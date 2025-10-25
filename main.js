@@ -1,8 +1,12 @@
 import * as Tone from 'tone';
+// V1 imports
 import { LorenzAttractor } from './sketches/lorenz.js';
 import { ParticleField } from './sketches/particles.js';
 import { RosslerAttractor } from './sketches/rossler.js';
 import { AudioWaveform } from './sketches/waveform.js';
+// V2 imports
+import { LorenzAttractorV2 } from './sketches/lorenz-v2.js';
+import { ParticleFieldV2 } from './sketches/particles-v2.js';
 
 class GenArt2025 {
   constructor() {
@@ -13,6 +17,7 @@ class GenArt2025 {
     this.fftAnalyzer = null;
     this.currentSketch = null;
     this.isPlaying = false;
+    this.currentVersion = 'v1'; // Default to V1
     this.audioFeatures = {
       bass: 0,
       mid: 0,
@@ -51,6 +56,7 @@ class GenArt2025 {
 
   setupControls() {
     const audioFileInput = document.getElementById('audioFile');
+    const versionSelect = document.getElementById('versionSelect');
     const sketchSelect = document.getElementById('sketchSelect');
     const playPauseBtn = document.getElementById('playPause');
     const stopBtn = document.getElementById('stop');
@@ -60,6 +66,12 @@ class GenArt2025 {
       if (file) {
         await this.loadAudioFile(file);
       }
+    });
+
+    versionSelect.addEventListener('change', (e) => {
+      this.currentVersion = e.target.value;
+      this.initializeSketches();
+      this.switchSketch(sketchSelect.value);
     });
 
     sketchSelect.addEventListener('change', (e) => {
@@ -222,12 +234,22 @@ class GenArt2025 {
   }
 
   initializeSketches() {
-    this.sketches = {
-      lorenz: new LorenzAttractor(this.canvas, this.ctx),
-      particles: new ParticleField(this.canvas, this.ctx),
-      rossler: new RosslerAttractor(this.canvas, this.ctx),
-      waveform: new AudioWaveform(this.canvas, this.ctx)
-    };
+    if (this.currentVersion === 'v2') {
+      this.sketches = {
+        lorenz: new LorenzAttractorV2(this.canvas, this.ctx),
+        particles: new ParticleFieldV2(this.canvas, this.ctx),
+        // V2 versions of rossler and waveform not yet implemented, use V1
+        rossler: new RosslerAttractor(this.canvas, this.ctx),
+        waveform: new AudioWaveform(this.canvas, this.ctx)
+      };
+    } else {
+      this.sketches = {
+        lorenz: new LorenzAttractor(this.canvas, this.ctx),
+        particles: new ParticleField(this.canvas, this.ctx),
+        rossler: new RosslerAttractor(this.canvas, this.ctx),
+        waveform: new AudioWaveform(this.canvas, this.ctx)
+      };
+    }
 
     // Start with Lorenz attractor
     this.currentSketch = this.sketches.lorenz;
