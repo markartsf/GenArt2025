@@ -12,20 +12,20 @@ export const FallColors = {
   brown: { h: 25, s: 45, l: 35 },
   burgundy: { h: 345, s: 65, l: 30 },
 
-  // Array for easy iteration - EXPANDED RICH PALETTE
+  // Array for easy iteration - RICH DARK PALETTE
   palette: [
-    { h: 50, s: 45, l: 65, name: 'neutralYellow' },
-    { h: 48, s: 95, l: 55, name: 'cadmiumYellow' },
-    { h: 40, s: 75, l: 58, name: 'neutralYellowishOrange' },
-    { h: 355, s: 85, l: 45, name: 'naphtholRed' },
-    { h: 0, s: 75, l: 35, name: 'darkRed' },
-    { h: 345, s: 65, l: 30, name: 'burgundy' },
-    { h: 15, s: 60, l: 40, name: 'burntSienna' },
+    { h: 48, s: 95, l: 60, name: 'cadmiumYellow' },
+    { h: 355, s: 85, l: 50, name: 'naphtholRed' },
+    { h: 0, s: 80, l: 28, name: 'darkRed' },
+    { h: 345, s: 70, l: 25, name: 'burgundy' },
+    { h: 15, s: 65, l: 30, name: 'darkBrown' },
+    { h: 275, s: 70, l: 30, name: 'deepViolet' },
+    { h: 285, s: 60, l: 35, name: 'deepPurple' },
+    { h: 300, s: 55, l: 35, name: 'plum' },
     { h: 25, s: 90, l: 55, name: 'cadmiumOrange' },
-    { h: 30, s: 60, l: 55, name: 'neutralOrange' },
-    { h: 25, s: 45, l: 35, name: 'brown' },
-    { h: 280, s: 65, l: 35, name: 'deepPurple' },
-    { h: 300, s: 55, l: 40, name: 'plum' }
+    { h: 40, s: 75, l: 58, name: 'neutralYellowishOrange' },
+    { h: 50, s: 45, l: 65, name: 'neutralYellow' },
+    { h: 15, s: 60, l: 40, name: 'burntSienna' }
   ],
 
   // Get a color from the palette by index

@@ -15,7 +15,8 @@ class FrequencyBar {
 
   update(energy) {
     this.targetHeight = this.height * energy;
-    this.currentHeight += (this.targetHeight - this.currentHeight) * 0.3;
+    // Much faster response
+    this.currentHeight += (this.targetHeight - this.currentHeight) * 0.6;
   }
 
   draw(ctx, aesthetic) {
@@ -50,7 +51,8 @@ class RadialSpike {
 
   update(energy) {
     this.targetLength = this.maxLength * energy;
-    this.currentLength += (this.targetLength - this.currentLength) * 0.4;
+    // Much faster response
+    this.currentLength += (this.targetLength - this.currentLength) * 0.7;
   }
 
   draw(ctx, aesthetic) {
@@ -100,27 +102,27 @@ export class TimbreSpectrum {
     const width = this.canvas.width / (window.devicePixelRatio || 1);
     const height = this.canvas.height / (window.devicePixelRatio || 1);
 
-    // Bass - thick horizontal band at bottom
+    // Bass - MASSIVE horizontal band at bottom
     this.bassBar = new FrequencyBar(
       0,
       height,
       width,
-      height * 0.4,
+      height * 0.7, // MUCH BIGGER
       'bass',
-      5 // Warm color
+      2 // Dark red
     );
 
     // Mid frequencies - vertical bars across screen
     this.midBars = [];
-    const numMidBars = 16;
+    const numMidBars = 24; // More bars
     const barWidth = width / numMidBars;
 
     for (let i = 0; i < numMidBars; i++) {
       this.midBars.push(new FrequencyBar(
         i * barWidth,
-        height * 0.65,
-        barWidth * 0.8,
         height * 0.5,
+        barWidth * 0.9,
+        height * 0.8, // MUCH TALLER
         'mid',
         (i % 12) // Cycle through colors
       ));
@@ -128,7 +130,7 @@ export class TimbreSpectrum {
 
     // High frequencies - radiating spikes from center
     this.highSpikes = [];
-    const numSpikes = 24;
+    const numSpikes = 36; // More spikes
 
     for (let i = 0; i < numSpikes; i++) {
       const angle = (i / numSpikes) * Math.PI * 2;
@@ -136,7 +138,7 @@ export class TimbreSpectrum {
         width / 2,
         height / 2,
         angle,
-        Math.min(width, height) * 0.4,
+        Math.min(width, height) * 0.6, // MUCH LONGER
         (i % 12)
       ));
     }
@@ -177,7 +179,7 @@ export class TimbreSpectrum {
     for (let i = 0; i < this.midBars.length; i++) {
       const binIndex = Math.floor((i / this.midBars.length) * midSpectrum.length);
       const energy = midSpectrum[binIndex] || 0;
-      this.midBars[i].update(energy * 3); // Amplify for visibility
+      this.midBars[i].update(energy * 8); // MUCH MORE AMPLIFICATION
       this.midBars[i].draw(this.ctx, this.aesthetic);
     }
 
@@ -189,7 +191,7 @@ export class TimbreSpectrum {
     for (let i = 0; i < this.highSpikes.length; i++) {
       const binIndex = Math.floor((i / this.highSpikes.length) * highSpectrum.length);
       const energy = highSpectrum[binIndex] || 0;
-      this.highSpikes[i].update(energy * 5); // Amplify for visibility
+      this.highSpikes[i].update(energy * 12); // MUCH MORE AMPLIFICATION
       this.highSpikes[i].draw(this.ctx, this.aesthetic);
     }
 
