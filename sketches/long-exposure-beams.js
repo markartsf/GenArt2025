@@ -19,11 +19,11 @@ class LightBeam {
     }
 
     // Trail properties
-    this.trailLength = 40 + Math.random() * 30; // Long trails
+    this.trailLength = 20 + Math.random() * 15; // Shorter trails for performance
     this.trail = [];
 
     // Visual properties
-    this.thickness = 8 + Math.random() * 12; // 8-20px thick
+    this.thickness = 10 + Math.random() * 8; // 10-18px thick
     this.brightness = 0.6 + Math.random() * 0.4;
 
     // Strobing (for segmented trails)
@@ -106,39 +106,45 @@ class LightBeam {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Draw trail segments
-    for (let i = 1; i < this.trail.length; i++) {
-      const point = this.trail[i];
-      const prevPoint = this.trail[i - 1];
+    // Draw trail as single path (much more efficient)
+    const midPoint = Math.floor(this.trail.length / 2);
 
-      // Fade trail from back to front
-      const alpha = (i / this.trail.length) * this.brightness;
-      const thickness = this.thickness * (0.5 + (i / this.trail.length) * 0.5);
-
-      // Get color based on type
-      const color = aesthetic.getColor(this.colorIndex, alpha);
-
-      // Draw with glow
-      ctx.strokeStyle = color;
-      ctx.lineWidth = thickness;
-      ctx.shadowBlur = 15 + this.brightness * 25;
-      ctx.shadowColor = aesthetic.getColor(this.colorIndex, 0.8);
+    // Back half - thinner, more transparent
+    if (this.trail.length > 3) {
+      ctx.strokeStyle = aesthetic.getColor(this.colorIndex, this.brightness * 0.3);
+      ctx.lineWidth = this.thickness * 0.6;
+      ctx.shadowBlur = 0; // No shadow on trail for performance
 
       ctx.beginPath();
-      ctx.moveTo(prevPoint.x, prevPoint.y);
-      ctx.lineTo(point.x, point.y);
+      ctx.moveTo(this.trail[0].x, this.trail[0].y);
+      for (let i = 1; i < midPoint; i++) {
+        ctx.lineTo(this.trail[i].x, this.trail[i].y);
+      }
       ctx.stroke();
     }
+
+    // Front half - thicker, brighter
+    ctx.strokeStyle = aesthetic.getColor(this.colorIndex, this.brightness * 0.7);
+    ctx.lineWidth = this.thickness;
+    ctx.shadowBlur = 15; // Only shadow on bright part
+    ctx.shadowColor = aesthetic.getColor(this.colorIndex, 0.6);
+
+    ctx.beginPath();
+    ctx.moveTo(this.trail[midPoint].x, this.trail[midPoint].y);
+    for (let i = midPoint + 1; i < this.trail.length; i++) {
+      ctx.lineTo(this.trail[i].x, this.trail[i].y);
+    }
+    ctx.stroke();
 
     // Draw bright head/core
     if (this.isVisible) {
       const lastPoint = this.trail[this.trail.length - 1];
       ctx.fillStyle = aesthetic.getColor(this.colorIndex, this.brightness);
-      ctx.shadowBlur = 30 + this.brightness * 40;
-      ctx.shadowColor = aesthetic.getColor(this.colorIndex, 0.9);
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = aesthetic.getColor(this.colorIndex, 0.8);
 
       ctx.beginPath();
-      ctx.arc(lastPoint.x, lastPoint.y, this.thickness * 0.6, 0, Math.PI * 2);
+      ctx.arc(lastPoint.x, lastPoint.y, this.thickness * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -168,8 +174,8 @@ export class LongExposureBeams {
 
     this.beams = [];
 
-    // Create 30-40 light beams with variety
-    const numBeams = 30 + Math.floor(Math.random() * 10);
+    // Create 20-25 light beams for better performance
+    const numBeams = 20 + Math.floor(Math.random() * 5);
 
     for (let i = 0; i < numBeams; i++) {
       const x = Math.random() * width;
@@ -214,9 +220,9 @@ export class LongExposureBeams {
     this.aesthetic.updateTempo(bpm);
     this.aesthetic.update(this.tempoAnalyzer);
 
-    // VERY slow fade for long exposure effect
+    // Slow fade for long exposure effect (slightly faster for performance)
     this.ctx.globalCompositeOperation = 'source-over';
-    this.ctx.fillStyle = `rgba(26, 10, 10, 0.01)`; // Almost no fade
+    this.ctx.fillStyle = `rgba(26, 10, 10, 0.03)`; // Balanced fade
     this.ctx.fillRect(0, 0, width, height);
 
     // Update and draw all beams
