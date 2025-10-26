@@ -145,35 +145,56 @@ class LightBeam {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Draw trail as single path (much more efficient)
+    // Draw trail using quadratic curves for smooth, organic appearance
     const midPoint = Math.floor(this.trail.length / 2);
+
+    // Helper function to draw smooth curve through points
+    const drawCurvedPath = (startIdx, endIdx, alpha, thickness, withShadow) => {
+      if (endIdx - startIdx < 2) return;
+
+      ctx.strokeStyle = aesthetic.getColor(this.colorIndex, alpha);
+      ctx.lineWidth = thickness;
+
+      if (withShadow) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = aesthetic.getColor(this.colorIndex, 0.6);
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(this.trail[startIdx].x, this.trail[startIdx].y);
+
+      // Draw smooth curves using quadratic curves
+      for (let i = startIdx + 1; i < endIdx - 1; i++) {
+        const current = this.trail[i];
+        const next = this.trail[i + 1];
+
+        // Control point is the current point
+        // End point is midway to next point
+        const cpx = current.x;
+        const cpy = current.y;
+        const endX = (current.x + next.x) / 2;
+        const endY = (current.y + next.y) / 2;
+
+        ctx.quadraticCurveTo(cpx, cpy, endX, endY);
+      }
+
+      // Draw final segment
+      if (endIdx - 1 >= startIdx) {
+        ctx.lineTo(this.trail[endIdx - 1].x, this.trail[endIdx - 1].y);
+      }
+
+      ctx.stroke();
+    };
 
     // Back half - thinner, more transparent
     if (this.trail.length > 3) {
-      ctx.strokeStyle = aesthetic.getColor(this.colorIndex, this.brightness * 0.3);
-      ctx.lineWidth = this.thickness * 0.6;
-      ctx.shadowBlur = 0; // No shadow on trail for performance
-
-      ctx.beginPath();
-      ctx.moveTo(this.trail[0].x, this.trail[0].y);
-      for (let i = 1; i < midPoint; i++) {
-        ctx.lineTo(this.trail[i].x, this.trail[i].y);
-      }
-      ctx.stroke();
+      drawCurvedPath(0, midPoint, this.brightness * 0.3, this.thickness * 0.6, false);
     }
 
-    // Front half - thicker, brighter
-    ctx.strokeStyle = aesthetic.getColor(this.colorIndex, this.brightness * 0.7);
-    ctx.lineWidth = this.thickness;
-    ctx.shadowBlur = 15; // Only shadow on bright part
-    ctx.shadowColor = aesthetic.getColor(this.colorIndex, 0.6);
-
-    ctx.beginPath();
-    ctx.moveTo(this.trail[midPoint].x, this.trail[midPoint].y);
-    for (let i = midPoint + 1; i < this.trail.length; i++) {
-      ctx.lineTo(this.trail[i].x, this.trail[i].y);
-    }
-    ctx.stroke();
+    // Front half - thicker, brighter with glow
+    drawCurvedPath(midPoint, this.trail.length, this.brightness * 0.7, this.thickness, true);
 
     // Draw bright head/core
     if (this.isVisible) {
