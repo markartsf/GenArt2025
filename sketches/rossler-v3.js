@@ -21,7 +21,7 @@ export class RosslerAttractorV3 {
     this.dt = 0.05;
 
     // Scale - START HUGE for V3
-    this.scale = 120; // Much bigger initial scale
+    this.scale = 160; // VERY large initial scale
     this.scaleGrowth = 0; // Gradual growth over time
     this.rotationX = 0;
     this.rotationY = 0;

@@ -107,9 +107,6 @@ export class SpiralGalaxy {
     this.aesthetic.updateTempo(bpm);
     this.aesthetic.update(this.tempoAnalyzer);
 
-    // Update camera
-    this.camera.update(this.aesthetic.current);
-
     // Adaptive fade
     this.ctx.fillStyle = `rgba(26, 10, 10, ${this.aesthetic.current.trailFade + 0.02})`;
     this.ctx.fillRect(0, 0, width, height);
@@ -188,8 +185,9 @@ export class SpiralGalaxy {
       }
     }
 
-    // Draw with camera orbit
-    this.camera.apply(this.ctx, width, height);
+    // Center coordinate system (no camera orbit to avoid disorienting rotation)
+    this.ctx.save();
+    this.ctx.translate(width / 2, height / 2);
 
     // Draw each octave spiral
     for (let octave = 0; octave < 8; octave++) {
@@ -258,8 +256,8 @@ export class SpiralGalaxy {
           const connectionColor = this.aesthetic.getColor(colorIndex, connectionAlpha);
 
           this.ctx.strokeStyle = connectionColor;
-          // Much thicker lines for more visible spirals
-          this.ctx.lineWidth = 3 + (this.aesthetic.current.lineThickness * 0.1);
+          // MUCH thicker lines for visible spirals
+          this.ctx.lineWidth = 6 + (this.aesthetic.current.lineThickness * 0.3);
           this.ctx.lineCap = 'round';
 
           // Add glow to connection lines too
@@ -305,7 +303,7 @@ export class SpiralGalaxy {
 
     this.ctx.shadowBlur = 0;
 
-    this.camera.restore(this.ctx);
+    this.ctx.restore();
 
     // Debug info
     this.ctx.save();

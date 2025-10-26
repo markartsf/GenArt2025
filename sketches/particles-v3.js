@@ -21,10 +21,10 @@ class ParticleV3 {
 
     // Trail history for motion blur effect
     this.trail = [];
-    this.maxTrailLength = 40; // Long exposure effect
+    this.maxTrailLength = 25; // Shorter trails for better performance
 
-    // Color - assign random color from palette for variety
-    this.colorIndex = Math.floor(Math.random() * 7);
+    // Color - assign random color from palette for variety (now 12 colors)
+    this.colorIndex = Math.floor(Math.random() * 12);
   }
 
   update(aesthetic, noiseField, transientBurst) {
@@ -125,7 +125,7 @@ export class ParticleFieldV3 {
     this.canvas = canvas;
     this.ctx = ctx;
     this.particles = [];
-    this.maxParticles = 400; // More particles for V3
+    this.maxParticles = 250; // Optimized for performance
     this.noiseField = [];
     this.noiseTime = 0;
 
@@ -220,7 +220,7 @@ export class ParticleFieldV3 {
 
     // Add new particles based on aesthetic density
     // More in urban (high density), fewer in country (low density)
-    const targetCount = Math.floor(150 + this.aesthetic.current.density * 250);
+    const targetCount = Math.floor(100 + this.aesthetic.current.density * 150);
     const particleDeficit = targetCount - this.particles.length;
 
     if (particleDeficit > 0) {

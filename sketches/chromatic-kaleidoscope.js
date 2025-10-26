@@ -130,34 +130,35 @@ export class ChromaticKaleidoscope {
   }
 
   drawShapeWithSymmetry(shape, aesthetic) {
-    const alpha = shape.life * 0.6;
+    // MUCH lower alpha for translucent ethereal layers
+    const alpha = shape.life * 0.25;
     const color = aesthetic.getColor(shape.colorIndex, alpha);
 
     this.ctx.strokeStyle = color;
-    // Much lower fill opacity for translucent layering effect
-    this.ctx.fillStyle = aesthetic.getColor(shape.colorIndex, alpha * 0.1);
+    // Very low fill opacity for ghost-like transparency
+    this.ctx.fillStyle = aesthetic.getColor(shape.colorIndex, alpha * 0.05);
 
-    // Line thickness based on aesthetic
-    const lineWidth = 2 + (aesthetic.current.lineThickness * 0.1);
+    // Thinner lines
+    const lineWidth = 1 + (aesthetic.current.lineThickness * 0.05);
     this.ctx.lineWidth = lineWidth;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
 
-    // Glow in urban mode
+    // Much subtler glow
     let glowAmount = 0;
     if (aesthetic.current.speed > 0.6) {
-      glowAmount = 12 + (aesthetic.current.speed * 20);
+      glowAmount = 5 + (aesthetic.current.speed * 8);
     }
     if (aesthetic.tempoAccelerationGlow > 0.2) {
-      glowAmount += aesthetic.tempoAccelerationGlow * 18;
+      glowAmount += aesthetic.tempoAccelerationGlow * 6;
     }
     if (aesthetic.transientBurst > 0.4) {
-      glowAmount += aesthetic.transientBurst * 25;
+      glowAmount += aesthetic.transientBurst * 8;
     }
 
     if (glowAmount > 0) {
       this.ctx.shadowBlur = glowAmount;
-      this.ctx.shadowColor = aesthetic.getColor(shape.colorIndex, 0.6);
+      this.ctx.shadowColor = aesthetic.getColor(shape.colorIndex, 0.2);
     }
 
     // Draw with radial symmetry

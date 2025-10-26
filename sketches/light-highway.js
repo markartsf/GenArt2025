@@ -51,18 +51,27 @@ class LightSource {
       energy = audioFeatures.high;
     }
 
+    // Ensure minimum base velocity so lights never stop moving
+    const minSpeed = 0.5;
+    if (Math.abs(this.vx) < minSpeed) {
+      this.vx = this.vx >= 0 ? minSpeed : -minSpeed;
+    }
+    if (Math.abs(this.vy) < minSpeed) {
+      this.vy = this.vy >= 0 ? minSpeed : -minSpeed;
+    }
+
     // Apply energy to velocity
     const speedMult = 1 + energy * 3;
     this.x += this.vx * speedMult;
     this.y += this.vy * speedMult;
 
     // Add smooth curves based on audio
-    const curvature = Math.sin(Date.now() * 0.001 + this.x * 0.01) * energy * 2;
-    this.vy += curvature;
+    const curvature = Math.sin(Date.now() * 0.001 + this.x * 0.01) * (0.5 + energy * 2);
+    this.vy += curvature * 0.1;
 
-    // Gentle damping
-    this.vx *= 0.99;
-    this.vy *= 0.99;
+    // Much lighter damping to maintain movement
+    this.vx *= 0.995;
+    this.vy *= 0.995;
 
     // Wrap around edges
     if (this.x < 0) this.x = this.width;

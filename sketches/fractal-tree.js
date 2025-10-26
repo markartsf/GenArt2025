@@ -105,10 +105,10 @@ export class FractalTree {
     const width = this.canvas.width / (window.devicePixelRatio || 1);
     const height = this.canvas.height / (window.devicePixelRatio || 1);
 
-    // Create initial trunk branch so tree is visible from start
+    // Create MUCH LARGER initial trunk - fills more screen
     const trunkX = width / 2;
-    const trunkY1 = height - 20;
-    const trunkY2 = height - 120; // Trunk goes up 100px
+    const trunkY1 = height * 0.95; // Start near bottom
+    const trunkY2 = height * 0.4; // Trunk goes up to middle of screen
 
     const trunkBranch = new Branch(
       trunkX,
@@ -122,12 +122,28 @@ export class FractalTree {
     );
     this.branches.push(trunkBranch);
 
-    // Add growth tip at top of trunk
+    // Add multiple growth tips to start wider
     this.growthTips.push(new GrowthTip(
       trunkX,
       trunkY2,
       -Math.PI / 2, // Pointing up
       1, // Start at generation 1
+      1.0
+    ));
+
+    // Add side tips for bushier start
+    this.growthTips.push(new GrowthTip(
+      trunkX,
+      trunkY2,
+      -Math.PI / 2 + 0.3,
+      1,
+      1.0
+    ));
+    this.growthTips.push(new GrowthTip(
+      trunkX,
+      trunkY2,
+      -Math.PI / 2 - 0.3,
+      1,
       1.0
     ));
   }
@@ -236,23 +252,22 @@ export class FractalTree {
       }
     }
 
-    // Grow new branches based on audio (MUCH lower threshold - more responsive)
-    // Also grow automatically to ensure tree always builds
+    // Grow new branches based on audio OR always grow automatically
     const hasAudio = audioFeatures.rms > 0.02;
-    const shouldGrowAutomatically = this.growthTips.length < 100 && Math.random() > 0.5; // More aggressive auto-growth
+    const shouldGrowAutomatically = this.growthTips.length < 200; // ALWAYS grow if under limit
 
     if ((hasAudio || shouldGrowAutomatically) && this.growthTips.length > 0) {
       // Choose growth tip based on octave
       const targetGeneration = Math.min(pitchInfo.octave, this.growthTips.length - 1);
 
-      // Find tips at or near target generation (relaxed energy requirement)
+      // Find tips at or near target generation (very relaxed energy requirement)
       const suitableTips = this.growthTips.filter(tip =>
-        Math.abs(tip.generation - targetGeneration) <= 3 && tip.energy > 0.15
+        Math.abs(tip.generation - targetGeneration) <= 3 && tip.energy > 0.05
       );
 
-      // If no suitable tips, use any active tip
+      // If no suitable tips, use any active tip (very low threshold)
       const tipsToUse = suitableTips.length > 0 ? suitableTips :
-        this.growthTips.filter(tip => tip.energy > 0.2);
+        this.growthTips.filter(tip => tip.energy > 0.05);
 
       if (tipsToUse.length > 0) {
         // Pick random suitable tip

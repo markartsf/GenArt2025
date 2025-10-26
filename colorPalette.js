@@ -12,15 +12,20 @@ export const FallColors = {
   brown: { h: 25, s: 45, l: 35 },
   burgundy: { h: 345, s: 65, l: 30 },
 
-  // Array for easy iteration
+  // Array for easy iteration - EXPANDED RICH PALETTE
   palette: [
     { h: 50, s: 45, l: 65, name: 'neutralYellow' },
     { h: 48, s: 95, l: 55, name: 'cadmiumYellow' },
+    { h: 40, s: 75, l: 58, name: 'neutralYellowishOrange' },
     { h: 355, s: 85, l: 45, name: 'naphtholRed' },
+    { h: 0, s: 75, l: 35, name: 'darkRed' },
+    { h: 345, s: 65, l: 30, name: 'burgundy' },
+    { h: 15, s: 60, l: 40, name: 'burntSienna' },
     { h: 25, s: 90, l: 55, name: 'cadmiumOrange' },
     { h: 30, s: 60, l: 55, name: 'neutralOrange' },
     { h: 25, s: 45, l: 35, name: 'brown' },
-    { h: 345, s: 65, l: 30, name: 'burgundy' }
+    { h: 280, s: 65, l: 35, name: 'deepPurple' },
+    { h: 300, s: 55, l: 40, name: 'plum' }
   ],
 
   // Get a color from the palette by index
