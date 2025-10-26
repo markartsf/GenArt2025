@@ -24,9 +24,22 @@ class LightBeam {
     this.trailLength = 20 + Math.random() * 15; // Shorter trails for performance
     this.trail = [];
 
-    // Visual properties
-    this.thickness = 10 + Math.random() * 8; // 10-18px thick
+    // Visual properties - VARIED THICKNESS (Strategy 3)
+    // Reference image has thin, medium, and thick beams
+    const thicknessRand = Math.random();
+    if (thicknessRand < 0.3) {
+      this.thickness = 3 + Math.random() * 2; // Thin: 3-5px
+    } else if (thicknessRand < 0.7) {
+      this.thickness = 8 + Math.random() * 4; // Medium: 8-12px
+    } else {
+      this.thickness = 15 + Math.random() * 10; // Thick: 15-25px
+    }
     this.brightness = 0.6 + Math.random() * 0.4;
+
+    // Perpendicular wobble parameters (Strategy 1)
+    this.wobblePhase = Math.random() * Math.PI * 2;
+    this.wobbleFrequency = 0.05 + Math.random() * 0.1;
+    this.wobbleAmplitude = 2 + Math.random() * 4; // 2-6px perpendicular offset
 
     // Strobing (for segmented trails)
     this.strobeInterval = Math.random() > 0.7 ? Math.floor(3 + Math.random() * 4) : 0;
@@ -130,7 +143,26 @@ class LightBeam {
 
     // Update trail (only when visible)
     if (this.isVisible) {
-      this.trail.push({ x: this.x, y: this.y, brightness: this.brightness });
+      // Strategy 1: Add perpendicular wobble to force curvature
+      this.wobblePhase += this.wobbleFrequency;
+      const wobbleOffset = Math.sin(this.wobblePhase) * this.wobbleAmplitude;
+
+      // Calculate perpendicular direction (90° from current angle)
+      const perpAngle = this.angle + Math.PI / 2;
+      const wobbleX = Math.cos(perpAngle) * wobbleOffset;
+      const wobbleY = Math.sin(perpAngle) * wobbleOffset;
+
+      // Strategy 4: Add random micro-adjustments
+      const microJitterX = (Math.random() - 0.5) * 1.5;
+      const microJitterY = (Math.random() - 0.5) * 1.5;
+
+      // Store position with wobble and jitter applied
+      this.trail.push({
+        x: this.x + wobbleX + microJitterX,
+        y: this.y + wobbleY + microJitterY,
+        brightness: this.brightness
+      });
+
       if (this.trail.length > this.trailLength) {
         this.trail.shift();
       }
@@ -148,7 +180,7 @@ class LightBeam {
     // Draw trail using quadratic curves for smooth, organic appearance
     const midPoint = Math.floor(this.trail.length / 2);
 
-    // Helper function to draw smooth curve through points
+    // Strategy 2: Better control point calculation using Catmull-Rom-like curves
     const drawCurvedPath = (startIdx, endIdx, alpha, thickness, withShadow) => {
       if (endIdx - startIdx < 2) return;
 
@@ -165,24 +197,23 @@ class LightBeam {
       ctx.beginPath();
       ctx.moveTo(this.trail[startIdx].x, this.trail[startIdx].y);
 
-      // Draw smooth curves using quadratic curves
-      for (let i = startIdx + 1; i < endIdx - 1; i++) {
-        const current = this.trail[i];
-        const next = this.trail[i + 1];
+      // Draw smooth curves using improved control points
+      for (let i = startIdx; i < endIdx - 1; i++) {
+        const p0 = this.trail[Math.max(startIdx, i - 1)];
+        const p1 = this.trail[i];
+        const p2 = this.trail[i + 1];
+        const p3 = this.trail[Math.min(endIdx - 1, i + 2)];
 
-        // Control point is the current point
-        // End point is midway to next point
-        const cpx = current.x;
-        const cpy = current.y;
-        const endX = (current.x + next.x) / 2;
-        const endY = (current.y + next.y) / 2;
+        // Calculate control points using Catmull-Rom tangents
+        // This ensures smooth curves through all points
+        const tension = 0.5; // Controls curve tightness
 
-        ctx.quadraticCurveTo(cpx, cpy, endX, endY);
-      }
+        const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
+        const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
+        const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
+        const cp2y = p2.y - (p3.y - p1.y) / 6 * tension;
 
-      // Draw final segment
-      if (endIdx - 1 >= startIdx) {
-        ctx.lineTo(this.trail[endIdx - 1].x, this.trail[endIdx - 1].y);
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
       }
 
       ctx.stroke();
