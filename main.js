@@ -15,6 +15,10 @@ import { AudioWaveformV3 } from './sketches/waveform-v3.js';
 import { SpiralGalaxy } from './sketches/spiral-galaxy.js';
 import { FractalTree } from './sketches/fractal-tree.js';
 import { ChromaticKaleidoscope } from './sketches/chromatic-kaleidoscope.js';
+// Light Trail visualizations
+import { LightHighway } from './sketches/light-highway.js';
+import { NeonPainter } from './sketches/neon-painter.js';
+import { ChromaticFlow } from './sketches/chromatic-flow.js';
 
 class GenArt2025 {
   constructor() {
@@ -244,11 +248,14 @@ class GenArt2025 {
       waveform: new AudioWaveformV3(this.canvas, this.ctx),
       galaxy: new SpiralGalaxy(this.canvas, this.ctx),
       tree: new FractalTree(this.canvas, this.ctx),
-      kaleidoscope: new ChromaticKaleidoscope(this.canvas, this.ctx)
+      kaleidoscope: new ChromaticKaleidoscope(this.canvas, this.ctx),
+      lightHighway: new LightHighway(this.canvas, this.ctx),
+      neonPainter: new NeonPainter(this.canvas, this.ctx),
+      chromaticFlow: new ChromaticFlow(this.canvas, this.ctx)
     };
 
-    // Start with Spiral Galaxy
-    this.currentSketch = this.sketches.galaxy;
+    // Start with Light Highway
+    this.currentSketch = this.sketches.lightHighway;
   }
 
   switchSketch(sketchName) {

@@ -5,7 +5,10 @@
       "Bash(npm run build)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "WebFetch(domain:openprocessing.org)"
     ],
     "deny": [],
     "ask": []
