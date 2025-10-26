@@ -7,6 +7,14 @@ import { AudioWaveform } from './sketches/waveform.js';
 // V2 imports
 import { LorenzAttractorV2 } from './sketches/lorenz-v2.js';
 import { ParticleFieldV2 } from './sketches/particles-v2.js';
+// V3 imports
+import { LorenzAttractorV3 } from './sketches/lorenz-v3.js';
+import { RosslerAttractorV3 } from './sketches/rossler-v3.js';
+import { ParticleFieldV3 } from './sketches/particles-v3.js';
+import { AudioWaveformV3 } from './sketches/waveform-v3.js';
+import { SpiralGalaxy } from './sketches/spiral-galaxy.js';
+import { FractalTree } from './sketches/fractal-tree.js';
+import { ChromaticKaleidoscope } from './sketches/chromatic-kaleidoscope.js';
 
 class GenArt2025 {
   constructor() {
@@ -17,7 +25,6 @@ class GenArt2025 {
     this.fftAnalyzer = null;
     this.currentSketch = null;
     this.isPlaying = false;
-    this.currentVersion = 'v1'; // Default to V1
     this.audioFeatures = {
       bass: 0,
       mid: 0,
@@ -56,7 +63,6 @@ class GenArt2025 {
 
   setupControls() {
     const audioFileInput = document.getElementById('audioFile');
-    const versionSelect = document.getElementById('versionSelect');
     const sketchSelect = document.getElementById('sketchSelect');
     const playPauseBtn = document.getElementById('playPause');
     const stopBtn = document.getElementById('stop');
@@ -66,12 +72,6 @@ class GenArt2025 {
       if (file) {
         await this.loadAudioFile(file);
       }
-    });
-
-    versionSelect.addEventListener('change', (e) => {
-      this.currentVersion = e.target.value;
-      this.initializeSketches();
-      this.switchSketch(sketchSelect.value);
     });
 
     sketchSelect.addEventListener('change', (e) => {
@@ -106,6 +106,7 @@ class GenArt2025 {
 
       // Create new player
       this.player = new Tone.Player(url).toDestination();
+      this.player.volume.value = 0; // Set to 0 dB (full volume)
       this.player.connect(this.analyzer);
       this.player.connect(this.fftAnalyzer);
 
@@ -116,6 +117,7 @@ class GenArt2025 {
       document.getElementById('stop').disabled = false;
 
       console.log('Audio file loaded successfully');
+      console.log('Tone.js context state:', Tone.context.state);
     } catch (error) {
       console.error('Error loading audio file:', error);
     }
@@ -234,25 +236,19 @@ class GenArt2025 {
   }
 
   initializeSketches() {
-    if (this.currentVersion === 'v2') {
-      this.sketches = {
-        lorenz: new LorenzAttractorV2(this.canvas, this.ctx),
-        particles: new ParticleFieldV2(this.canvas, this.ctx),
-        // V2 versions of rossler and waveform not yet implemented, use V1
-        rossler: new RosslerAttractor(this.canvas, this.ctx),
-        waveform: new AudioWaveform(this.canvas, this.ctx)
-      };
-    } else {
-      this.sketches = {
-        lorenz: new LorenzAttractor(this.canvas, this.ctx),
-        particles: new ParticleField(this.canvas, this.ctx),
-        rossler: new RosslerAttractor(this.canvas, this.ctx),
-        waveform: new AudioWaveform(this.canvas, this.ctx)
-      };
-    }
+    // V3 - Ethereal Transitions
+    this.sketches = {
+      lorenz: new LorenzAttractorV3(this.canvas, this.ctx),
+      particles: new ParticleFieldV3(this.canvas, this.ctx),
+      rossler: new RosslerAttractorV3(this.canvas, this.ctx),
+      waveform: new AudioWaveformV3(this.canvas, this.ctx),
+      galaxy: new SpiralGalaxy(this.canvas, this.ctx),
+      tree: new FractalTree(this.canvas, this.ctx),
+      kaleidoscope: new ChromaticKaleidoscope(this.canvas, this.ctx)
+    };
 
-    // Start with Lorenz attractor
-    this.currentSketch = this.sketches.lorenz;
+    // Start with Spiral Galaxy
+    this.currentSketch = this.sketches.galaxy;
   }
 
   switchSketch(sketchName) {
@@ -269,11 +265,15 @@ class GenArt2025 {
       this.player.stop();
       this.isPlaying = false;
       document.getElementById('playPause').textContent = 'Play';
+      console.log('Audio paused');
     } else {
       await Tone.start();
+      console.log('Tone.js started, context state:', Tone.context.state);
+      console.log('Player volume:', this.player.volume.value, 'dB');
       this.player.start();
       this.isPlaying = true;
       document.getElementById('playPause').textContent = 'Pause';
+      console.log('Audio playing');
     }
   }
 
