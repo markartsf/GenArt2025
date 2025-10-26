@@ -9,14 +9,11 @@ class LightBeam {
     this.type = type; // 'bass', 'mid', 'high'
     this.colorIndex = colorIndex;
 
-    // Movement properties - LARGE horizontal bias
-    this.vx = (Math.random() - 0.5) * 15; // Strong horizontal
-    this.vy = (Math.random() - 0.5) * 3;  // Subtle vertical
-
-    // Ensure strong horizontal movement
-    if (Math.abs(this.vx) < 5) {
-      this.vx = Math.random() > 0.5 ? 8 : -8;
-    }
+    // Movement properties - angle-based for organic curves
+    this.angle = Math.random() * Math.PI * 2; // Current direction
+    this.speed = 5 + Math.random() * 8; // Base speed
+    this.angularVelocity = (Math.random() - 0.5) * 0.15; // Turning speed
+    this.curviness = 0.5 + Math.random() * 1.5; // How much it curves
 
     // Trail properties
     this.trailLength = 20 + Math.random() * 15; // Shorter trails for performance
@@ -35,25 +32,25 @@ class LightBeam {
   update(audioFeatures, aesthetic) {
     // Audio-driven behavior based on type
     let speedMultiplier = 1;
+    let curveMultiplier = 1;
 
     switch(this.type) {
       case 'bass':
-        // Red/magenta - fast horizontal sweeps
+        // Red/magenta - fast sweeping curves
         speedMultiplier = 1 + audioFeatures.bass * 2;
-        // Add some waviness
-        this.vy += Math.sin(Date.now() * 0.001) * 0.1;
+        curveMultiplier = 1 + audioFeatures.bass * 0.5;
         break;
 
       case 'mid':
-        // Blue/cyan - curved looping paths
+        // Blue/cyan - tighter looping curves
         speedMultiplier = 0.8 + audioFeatures.mid * 1.5;
-        // More vertical variation for curves
-        this.vy += (Math.random() - 0.5) * audioFeatures.mid * 0.5;
+        curveMultiplier = 1.5 + audioFeatures.mid * 1.0; // More curviness
         break;
 
       case 'high':
-        // Yellow/white - very fast, bright
+        // Yellow/white - very fast with gentle curves
         speedMultiplier = 1.5 + audioFeatures.high * 3;
+        curveMultiplier = 0.7 + audioFeatures.high * 0.3;
         this.brightness = 0.8 + audioFeatures.high * 0.2;
         break;
     }
@@ -61,18 +58,23 @@ class LightBeam {
     // Tempo affects overall speed
     const tempoMultiplier = aesthetic.current.speed;
 
+    // Continuously change angle for organic curves
+    this.angularVelocity += (Math.random() - 0.5) * 0.05 * this.curviness * curveMultiplier;
+
+    // Keep angular velocity in reasonable range
+    this.angularVelocity = Math.max(-0.2, Math.min(0.2, this.angularVelocity));
+
+    // Update angle
+    this.angle += this.angularVelocity;
+
+    // Calculate velocity from angle and speed
+    const finalSpeed = this.speed * speedMultiplier * tempoMultiplier;
+    const vx = Math.cos(this.angle) * finalSpeed;
+    const vy = Math.sin(this.angle) * finalSpeed;
+
     // Update position
-    this.x += this.vx * speedMultiplier * tempoMultiplier;
-    this.y += this.vy * speedMultiplier * tempoMultiplier;
-
-    // Subtle drift to create curves
-    this.vx += (Math.random() - 0.5) * 0.1;
-    this.vy += (Math.random() - 0.5) * 0.1;
-
-    // Maintain horizontal bias
-    if (Math.abs(this.vx) < 3) {
-      this.vx += this.vx > 0 ? 0.2 : -0.2;
-    }
+    this.x += vx;
+    this.y += vy;
 
     // Wrap around screen
     if (this.x < -100) this.x = this.width + 100;
