@@ -22,6 +22,7 @@ import { ChromaticFlow } from './sketches/chromatic-flow.js';
 // Audio-Responsive Visualizations
 import { RhythmGrid } from './sketches/rhythm-grid.js';
 import { TimbreSpectrum } from './sketches/timbre-spectrum.js';
+import { LongExposureBeams } from './sketches/long-exposure-beams.js';
 
 class GenArt2025 {
   constructor() {
@@ -256,7 +257,8 @@ class GenArt2025 {
       neonPainter: new NeonPainter(this.canvas, this.ctx),
       chromaticFlow: new ChromaticFlow(this.canvas, this.ctx),
       rhythmGrid: new RhythmGrid(this.canvas, this.ctx),
-      timbreSpectrum: new TimbreSpectrum(this.canvas, this.ctx)
+      timbreSpectrum: new TimbreSpectrum(this.canvas, this.ctx),
+      longExposureBeams: new LongExposureBeams(this.canvas, this.ctx)
     };
 
     // Start with Rhythm Grid
