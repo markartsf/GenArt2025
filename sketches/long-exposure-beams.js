@@ -15,6 +15,11 @@ class LightBeam {
     this.angularVelocity = (Math.random() - 0.5) * 0.15; // Turning speed
     this.curviness = 0.5 + Math.random() * 1.5; // How much it curves
 
+    // Sine wave modulation for guaranteed curves (no straight lines)
+    this.sinePhase = Math.random() * Math.PI * 2;
+    this.sineFrequency = 0.02 + Math.random() * 0.04;
+    this.sineAmplitude = 0.05 + Math.random() * 0.1;
+
     // Trail properties
     this.trailLength = 20 + Math.random() * 15; // Shorter trails for performance
     this.trail = [];
@@ -59,13 +64,22 @@ class LightBeam {
     const tempoMultiplier = aesthetic.current.speed;
 
     // Continuously change angle for organic curves
-    this.angularVelocity += (Math.random() - 0.5) * 0.05 * this.curviness * curveMultiplier;
+    this.angularVelocity += (Math.random() - 0.5) * 0.08 * this.curviness * curveMultiplier;
 
-    // Keep angular velocity in reasonable range
-    this.angularVelocity = Math.max(-0.2, Math.min(0.2, this.angularVelocity));
+    // Keep angular velocity in reasonable range but NEVER zero
+    this.angularVelocity = Math.max(-0.25, Math.min(0.25, this.angularVelocity));
 
-    // Update angle
-    this.angle += this.angularVelocity;
+    // Prevent settling into straight lines - ensure minimum curvature
+    if (Math.abs(this.angularVelocity) < 0.02) {
+      this.angularVelocity += (Math.random() - 0.5) * 0.08;
+    }
+
+    // Add sine wave modulation to GUARANTEE curves (no straight lines possible)
+    this.sinePhase += this.sineFrequency;
+    const sineModulation = Math.sin(this.sinePhase) * this.sineAmplitude * curveMultiplier;
+
+    // Update angle with both angular velocity AND sine modulation
+    this.angle += this.angularVelocity + sineModulation;
 
     // Calculate velocity from angle and speed
     const finalSpeed = this.speed * speedMultiplier * tempoMultiplier;
