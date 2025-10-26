@@ -19,6 +19,9 @@ import { ChromaticKaleidoscope } from './sketches/chromatic-kaleidoscope.js';
 import { LightHighway } from './sketches/light-highway.js';
 import { NeonPainter } from './sketches/neon-painter.js';
 import { ChromaticFlow } from './sketches/chromatic-flow.js';
+// Audio-Responsive Visualizations
+import { RhythmGrid } from './sketches/rhythm-grid.js';
+import { TimbreSpectrum } from './sketches/timbre-spectrum.js';
 
 class GenArt2025 {
   constructor() {
@@ -251,11 +254,13 @@ class GenArt2025 {
       kaleidoscope: new ChromaticKaleidoscope(this.canvas, this.ctx),
       lightHighway: new LightHighway(this.canvas, this.ctx),
       neonPainter: new NeonPainter(this.canvas, this.ctx),
-      chromaticFlow: new ChromaticFlow(this.canvas, this.ctx)
+      chromaticFlow: new ChromaticFlow(this.canvas, this.ctx),
+      rhythmGrid: new RhythmGrid(this.canvas, this.ctx),
+      timbreSpectrum: new TimbreSpectrum(this.canvas, this.ctx)
     };
 
-    // Start with Light Highway
-    this.currentSketch = this.sketches.lightHighway;
+    // Start with Rhythm Grid
+    this.currentSketch = this.sketches.rhythmGrid;
   }
 
   switchSketch(sketchName) {
