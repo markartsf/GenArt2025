@@ -17,8 +17,8 @@ class LightBeam {
 
     // Sine wave modulation for guaranteed curves (no straight lines)
     this.sinePhase = Math.random() * Math.PI * 2;
-    this.sineFrequency = 0.03 + Math.random() * 0.05;
-    this.sineAmplitude = 0.25 + Math.random() * 0.35; // MUCH larger amplitude for dramatic curves
+    this.sineFrequency = 0.05 + Math.random() * 0.08;
+    this.sineAmplitude = 0.6 + Math.random() * 0.6; // EXTREME amplitude: 0.6-1.2 radians (34-69 degrees!)
 
     // Trail properties
     this.trailLength = 20 + Math.random() * 15; // Shorter trails for performance
@@ -38,8 +38,8 @@ class LightBeam {
 
     // Perpendicular wobble parameters (Strategy 1)
     this.wobblePhase = Math.random() * Math.PI * 2;
-    this.wobbleFrequency = 0.05 + Math.random() * 0.1;
-    this.wobbleAmplitude = 2 + Math.random() * 4; // 2-6px perpendicular offset
+    this.wobbleFrequency = 0.08 + Math.random() * 0.12;
+    this.wobbleAmplitude = 15 + Math.random() * 25; // EXTREME: 15-40px perpendicular offset!
 
     // Strobing (for segmented trails)
     this.strobeInterval = Math.random() > 0.7 ? Math.floor(3 + Math.random() * 4) : 0;
@@ -76,15 +76,15 @@ class LightBeam {
     // Tempo affects overall speed
     const tempoMultiplier = aesthetic.current.speed;
 
-    // Continuously change angle for organic curves
-    this.angularVelocity += (Math.random() - 0.5) * 0.12 * this.curviness * curveMultiplier;
+    // Continuously change angle for organic curves (MUCH MORE AGGRESSIVE)
+    this.angularVelocity += (Math.random() - 0.5) * 0.25 * this.curviness * curveMultiplier;
 
-    // Keep angular velocity in reasonable range but NEVER zero
-    this.angularVelocity = Math.max(-0.3, Math.min(0.3, this.angularVelocity));
+    // Keep angular velocity in WIDER range but NEVER zero
+    this.angularVelocity = Math.max(-0.5, Math.min(0.5, this.angularVelocity));
 
-    // Prevent settling into straight lines - ensure minimum curvature
-    if (Math.abs(this.angularVelocity) < 0.03) {
-      this.angularVelocity += (Math.random() - 0.5) * 0.15;
+    // Prevent settling into straight lines - MUCH LARGER minimum curvature
+    if (Math.abs(this.angularVelocity) < 0.08) {
+      this.angularVelocity += (Math.random() - 0.5) * 0.3;
     }
 
     // Add sine wave modulation to GUARANTEE curves (no straight lines possible)
@@ -106,12 +106,12 @@ class LightBeam {
       Math.abs(normalizedAngle - Math.PI * 2) < cardinalThreshold; // 360°/0°
 
     if (isNearCardinal) {
-      // Force a large angle change to break out of straight line
-      this.angle += (Math.random() - 0.5) * 0.4 + (Math.random() > 0.5 ? 0.3 : -0.3);
+      // Force a MASSIVE angle change to break out of straight line
+      this.angle += (Math.random() - 0.5) * 0.8 + (Math.random() > 0.5 ? 0.6 : -0.6);
     }
 
-    // Force minimum angle change every frame (never stay straight)
-    const minAngleChange = 0.04;
+    // Force LARGER minimum angle change every frame (never stay straight)
+    const minAngleChange = 0.1; // Increased from 0.04 to 0.1
     const totalChange = Math.abs(this.angularVelocity + sineModulation);
     if (totalChange < minAngleChange) {
       this.angle += (Math.random() > 0.5 ? minAngleChange : -minAngleChange);
@@ -152,9 +152,9 @@ class LightBeam {
       const wobbleX = Math.cos(perpAngle) * wobbleOffset;
       const wobbleY = Math.sin(perpAngle) * wobbleOffset;
 
-      // Strategy 4: Add random micro-adjustments
-      const microJitterX = (Math.random() - 0.5) * 1.5;
-      const microJitterY = (Math.random() - 0.5) * 1.5;
+      // Strategy 4: Add random micro-adjustments (increased)
+      const microJitterX = (Math.random() - 0.5) * 5;
+      const microJitterY = (Math.random() - 0.5) * 5;
 
       // Store position with wobble and jitter applied
       this.trail.push({
