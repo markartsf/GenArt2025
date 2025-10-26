@@ -17,8 +17,8 @@ class LightBeam {
 
     // Sine wave modulation for guaranteed curves (no straight lines)
     this.sinePhase = Math.random() * Math.PI * 2;
-    this.sineFrequency = 0.02 + Math.random() * 0.04;
-    this.sineAmplitude = 0.05 + Math.random() * 0.1;
+    this.sineFrequency = 0.03 + Math.random() * 0.05;
+    this.sineAmplitude = 0.25 + Math.random() * 0.35; // MUCH larger amplitude for dramatic curves
 
     // Trail properties
     this.trailLength = 20 + Math.random() * 15; // Shorter trails for performance
@@ -64,14 +64,14 @@ class LightBeam {
     const tempoMultiplier = aesthetic.current.speed;
 
     // Continuously change angle for organic curves
-    this.angularVelocity += (Math.random() - 0.5) * 0.08 * this.curviness * curveMultiplier;
+    this.angularVelocity += (Math.random() - 0.5) * 0.12 * this.curviness * curveMultiplier;
 
     // Keep angular velocity in reasonable range but NEVER zero
-    this.angularVelocity = Math.max(-0.25, Math.min(0.25, this.angularVelocity));
+    this.angularVelocity = Math.max(-0.3, Math.min(0.3, this.angularVelocity));
 
     // Prevent settling into straight lines - ensure minimum curvature
-    if (Math.abs(this.angularVelocity) < 0.02) {
-      this.angularVelocity += (Math.random() - 0.5) * 0.08;
+    if (Math.abs(this.angularVelocity) < 0.03) {
+      this.angularVelocity += (Math.random() - 0.5) * 0.15;
     }
 
     // Add sine wave modulation to GUARANTEE curves (no straight lines possible)
@@ -80,6 +80,29 @@ class LightBeam {
 
     // Update angle with both angular velocity AND sine modulation
     this.angle += this.angularVelocity + sineModulation;
+
+    // CRITICAL: Detect and break cardinal directions (0°, 90°, 180°, 270°)
+    // Normalize angle to 0-2π
+    const normalizedAngle = ((this.angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const cardinalThreshold = 0.1; // Within ~6 degrees of cardinal
+    const isNearCardinal =
+      Math.abs(normalizedAngle) < cardinalThreshold || // 0° (horizontal right)
+      Math.abs(normalizedAngle - Math.PI / 2) < cardinalThreshold || // 90° (vertical down)
+      Math.abs(normalizedAngle - Math.PI) < cardinalThreshold || // 180° (horizontal left)
+      Math.abs(normalizedAngle - Math.PI * 1.5) < cardinalThreshold || // 270° (vertical up)
+      Math.abs(normalizedAngle - Math.PI * 2) < cardinalThreshold; // 360°/0°
+
+    if (isNearCardinal) {
+      // Force a large angle change to break out of straight line
+      this.angle += (Math.random() - 0.5) * 0.4 + (Math.random() > 0.5 ? 0.3 : -0.3);
+    }
+
+    // Force minimum angle change every frame (never stay straight)
+    const minAngleChange = 0.04;
+    const totalChange = Math.abs(this.angularVelocity + sineModulation);
+    if (totalChange < minAngleChange) {
+      this.angle += (Math.random() > 0.5 ? minAngleChange : -minAngleChange);
+    }
 
     // Calculate velocity from angle and speed
     const finalSpeed = this.speed * speedMultiplier * tempoMultiplier;
