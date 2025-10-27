@@ -55,7 +55,7 @@ let fpsHistorySize = 30; // Track last 30 frames for smooth average
 
 // Layer class with lifecycle and continuous motion
 class Layer {
-  constructor(colorPalette, entranceDir = null) {
+  constructor(colorPalette) {
     this.id = layerIdCounter++;
     this.state = 'entering'; // 'entering', 'active', 'exiting'
 
@@ -68,11 +68,6 @@ class Layer {
     this.colorPalette = colorPalette || warmColors;
     this.colorIndex = floor(random(this.colorPalette.length));
     this.targetColorIndex = this.colorIndex;
-
-    // Entrance direction
-    const directions = ['left', 'right', 'top', 'bottom'];
-    this.entranceDir = entranceDir || random(directions);
-    this.exitDir = this.getOppositeDir(this.entranceDir);
 
     // Angle animation - CONTINUOUS
     this.angle = random(360);
@@ -113,16 +108,6 @@ class Layer {
     // This is the critical performance fix
     this.graphics = createGraphics(width, height);
     this.graphics.angleMode(DEGREES);
-  }
-
-  getOppositeDir(dir) {
-    const opposites = {
-      'left': 'right',
-      'right': 'left',
-      'top': 'bottom',
-      'bottom': 'top'
-    };
-    return opposites[dir];
   }
 
   update(audioData) {
@@ -219,35 +204,18 @@ class Layer {
       1 - pow(1 - t, 3) :  // Ease out for entrance
       pow(t, 2);            // Ease in for exit
 
-    let offsetX = 0;
-    let offsetY = 0;
-    let alpha = eased;
+    // Radial gradient mask - reveal from center outward
+    // No offset needed - layer stays centered
+    let maskRadius = eased; // 0 to 1, controls radial mask size
+    let alpha = 1.0; // Keep full alpha, let mask handle visibility
 
-    // Entrance/exit animation
-    let dir = this.state === 'exiting' ? this.exitDir : this.entranceDir;
-
-    switch(dir) {
-      case 'left':
-        offsetX = lerp(-width * 1.2, 0, eased);
-        break;
-      case 'right':
-        offsetX = lerp(width * 1.2, 0, eased);
-        break;
-      case 'top':
-        offsetY = lerp(-height * 1.2, 0, eased);
-        break;
-      case 'bottom':
-        offsetY = lerp(height * 1.2, 0, eased);
-        break;
-    }
-
-    return { offsetX, offsetY, alpha };
+    return { offsetX: 0, offsetY: 0, alpha, maskRadius };
   }
 
   draw(audioData) {
     let transform = this.getTransform();
 
-    if (transform.alpha < 0.01) return;
+    if (transform.maskRadius < 0.01) return; // Don't draw if mask is invisible
 
     // REUSE the graphics buffer created in constructor
     let g = this.graphics;
@@ -337,6 +305,23 @@ class Layer {
     }
     g.noErase();
     g.pop();
+
+    // Apply radial gradient mask for smooth entrance/exit
+    // This creates soft circular reveal/hide with no hard edges
+    let maxRadius = sqrt(sq(width) + sq(height)) / 2 * 1.5; // Diagonal + margin
+    let maskRad = maxRadius * transform.maskRadius;
+
+    g.drawingContext.globalCompositeOperation = 'destination-in';
+    let radialGradient = g.drawingContext.createRadialGradient(
+      width / 2, height / 2, 0,
+      width / 2, height / 2, maskRad
+    );
+    radialGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    radialGradient.addColorStop(0.7, 'rgba(255, 255, 255, 1)');
+    radialGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.drawingContext.fillStyle = radialGradient;
+    g.drawingContext.fillRect(0, 0, width, height);
+    g.drawingContext.globalCompositeOperation = 'source-over';
 
     // Composite layer
     push();
@@ -607,6 +592,7 @@ function setupControls() {
   const playPauseBtn = select('#playPause');
   const stopBtn = select('#stop');
   const regenerateBtn = select('#regenerate');
+  const fullscreenBtn = select('#fullscreen');
   const statusText = select('#status');
 
   fileInput.changed(() => {
@@ -681,6 +667,16 @@ function setupControls() {
     layers = [];
     spawnLayer();
     spawnLayer();
+  });
+
+  fullscreenBtn.mousePressed(() => {
+    let fs = fullscreen();
+    fullscreen(!fs);
+    if (!fs) {
+      fullscreenBtn.html('⛶ Exit Fullscreen');
+    } else {
+      fullscreenBtn.html('⛶ Fullscreen');
+    }
   });
 }
 
