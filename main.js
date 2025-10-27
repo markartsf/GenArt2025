@@ -25,7 +25,7 @@ import { TimbreSpectrum } from './sketches/timbre-spectrum.js';
 import { LongExposureBeams } from './sketches/long-exposure-beams.js';
 import { LongExposureBeamsV2 } from './sketches/long-exposure-beams-v2.js';
 import { LongExposureBeamsV3 } from './sketches/long-exposure-beams-v3.js';
-import { LongExposureP5 } from './sketches/long-exposure-p5.js';
+// import { LongExposureP5 } from './sketches/long-exposure-p5.js'; // DISABLED - breaks app
 
 class GenArt2025 {
   constructor() {
@@ -263,8 +263,8 @@ class GenArt2025 {
       timbreSpectrum: new TimbreSpectrum(this.canvas, this.ctx),
       longExposureBeams: new LongExposureBeams(this.canvas, this.ctx),
       longExposureBeamsV2: new LongExposureBeamsV2(this.canvas, this.ctx),
-      longExposureBeamsV3: new LongExposureBeamsV3(this.canvas, this.ctx),
-      longExposureP5: new LongExposureP5(this.canvas, this.ctx)
+      longExposureBeamsV3: new LongExposureBeamsV3(this.canvas, this.ctx)
+      // longExposureP5: new LongExposureP5(this.canvas, this.ctx) // DISABLED
     };
 
     // Start with Rhythm Grid
