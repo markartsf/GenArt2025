@@ -84,6 +84,23 @@
       font-size: 11px;
       color: #c8a882;
     }
+
+    /* Hide controls in fullscreen mode for recording */
+    :fullscreen #controls {
+      display: none;
+    }
+
+    :-webkit-full-screen #controls {
+      display: none;
+    }
+
+    :-moz-full-screen #controls {
+      display: none;
+    }
+
+    :fullscreen #container {
+      background: #1a0a0a;
+    }
   </style>
 </head>
 <body>
@@ -101,6 +118,17 @@
         <button id="stop" disabled>Stop</button>
         <button id="regenerate">Regenerate</button>
         <button id="fullscreen">⛶ Fullscreen</button>
+      </div>
+
+      <div class="control-group">
+        <label>
+          <input type="checkbox" id="aspectRatio169">
+          16:9 Aspect Ratio (for recording)
+        </label>
+        <label>
+          <input type="checkbox" id="autoRegen">
+          Auto-regenerate every 15s (recording mode)
+        </label>
       </div>
 
       <div class="info">

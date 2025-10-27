@@ -39,11 +39,33 @@ let isCrossfading = false;
 let regenCooldown = 2000; // Min 2 seconds between regenerations
 let lastRegenTime = 0;
 
+// Recording mode
+let autoRegenEnabled = false;
+let autoRegenInterval = 15000; // 15 seconds
+let lastAutoRegenTime = 0;
+let aspectRatio169 = false;
+
+// On-canvas button
+let regenButton = {
+  x: 0,
+  y: 0,
+  w: 120,
+  h: 40,
+  visible: true,
+  hover: false
+};
+
 function setup() {
-  const canvas = createCanvas(800, 800);
+  let canvasWidth = 800;
+  let canvasHeight = 800;
+
+  const canvas = createCanvas(canvasWidth, canvasHeight);
   canvas.parent('p5-container');
 
   angleMode(DEGREES);
+
+  // Position regenerate button (bottom-right corner with margin)
+  updateButtonPosition();
 
   // Create starfield texture ONCE
   graphics = createGraphics(width, height);
@@ -191,7 +213,10 @@ function updateAnimatedShapes() {
   for (let i = 1; i < layerGraphics.length; i++) {
     let g = layerGraphics[i];
 
-    // Clear cutouts and redraw with animated positions
+    // FIRST: Redraw the gradient to restore full background
+    updateLayerGradient(g, i, baseAngle);
+
+    // THEN: Apply animated cutouts with erase
     g.push();
     g.erase(255, 255);
     g.noStroke();
@@ -356,6 +381,17 @@ function draw() {
     }
   }
 
+  // Auto-regeneration for recording mode
+  if (autoRegenEnabled && isPlaying && !isCrossfading) {
+    if (millis() - lastAutoRegenTime > autoRegenInterval) {
+      generateComposition(true);
+      lastAutoRegenTime = millis();
+    }
+  }
+
+  // Check mouse hover for on-canvas button
+  regenButton.hover = isMouseOverButton();
+
   // Redraw animated shapes onto layers
   updateAnimatedShapes();
 
@@ -408,7 +444,8 @@ function draw() {
   push();
   fill(0, 0, 0, 150);
   noStroke();
-  rect(5, 5, 240, 120);
+  let debugHeight = autoRegenEnabled ? 135 : 120;
+  rect(5, 5, 240, debugHeight);
 
   fill(255);
   textSize(11);
@@ -437,7 +474,59 @@ function draw() {
     fill(255, 200, 100);
     text(`Crossfading: ${(crossfadeProgress * 100).toFixed(0)}%`, 10, 110);
   }
+
+  // Show auto-regen countdown if enabled
+  if (autoRegenEnabled && isPlaying) {
+    let timeLeft = max(0, (autoRegenInterval - (millis() - lastAutoRegenTime)) / 1000);
+    fill(100, 255, 150);
+    text(`Auto-regen: ${timeLeft.toFixed(0)}s`, 10, 125);
+  }
   pop();
+
+  // Draw on-canvas regenerate button (visible in fullscreen)
+  drawRegenButton();
+}
+
+function updateButtonPosition() {
+  regenButton.x = width - regenButton.w - 20;
+  regenButton.y = height - regenButton.h - 20;
+}
+
+function isMouseOverButton() {
+  return mouseX >= regenButton.x &&
+         mouseX <= regenButton.x + regenButton.w &&
+         mouseY >= regenButton.y &&
+         mouseY <= regenButton.y + regenButton.h;
+}
+
+function drawRegenButton() {
+  if (!regenButton.visible) return;
+
+  push();
+  // Button background
+  if (regenButton.hover) {
+    fill(80, 80, 80, 220);
+  } else {
+    fill(50, 50, 50, 180);
+  }
+  noStroke();
+  rect(regenButton.x, regenButton.y, regenButton.w, regenButton.h, 5);
+
+  // Button text
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(14);
+  text('Regenerate', regenButton.x + regenButton.w / 2, regenButton.y + regenButton.h / 2);
+  pop();
+}
+
+function mousePressed() {
+  // Check if clicked on regenerate button
+  if (isMouseOverButton()) {
+    if (millis() - lastRegenTime > regenCooldown && !isCrossfading) {
+      generateComposition(true);
+    }
+  }
 }
 
 function getAudioFeatures() {
@@ -468,6 +557,8 @@ function setupControls() {
   const stopBtn = select('#stop');
   const regenerateBtn = select('#regenerate');
   const fullscreenBtn = select('#fullscreen');
+  const aspectRatioCheckbox = select('#aspectRatio169');
+  const autoRegenCheckbox = select('#autoRegen');
   const statusText = select('#status');
 
   fileInput.changed(() => {
@@ -536,10 +627,70 @@ function setupControls() {
       fullscreenBtn.html('⛶ Fullscreen');
     }
   });
+
+  // Aspect ratio toggle
+  aspectRatioCheckbox.changed(() => {
+    aspectRatio169 = aspectRatioCheckbox.elt.checked;
+    updateCanvasSize();
+  });
+
+  // Auto-regeneration toggle
+  autoRegenCheckbox.changed(() => {
+    autoRegenEnabled = autoRegenCheckbox.elt.checked;
+    if (autoRegenEnabled) {
+      lastAutoRegenTime = millis(); // Reset timer
+      statusText.html('📹 Recording mode: Auto-regenerate every 15s');
+    } else {
+      statusText.html(isPlaying ? '▶ Playing...' : 'Stopped');
+    }
+  });
+}
+
+function updateCanvasSize() {
+  let newWidth, newHeight;
+
+  if (aspectRatio169) {
+    // 16:9 aspect ratio (common for video recording)
+    newWidth = 1920;
+    newHeight = 1080;
+  } else {
+    // Square (original)
+    newWidth = 800;
+    newHeight = 800;
+  }
+
+  resizeCanvas(newWidth, newHeight);
+
+  // Update button position
+  updateButtonPosition();
+
+  // Regenerate starfield at new size
+  graphics.remove();
+  graphics = createGraphics(width, height);
+  graphics.colorMode(HSB, 360, 100, 100, 100);
+  graphics.noStroke();
+
+  for (let i = 0; i < (width * height * 10) / 100; i++) {
+    graphics.fill(0, 0, 100, 5);
+    let x = random(width);
+    let y = random(height);
+    let w = random(3);
+    let h = random(3);
+    graphics.ellipse(x, y, w, h);
+  }
+
+  // Regenerate composition at new size
+  generateComposition(false);
 }
 
 function windowResized() {
+  // Don't auto-resize if in 16:9 mode or fullscreen
+  if (aspectRatio169 || fullscreen()) return;
+
   resizeCanvas(windowWidth, windowHeight - 120);
+
+  // Update button position
+  updateButtonPosition();
 
   // Regenerate at new size
   graphics.remove();
