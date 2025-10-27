@@ -23,6 +23,13 @@ let smoothMid = 0;
 let smoothHigh = 0;
 let smoothRms = 0;
 
+// Beat detection for tempo responsiveness
+let lastSpectrum = null;
+let onsetStrength = 0;
+let beatDetected = false;
+let beatPulse = 0; // Decays over time
+let tempoMultiplier = 1.0; // Speed multiplier based on tempo
+
 // Visual parameters that respond to audio
 let baseAngle = 0; // Static angle for gradients (no rotation)
 let globalScale = 1.0;
@@ -346,22 +353,32 @@ function draw() {
   smoothHigh += (audioData.high - smoothHigh) * 0.02;
   smoothRms += (audioData.rms - smoothRms) * 0.03;
 
-  // Subtle global scale breathing based on bass
-  targetScale = 0.94 + smoothBass * 0.12; // Scale between 0.94 and 1.06
+  // Beat detection and tempo responsiveness
+  if (audioData.beat) {
+    beatPulse = 1.0; // Spike on beat
+    // Increase tempo multiplier on beats
+    tempoMultiplier = min(tempoMultiplier + 0.2, 2.5); // Max 2.5x speed
+  }
+  beatPulse *= 0.85; // Decay beat pulse
+  tempoMultiplier += (1.0 - tempoMultiplier) * 0.03; // Return to normal speed gradually
+
+  // Subtle global scale breathing based on bass + beat pulse
+  targetScale = 0.94 + smoothBass * 0.12 + beatPulse * 0.08; // Extra kick on beats
   globalScale += (targetScale - globalScale) * 0.02;
 
   // Subtle shadow intensity based on highs
   shadowIntensity = 0.8 + smoothHigh * 0.4;
 
-  // Animate individual shapes
+  // Animate individual shapes with tempo responsiveness
   for (let shape of shapeAnimations) {
-    // Gentle continuous rotation
+    // Rotation speed modulated by tempo multiplier
     if (isPlaying) {
-      shape.rotation += shape.rotationSpeed;
+      let speedMultiplier = tempoMultiplier * (0.7 + smoothMid * 0.6); // Mids also affect speed
+      shape.rotation += shape.rotationSpeed * speedMultiplier;
     }
 
-    // Pulse phase for subtle scale breathing per shape
-    shape.pulsePhase += 0.02;
+    // Pulse phase speeds up with tempo
+    shape.pulsePhase += 0.02 * tempoMultiplier;
 
     // Mids can modulate rotation speed slightly
     shape.targetRotation = shape.rotation + smoothMid * 5;
@@ -395,9 +412,9 @@ function draw() {
   // Redraw animated shapes onto layers
   updateAnimatedShapes();
 
-  // Clear and draw
+  // Clear and draw with dark background (no white border)
   clear();
-  background(240);
+  background(26, 10, 10); // Dark background matching UI
 
   // Draw with crossfade if active
   push();
@@ -444,7 +461,7 @@ function draw() {
   push();
   fill(0, 0, 0, 150);
   noStroke();
-  let debugHeight = autoRegenEnabled ? 135 : 120;
+  let debugHeight = autoRegenEnabled ? 150 : 135;
   rect(5, 5, 240, debugHeight);
 
   fill(255);
@@ -469,17 +486,28 @@ function draw() {
   fill(255);
   text(`Scale: ${globalScale.toFixed(3)}`, 10, 95);
 
+  // Show tempo multiplier with color coding
+  let tempoColor = color(100 + tempoMultiplier * 77, 200, 100);
+  fill(tempoColor);
+  text(`Tempo: ${tempoMultiplier.toFixed(2)}x`, 10, 110);
+
+  // Beat indicator (red circle when beat detected)
+  if (audioData.beat) {
+    fill(255, 50, 50);
+    circle(220, 110, 12);
+  }
+
   // Show crossfade status
   if (isCrossfading) {
     fill(255, 200, 100);
-    text(`Crossfading: ${(crossfadeProgress * 100).toFixed(0)}%`, 10, 110);
+    text(`Crossfading: ${(crossfadeProgress * 100).toFixed(0)}%`, 10, 125);
   }
 
   // Show auto-regen countdown if enabled
   if (autoRegenEnabled && isPlaying) {
     let timeLeft = max(0, (autoRegenInterval - (millis() - lastAutoRegenTime)) / 1000);
     fill(100, 255, 150);
-    text(`Auto-regen: ${timeLeft.toFixed(0)}s`, 10, 125);
+    text(`Auto-regen: ${timeLeft.toFixed(0)}s`, 10, 140);
   }
   pop();
 
@@ -535,7 +563,9 @@ function getAudioFeatures() {
       bass: 0,
       mid: 0,
       high: 0,
-      rms: 0
+      rms: 0,
+      beat: false,
+      onsetStrength: 0
     };
   }
 
@@ -548,7 +578,24 @@ function getAudioFeatures() {
   const high = spectrum.slice(midEnd).reduce((a, b) => a + b, 0) / (spectrum.length - midEnd) / 255;
   const rms = amplitude.getLevel();
 
-  return { bass, mid, high, rms };
+  // Onset detection using spectral flux (for beat detection)
+  if (!lastSpectrum) {
+    lastSpectrum = spectrum.slice();
+  }
+
+  let flux = 0;
+  for (let i = 0; i < spectrum.length; i++) {
+    let diff = spectrum[i] - lastSpectrum[i];
+    if (diff > 0) flux += diff;
+  }
+  lastSpectrum = spectrum.slice();
+
+  onsetStrength = constrain(flux / 10000, 0, 1);
+
+  // Simple beat detection - look for strong onsets
+  beatDetected = onsetStrength > 0.4;
+
+  return { bass, mid, high, rms, beat: beatDetected, onsetStrength };
 }
 
 function setupControls() {
