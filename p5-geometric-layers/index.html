@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P5.js Geometric Layers - Audio Reactive</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a0a0a;
+      color: #f5deb3;
+      overflow: hidden;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #controls {
+      padding: 20px;
+      background: rgba(26, 10, 10, 0.95);
+      border-bottom: 2px solid rgba(205, 92, 92, 0.3);
+      z-index: 10;
+    }
+
+    .control-group {
+      margin-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    input[type="file"] {
+      background: #222;
+      color: #fff;
+      padding: 8px;
+      border: 1px solid #444;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    button {
+      background: #444;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 3px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #p5-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .info {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #c8a882;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="controls">
+      <h2 style="margin-bottom: 15px;">🎨 Geometric Layers - Audio Reactive</h2>
+
+      <div class="control-group">
+        <label for="audioFile">Audio File</label>
+        <input type="file" id="audioFile" accept="audio/*">
+      </div>
+
+      <div class="control-group">
+        <button id="playPause" disabled>Play</button>
+        <button id="stop" disabled>Stop</button>
+        <button id="regenerate">Regenerate</button>
+      </div>
+
+      <div class="info">
+        <p>🎵 Layered gradients with geometric cutouts</p>
+        <p id="status">Load an audio file to begin...</p>
+      </div>
+    </div>
+
+    <div id="p5-container"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
