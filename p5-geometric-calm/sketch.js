@@ -23,6 +23,15 @@ let smoothMid = 0;
 let smoothHigh = 0;
 let smoothRms = 0;
 
+// Beat detection for particles
+let lastSpectrum = null;
+let onsetStrength = 0;
+let beatThreshold = 0.5;
+
+// Beat particles
+let particles = [];
+let maxParticles = 50; // Performance limit
+
 // Visual parameters that respond to audio
 let baseAngle = 0; // Static angle for gradients (no rotation)
 let globalScale = 1.0;
@@ -54,6 +63,92 @@ let regenButton = {
   visible: true,
   hover: false
 };
+
+// Beat Particle class - spawns on audio beats
+class BeatParticle {
+  constructor(x, y, intensity) {
+    this.x = x;
+    this.y = y;
+    this.life = 1.0; // 1 = full life, 0 = dead
+    this.maxLife = random(40, 70); // Frames to live
+    this.age = 0;
+
+    // Size based on beat intensity
+    this.size = random(4, 10) * (0.5 + intensity * 0.5);
+
+    // Color from current palette
+    if (palette && palette.length > 0) {
+      this.color = random(palette);
+    } else {
+      this.color = '#f2c94c';
+    }
+
+    // Movement - gentle drift
+    this.vx = random(-0.8, 0.8);
+    this.vy = random(-1.5, -0.3); // Drift upward mostly
+
+    // Pulse with audio
+    this.pulsePhase = random(TWO_PI);
+    this.pulseSpeed = random(0.08, 0.2);
+
+    // Spin
+    this.rotation = random(TWO_PI);
+    this.rotationSpeed = random(-0.1, 0.1);
+  }
+
+  update() {
+    this.age++;
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Fade out over lifetime
+    this.life = 1.0 - (this.age / this.maxLife);
+
+    // Pulse phase
+    this.pulsePhase += this.pulseSpeed;
+    this.rotation += this.rotationSpeed;
+
+    // Slow down over time (friction)
+    this.vx *= 0.98;
+    this.vy *= 0.98;
+  }
+
+  isDead() {
+    return this.life <= 0 || this.age > this.maxLife;
+  }
+
+  draw() {
+    push();
+
+    // Pulse size with bass
+    let pulseFactor = 1.0 + sin(this.pulsePhase) * 0.4 * smoothBass;
+    let currentSize = this.size * pulseFactor * this.life;
+
+    // Alpha based on life
+    let alpha = floor(this.life * 180);
+
+    translate(this.x, this.y);
+    rotate(this.rotation);
+
+    // Get color components
+    let c = color(this.color);
+    let r = red(c);
+    let g = green(c);
+    let b = blue(c);
+
+    // Draw particle with glow
+    drawingContext.shadowBlur = 15 + smoothHigh * 20;
+    drawingContext.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha / 255})`;
+
+    noStroke();
+    fill(r, g, b, alpha);
+    circle(0, 0, currentSize);
+
+    drawingContext.shadowBlur = 0;
+
+    pop();
+  }
+}
 
 function setup() {
   let canvasWidth = 800;
@@ -368,6 +463,25 @@ function draw() {
     shape.rotation += (shape.targetRotation - shape.rotation) * 0.05;
   }
 
+  // Spawn particles on beats
+  if (audioData.beat && particles.length < maxParticles) {
+    // Spawn 3-6 particles per beat based on intensity
+    let numParticles = floor(3 + audioData.onsetStrength * 3);
+    for (let i = 0; i < numParticles; i++) {
+      let x = random(width);
+      let y = random(height);
+      particles.push(new BeatParticle(x, y, audioData.onsetStrength));
+    }
+  }
+
+  // Update and clean up particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update();
+    if (particles[i].isDead()) {
+      particles.splice(i, 1);
+    }
+  }
+
   // Update crossfade
   if (isCrossfading) {
     crossfadeProgress += 0.02; // 2% per frame = ~3 second crossfade
@@ -440,6 +554,11 @@ function draw() {
   image(graphics, 0, 0);
   blendMode(BLEND);
 
+  // Draw beat particles
+  for (let particle of particles) {
+    particle.draw();
+  }
+
   // Debug info with visual indicators
   push();
   fill(0, 0, 0, 150);
@@ -452,22 +571,23 @@ function draw() {
   textAlign(LEFT);
   text(`FPS: ${frameRate().toFixed(1)}`, 10, 20);
   text(`Layers: ${layerGraphics.length} | Shapes: ${shapeAnimations.length}`, 10, 35);
+  text(`Particles: ${particles.length}/${maxParticles}`, 10, 50);
 
   // Audio bars to show it's working
   fill(100, 200, 100);
-  text(`Bass: ${(smoothBass * 100).toFixed(0)}%`, 10, 50);
-  rect(80, 42, smoothBass * 150, 8);
+  text(`Bass: ${(smoothBass * 100).toFixed(0)}%`, 10, 65);
+  rect(80, 57, smoothBass * 150, 8);
 
   fill(100, 150, 200);
-  text(`Mid: ${(smoothMid * 100).toFixed(0)}%`, 10, 65);
-  rect(80, 57, smoothMid * 150, 8);
+  text(`Mid: ${(smoothMid * 100).toFixed(0)}%`, 10, 80);
+  rect(80, 72, smoothMid * 150, 8);
 
   fill(200, 150, 100);
-  text(`High: ${(smoothHigh * 100).toFixed(0)}%`, 10, 80);
-  rect(80, 72, smoothHigh * 150, 8);
+  text(`High: ${(smoothHigh * 100).toFixed(0)}%`, 10, 95);
+  rect(80, 87, smoothHigh * 150, 8);
 
   fill(255);
-  text(`Scale: ${globalScale.toFixed(3)}`, 10, 95);
+  text(`Scale: ${globalScale.toFixed(3)}`, 10, 110);
 
   // Show crossfade status
   if (isCrossfading) {
@@ -535,7 +655,9 @@ function getAudioFeatures() {
       bass: 0,
       mid: 0,
       high: 0,
-      rms: 0
+      rms: 0,
+      beat: false,
+      onsetStrength: 0
     };
   }
 
@@ -548,7 +670,24 @@ function getAudioFeatures() {
   const high = spectrum.slice(midEnd).reduce((a, b) => a + b, 0) / (spectrum.length - midEnd) / 255;
   const rms = amplitude.getLevel();
 
-  return { bass, mid, high, rms };
+  // Beat detection using spectral flux (onset detection)
+  if (!lastSpectrum) {
+    lastSpectrum = spectrum.slice();
+  }
+
+  let flux = 0;
+  for (let i = 0; i < spectrum.length; i++) {
+    let diff = spectrum[i] - lastSpectrum[i];
+    if (diff > 0) flux += diff;
+  }
+  lastSpectrum = spectrum.slice();
+
+  onsetStrength = constrain(flux / 10000, 0, 1);
+
+  // Detect beat if onset exceeds threshold
+  let beatDetected = onsetStrength > beatThreshold;
+
+  return { bass, mid, high, rms, beat: beatDetected, onsetStrength };
 }
 
 function setupControls() {
