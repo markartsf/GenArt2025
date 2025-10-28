@@ -66,12 +66,15 @@ let regenButton = {
 
 // BeatShape - geometric shapes that flow across screen on beats
 class BeatShape {
-  constructor(x, y, intensity) {
+  constructor(x, y, intensity, sourceShape = null) {
     this.x = x;
     this.y = y;
 
-    // Color from palette
-    if (palette && palette.length > 0) {
+    // Color from source shape if available, otherwise from palette
+    if (sourceShape) {
+      // Inherit color from the composition shape that spawned this
+      this.color = palette[sourceShape.layerIndex % palette.length];
+    } else if (palette && palette.length > 0) {
       this.color = random(palette);
     } else {
       this.color = '#f2c94c';
@@ -84,28 +87,42 @@ class BeatShape {
     this.size = random(20, 50) * (0.7 + intensity * 0.6);
     this.baseSize = this.size;
 
-    // Movement - multiple direction options
-    let moveType = random();
-    if (moveType < 0.25) {
-      // Move upward
-      this.vx = random(-0.5, 0.5);
-      this.vy = random(-3, -1);
-    } else if (moveType < 0.5) {
-      // Move outward from center
-      let dx = x - width / 2;
-      let dy = y - height / 2;
-      let mag = sqrt(dx * dx + dy * dy);
-      this.vx = (dx / mag) * random(1.5, 3);
-      this.vy = (dy / mag) * random(1.5, 3);
-    } else if (moveType < 0.75) {
-      // Move diagonally
-      this.vx = random(-3, 3);
-      this.vy = random(-3, 3);
+    // Movement - unified flow direction based on composition gradient angle
+    if (sourceShape) {
+      // All shapes flow in the same direction as the gradient
+      // This creates a unified visual stream instead of explosion
+      let flowAngle = baseAngle * (PI / 180); // Convert to radians
+      let speed = random(1, 2.5); // Slower movement - was 3-5
+
+      // Add slight variation so shapes don't move in perfect line
+      let angleVariation = random(-0.3, 0.3); // ±17 degrees variation
+
+      this.vx = cos(flowAngle + angleVariation) * speed;
+      this.vy = sin(flowAngle + angleVariation) * speed;
     } else {
-      // Spiral outward
-      let angle = random(TWO_PI);
-      this.vx = cos(angle) * random(2, 4);
-      this.vy = sin(angle) * random(2, 4);
+      // Fallback to random movement if no source
+      let moveType = random();
+      if (moveType < 0.25) {
+        // Move upward
+        this.vx = random(-0.5, 0.5);
+        this.vy = random(-3, -1);
+      } else if (moveType < 0.5) {
+        // Move outward from center
+        let dx = x - width / 2;
+        let dy = y - height / 2;
+        let mag = sqrt(dx * dx + dy * dy);
+        this.vx = (dx / mag) * random(1.5, 3);
+        this.vy = (dy / mag) * random(1.5, 3);
+      } else if (moveType < 0.75) {
+        // Move diagonally
+        this.vx = random(-3, 3);
+        this.vy = random(-3, 3);
+      } else {
+        // Spiral outward
+        let angle = random(TWO_PI);
+        this.vx = cos(angle) * random(2, 4);
+        this.vy = sin(angle) * random(2, 4);
+      }
     }
 
     // Rotation
@@ -262,7 +279,7 @@ function generateComposition(triggerCrossfade = false) {
       colors: arr,
       nStep: nStep,
       randomSeed: rs,
-      cells: int(random(3, 7))
+      cells: int(random(2, 10)) // Match original: 2-10 cells for dense grids
     };
 
     // Draw gradient (once, no rotation)
@@ -291,7 +308,7 @@ function createAnimatedShapes(g, layerIndex, rs) {
   // Create animation data for each shape
   for (let k = 0; k < cells; k++) {
     for (let j = 0; j < cells; j++) {
-      let shape_num = int(random(5));
+      let shape_num = int(random(2)); // Only arcs and triangles like original!
       let baseRotation = (int(random(4)) * 360) / 4;
 
       shapeAnimations.push({
@@ -477,32 +494,59 @@ function draw() {
   // Subtle shadow intensity based on highs
   shadowIntensity = 0.8 + smoothHigh * 0.4;
 
-  // Animate individual shapes
+  // Keep shapes static - only subtle breathing, no rotation
   for (let shape of shapeAnimations) {
-    // Gentle continuous rotation
-    if (isPlaying) {
-      shape.rotation += shape.rotationSpeed;
-    }
-
-    // Pulse phase for subtle scale breathing per shape
+    // Pulse phase for subtle scale breathing per shape only
     shape.pulsePhase += 0.02;
 
-    // Mids can modulate rotation speed slightly
-    shape.targetRotation = shape.rotation + smoothMid * 5;
-    shape.rotation += (shape.targetRotation - shape.rotation) * 0.05;
+    // Shapes stay at their base rotation - no continuous spinning
   }
 
-  // Spawn flowing geometric shapes on beats
-  if (audioData.beat && beatShapes.length < maxBeatShapes) {
+  // Spawn flowing geometric shapes on beats - FROM varied positions
+  if (audioData.beat && beatShapes.length < maxBeatShapes && shapeAnimations.length > 0) {
     // Spawn 8-15 shapes per beat based on intensity
     let numShapes = floor(8 + audioData.onsetStrength * 7);
 
     for (let i = 0; i < numShapes; i++) {
-      // Random spawn position
-      let x = random(width);
-      let y = random(height);
+      let sourceShape = random(shapeAnimations);
+      let x, y;
 
-      beatShapes.push(new BeatShape(x, y, audioData.onsetStrength));
+      // Varied spawn positions
+      let spawnType = random();
+
+      if (spawnType < 0.5) {
+        // 50% - From composition shapes (edges)
+        let edgeAngle = random(TWO_PI);
+        let edgeDistance = sourceShape.size / 2;
+        x = sourceShape.x + cos(edgeAngle) * edgeDistance;
+        y = sourceShape.y + sin(edgeAngle) * edgeDistance;
+      } else if (spawnType < 0.7) {
+        // 20% - From screen edges
+        let edge = floor(random(4)); // 0=top, 1=right, 2=bottom, 3=left
+        if (edge === 0) {
+          x = random(width);
+          y = 0;
+        } else if (edge === 1) {
+          x = width;
+          y = random(height);
+        } else if (edge === 2) {
+          x = random(width);
+          y = height;
+        } else {
+          x = 0;
+          y = random(height);
+        }
+      } else if (spawnType < 0.85) {
+        // 15% - From center area
+        x = width / 2 + random(-100, 100);
+        y = height / 2 + random(-100, 100);
+      } else {
+        // 15% - Random positions
+        x = random(width);
+        y = random(height);
+      }
+
+      beatShapes.push(new BeatShape(x, y, audioData.onsetStrength, sourceShape));
     }
   }
 
@@ -766,6 +810,8 @@ function setupControls() {
       playPauseBtn.html('Play');
       statusText.html('Paused');
     } else {
+      // Ensure audio context is started (browser autoplay fix)
+      userStartAudio();
       audioFile.play();
       isPlaying = true;
       playPauseBtn.html('Pause');
