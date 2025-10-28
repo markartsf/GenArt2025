@@ -26,11 +26,11 @@ let smoothRms = 0;
 // Beat detection for particles
 let lastSpectrum = null;
 let onsetStrength = 0;
-let beatThreshold = 0.5;
+let beatThreshold = 0.2; // Very low threshold for staccato string sensitivity
 
-// Beat particles
-let particles = [];
-let maxParticles = 50; // Performance limit
+// Beat shapes that flow across screen
+let beatShapes = [];
+let maxBeatShapes = 150; // Allow many shapes for staccato responsiveness
 
 // Visual parameters that respond to audio
 let baseAngle = 0; // Static angle for gradients (no rotation)
@@ -64,88 +64,117 @@ let regenButton = {
   hover: false
 };
 
-// Beat Particle class - spawns on audio beats
-class BeatParticle {
+// BeatShape - geometric shapes that flow across screen on beats
+class BeatShape {
   constructor(x, y, intensity) {
     this.x = x;
     this.y = y;
-    this.life = 1.0; // 1 = full life, 0 = dead
-    this.maxLife = random(40, 70); // Frames to live
-    this.age = 0;
 
-    // Size based on beat intensity
-    this.size = random(4, 10) * (0.5 + intensity * 0.5);
-
-    // Color from current palette
+    // Color from palette
     if (palette && palette.length > 0) {
       this.color = random(palette);
     } else {
       this.color = '#f2c94c';
     }
 
-    // Movement - gentle drift
-    this.vx = random(-0.8, 0.8);
-    this.vy = random(-1.5, -0.3); // Drift upward mostly
+    // Random shape type
+    this.type = floor(random(5)); // 0=arc, 1=triangle, 2=square, 3=circle, 4=line
 
-    // Pulse with audio
-    this.pulsePhase = random(TWO_PI);
-    this.pulseSpeed = random(0.08, 0.2);
+    // Size based on intensity
+    this.size = random(20, 50) * (0.7 + intensity * 0.6);
+    this.baseSize = this.size;
 
-    // Spin
+    // Movement - multiple direction options
+    let moveType = random();
+    if (moveType < 0.25) {
+      // Move upward
+      this.vx = random(-0.5, 0.5);
+      this.vy = random(-3, -1);
+    } else if (moveType < 0.5) {
+      // Move outward from center
+      let dx = x - width / 2;
+      let dy = y - height / 2;
+      let mag = sqrt(dx * dx + dy * dy);
+      this.vx = (dx / mag) * random(1.5, 3);
+      this.vy = (dy / mag) * random(1.5, 3);
+    } else if (moveType < 0.75) {
+      // Move diagonally
+      this.vx = random(-3, 3);
+      this.vy = random(-3, 3);
+    } else {
+      // Spiral outward
+      let angle = random(TWO_PI);
+      this.vx = cos(angle) * random(2, 4);
+      this.vy = sin(angle) * random(2, 4);
+    }
+
+    // Rotation
     this.rotation = random(TWO_PI);
-    this.rotationSpeed = random(-0.1, 0.1);
+    this.rotationSpeed = random(-0.15, 0.15);
+
+    // Pulse phase
+    this.pulsePhase = random(TWO_PI);
   }
 
   update() {
-    this.age++;
+    // Move
     this.x += this.vx;
     this.y += this.vy;
 
-    // Fade out over lifetime
-    this.life = 1.0 - (this.age / this.maxLife);
-
-    // Pulse phase
-    this.pulsePhase += this.pulseSpeed;
+    // Rotate
     this.rotation += this.rotationSpeed;
 
-    // Slow down over time (friction)
-    this.vx *= 0.98;
-    this.vy *= 0.98;
+    // Pulse with audio
+    this.pulsePhase += 0.1;
+    let pulse = 1.0 + sin(this.pulsePhase) * 0.3 * smoothBass;
+    this.size = this.baseSize * pulse;
   }
 
-  isDead() {
-    return this.life <= 0 || this.age > this.maxLife;
+  isOffScreen() {
+    let margin = 100;
+    return this.x < -margin || this.x > width + margin ||
+           this.y < -margin || this.y > height + margin;
   }
 
   draw() {
     push();
-
-    // Pulse size with bass
-    let pulseFactor = 1.0 + sin(this.pulsePhase) * 0.4 * smoothBass;
-    let currentSize = this.size * pulseFactor * this.life;
-
-    // Alpha based on life
-    let alpha = floor(this.life * 180);
-
     translate(this.x, this.y);
     rotate(this.rotation);
 
-    // Get color components
     let c = color(this.color);
     let r = red(c);
     let g = green(c);
     let b = blue(c);
 
-    // Draw particle with glow
-    drawingContext.shadowBlur = 15 + smoothHigh * 20;
-    drawingContext.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha / 255})`;
+    // Glow
+    drawingContext.shadowBlur = 15 + smoothHigh * 15;
+    drawingContext.shadowColor = `rgba(${r}, ${g}, ${b}, 0.7)`;
 
     noStroke();
-    fill(r, g, b, alpha);
-    circle(0, 0, currentSize);
+    fill(r, g, b, 200);
+
+    // Draw shape based on type
+    if (this.type === 0) {
+      // Arc
+      arc(0, 0, this.size, this.size, 0, PI);
+    } else if (this.type === 1) {
+      // Triangle
+      triangle(-this.size/2, this.size/2, this.size/2, this.size/2, 0, -this.size/2);
+    } else if (this.type === 2) {
+      // Square
+      rectMode(CENTER);
+      rect(0, 0, this.size, this.size);
+    } else if (this.type === 3) {
+      // Circle
+      circle(0, 0, this.size);
+    } else {
+      // Line/dash
+      strokeWeight(6);
+      stroke(r, g, b, 200);
+      line(-this.size/2, 0, this.size/2, 0);
+    }
 
     drawingContext.shadowBlur = 0;
-
     pop();
   }
 }
@@ -463,22 +492,25 @@ function draw() {
     shape.rotation += (shape.targetRotation - shape.rotation) * 0.05;
   }
 
-  // Spawn particles on beats
-  if (audioData.beat && particles.length < maxParticles) {
-    // Spawn 3-6 particles per beat based on intensity
-    let numParticles = floor(3 + audioData.onsetStrength * 3);
-    for (let i = 0; i < numParticles; i++) {
+  // Spawn flowing geometric shapes on beats
+  if (audioData.beat && beatShapes.length < maxBeatShapes) {
+    // Spawn 8-15 shapes per beat based on intensity
+    let numShapes = floor(8 + audioData.onsetStrength * 7);
+
+    for (let i = 0; i < numShapes; i++) {
+      // Random spawn position
       let x = random(width);
       let y = random(height);
-      particles.push(new BeatParticle(x, y, audioData.onsetStrength));
+
+      beatShapes.push(new BeatShape(x, y, audioData.onsetStrength));
     }
   }
 
-  // Update and clean up particles
-  for (let i = particles.length - 1; i >= 0; i--) {
-    particles[i].update();
-    if (particles[i].isDead()) {
-      particles.splice(i, 1);
+  // Update and clean up beat shapes
+  for (let i = beatShapes.length - 1; i >= 0; i--) {
+    beatShapes[i].update();
+    if (beatShapes[i].isOffScreen()) {
+      beatShapes.splice(i, 1);
     }
   }
 
@@ -554,9 +586,9 @@ function draw() {
   image(graphics, 0, 0);
   blendMode(BLEND);
 
-  // Draw beat particles
-  for (let particle of particles) {
-    particle.draw();
+  // Draw flowing beat shapes
+  for (let shape of beatShapes) {
+    shape.draw();
   }
 
   // Debug info with visual indicators
@@ -571,7 +603,7 @@ function draw() {
   textAlign(LEFT);
   text(`FPS: ${frameRate().toFixed(1)}`, 10, 20);
   text(`Layers: ${layerGraphics.length} | Shapes: ${shapeAnimations.length}`, 10, 35);
-  text(`Particles: ${particles.length}/${maxParticles}`, 10, 50);
+  text(`Beat Shapes: ${beatShapes.length}/${maxBeatShapes}`, 10, 50);
 
   // Audio bars to show it's working
   fill(100, 200, 100);
