@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Liquid Light Ribbons - Pure Audio Reactive</title>
+  <title>P5.js Long Exposure Beams</title>
   <style>
     * {
       margin: 0;
@@ -13,7 +13,7 @@
 
     body {
       font-family: 'Courier New', monospace;
-      background: #0a0a0a;
+      background: #1a0a0a;
       color: #f5deb3;
       overflow: hidden;
     }
@@ -26,13 +26,13 @@
 
     #controls {
       padding: 20px;
-      background: rgba(10, 10, 10, 0.95);
+      background: rgba(26, 10, 10, 0.95);
       border-bottom: 2px solid rgba(205, 92, 92, 0.3);
       z-index: 10;
     }
 
     .control-group {
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
 
     label {
@@ -71,19 +71,9 @@
       cursor: not-allowed;
     }
 
-    #canvas-container {
+    #p5-container {
       flex: 1;
       position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #0a0a0a;
-    }
-
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
     }
 
     .info {
@@ -91,55 +81,12 @@
       font-size: 11px;
       color: #c8a882;
     }
-
-    #audio-info {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .info-item {
-      background: rgba(40, 20, 15, 0.6);
-      padding: 6px;
-      border-radius: 3px;
-      border: 1px solid rgba(205, 92, 92, 0.2);
-    }
-
-    .info-label {
-      color: #c8a882;
-      font-size: 9px;
-      margin-bottom: 2px;
-    }
-
-    .info-value {
-      color: #f4a460;
-      font-weight: bold;
-      font-size: 11px;
-    }
-
-    /* Hide controls in fullscreen mode for recording */
-    :fullscreen #controls {
-      display: none;
-    }
-
-    :-webkit-full-screen #controls {
-      display: none;
-    }
-
-    :-moz-full-screen #controls {
-      display: none;
-    }
-
-    :fullscreen #container {
-      background: #0a0a0a;
-    }
   </style>
 </head>
 <body>
   <div id="container">
     <div id="controls">
-      <h2 style="margin-bottom: 15px;">🌊 Liquid Light Ribbons</h2>
+      <h2 style="margin-bottom: 15px;">🎨 P5.js Long Exposure Beams</h2>
 
       <div class="control-group">
         <label for="audioFile">Audio File</label>
@@ -149,24 +96,19 @@
       <div class="control-group">
         <button id="playPause" disabled>Play</button>
         <button id="stop" disabled>Stop</button>
-        <button id="reset">Reset</button>
-        <button id="fullscreen">⛶ Fullscreen</button>
       </div>
-
-      <div id="audio-info"></div>
 
       <div class="info">
-        <p>🎵 Pure audio-reactive - ribbons flow only with music</p>
+        <p>📸 Standalone p5.js version - smooth organic curves</p>
         <p id="status">Load an audio file to begin...</p>
-        <p style="font-size: 10px; margin-top: 5px; color: #a8886a;">💡 Press R to reset (works in fullscreen)</p>
       </div>
     </div>
 
-    <div id="canvas-container">
-      <canvas id="canvas"></canvas>
-    </div>
+    <div id="p5-container"></div>
   </div>
 
-  <script type="module" src="/sketch.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+  <script src="sketch.js"></script>
 </body>
 </html>

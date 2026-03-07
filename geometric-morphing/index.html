@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Liquid Light Ribbons - Pure Audio Reactive</title>
+  <title>Geometric Morphing - Beat Reactive Shapes</title>
   <style>
     * {
       margin: 0;
@@ -118,7 +118,7 @@
       font-size: 11px;
     }
 
-    /* Hide controls in fullscreen mode for recording */
+    /* Hide controls in fullscreen mode */
     :fullscreen #controls {
       display: none;
     }
@@ -139,7 +139,7 @@
 <body>
   <div id="container">
     <div id="controls">
-      <h2 style="margin-bottom: 15px;">🌊 Liquid Light Ribbons</h2>
+      <h2 style="margin-bottom: 15px;">🔷 Geometric Morphing - Beat Reactive</h2>
 
       <div class="control-group">
         <label for="audioFile">Audio File</label>
@@ -153,12 +153,17 @@
         <button id="fullscreen">⛶ Fullscreen</button>
       </div>
 
+      <div class="control-group">
+        <label for="gainSlider">Gain: <span id="gainValue">10.0</span>x</label>
+        <input type="range" id="gainSlider" min="1" max="20" step="0.5" value="10" style="width: 300px;">
+      </div>
+
       <div id="audio-info"></div>
 
       <div class="info">
-        <p>🎵 Pure audio-reactive - ribbons flow only with music</p>
+        <p>🔍 DEBUG MODE: Tone.Meter + Compressor for better quiet audio response</p>
         <p id="status">Load an audio file to begin...</p>
-        <p style="font-size: 10px; margin-top: 5px; color: #a8886a;">💡 Press R to reset (works in fullscreen)</p>
+        <p style="font-size: 10px; margin-top: 5px; color: #a8886a;">💡 Compressor boosts quiet tracks | Meters with 0.8 smoothing | Adjust gain for fine-tuning</p>
       </div>
     </div>
 
@@ -167,6 +172,6 @@
     </div>
   </div>
 
-  <script type="module" src="/sketch.js"></script>
+  <script type="module" src="/geometric-morphing/sketch.js"></script>
 </body>
 </html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Helix Tiles</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: monospace; }
+
+    #overlay {
+      position: fixed; inset: 0; background: rgba(6, 4, 16, 0.93);
+      display: flex; flex-direction: column; justify-content: center;
+      align-items: center; gap: 18px; z-index: 100;
+    }
+    #overlay h1 {
+      color: rgba(223, 175, 102, 0.9); font-size: 20px; letter-spacing: 5px;
+      font-weight: 400; text-transform: uppercase; font-family: 'Courier New', monospace;
+    }
+    #overlay p {
+      color: rgba(200, 185, 165, 0.45); font-size: 12px; letter-spacing: 1px;
+      text-align: center; max-width: 430px; line-height: 1.8;
+    }
+    .btn-group { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn {
+      background: rgba(72, 64, 100, 0.3); border: 1px solid rgba(120, 107, 136, 0.4);
+      color: rgba(237, 225, 214, 0.85); padding: 9px 20px; border-radius: 3px;
+      cursor: pointer; font-size: 12px; letter-spacing: 1px; font-family: monospace;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(120, 107, 136, 0.4); border-color: rgba(183, 151, 103, 0.6); }
+    .btn.primary {
+      background: rgba(183, 151, 103, 0.2); border-color: rgba(223, 175, 102, 0.6);
+      color: #DFAF66;
+    }
+    .btn.primary:hover { background: rgba(183, 151, 103, 0.35); }
+
+    #ui {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 10; align-items: center;
+      transition: opacity 0.5s;
+    }
+    #ui .btn { padding: 6px 14px; font-size: 11px; }
+
+    #info {
+      position: fixed; top: 14px; left: 18px;
+      color: rgba(183, 151, 103, 0.35); font-size: 11px; line-height: 1.9;
+      pointer-events: none; font-family: monospace; transition: opacity 0.5s;
+    }
+    #meters {
+      position: fixed; top: 14px; right: 18px;
+      color: rgba(183, 151, 103, 0.35); font-size: 11px; text-align: right;
+      line-height: 2.0; pointer-events: none; font-family: monospace;
+      transition: opacity 0.5s;
+    }
+    .meter-bar {
+      display: inline-block; width: 55px; height: 5px;
+      background: rgba(255,255,255,0.07); border-radius: 2px;
+      vertical-align: middle; margin-left: 6px; overflow: hidden;
+    }
+    .meter-fill { height: 100%; border-radius: 2px; }
+
+    body.fullscreen-mode #ui,
+    body.fullscreen-mode #info,
+    body.fullscreen-mode #meters { opacity: 0; }
+    body.fullscreen-mode:hover #ui,
+    body.fullscreen-mode:hover #info,
+    body.fullscreen-mode:hover #meters { opacity: 1; }
+
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="overlay">
+  <h1>Helix Tiles</h1>
+  <p>50 geometric tiles spiral through 3D space on a helix.<br>
+     Bass plucks pulse the tiles outward. Violin shifts brightness and speed.<br>
+     High frequencies warm the color temperature.</p>
+  <div class="btn-group">
+    <button class="btn primary" onclick="loadBundled()">Load circles01a.mp3</button>
+    <label class="btn" for="file-input">Load your own audio</label>
+    <input type="file" id="file-input" accept="audio/*" onchange="loadAudioFile(this)">
+    <button class="btn" onclick="startNoAudio()">Run without audio</button>
+  </div>
+</div>
+
+<div id="info">
+  HELIX TILES &nbsp;|&nbsp; p5.js WEBGL<br>
+  <span id="state-label">waiting for audio…</span>
+</div>
+
+<div id="meters">
+  BASS &nbsp;&nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="bass-meter" style="background:#C16359;width:0%"></span></span><br>
+  VIOLIN <span class="meter-bar"><span class="meter-fill" id="mid-meter"  style="background:#DFAF66;width:0%"></span></span><br>
+  HIGHS &nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="high-meter" style="background:#719CA9;width:0%"></span></span>
+</div>
+
+<div id="ui">
+  <button class="btn" onclick="togglePlayPause()" id="playBtn">Pause</button>
+  <button class="btn" onclick="cycleScheme()"     id="schemeBtn">Scheme: Original</button>
+  <button class="btn" onclick="reshuffleTiles()">Reshuffle</button>
+  <button class="btn" onclick="toggleFullscreen()" id="fsBtn">⛶ Fullscreen</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="sketch.js"></script>
+</body>
+</html>

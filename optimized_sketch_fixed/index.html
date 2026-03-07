@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audio Reactive Sketch</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: black;
+        color: white;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+      #playButton {
+        font-size: 1.2rem;
+        padding: 10px 20px;
+        border: 2px solid white;
+        border-radius: 10px;
+        background: transparent;
+        color: white;
+        cursor: pointer;
+        margin-top: 20px;
+      }
+      #loading {
+        font-size: 1rem;
+        margin-top: 10px;
+        color: #aaa;
+      }
+      canvas {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Audio Reactive Sketch</h2>
+    <button id="playButton">▶️ Play</button>
+    <div id="loading">Loading audio...</div>
+    <script src="sketch.js"></script>
+  </body>
+</html>

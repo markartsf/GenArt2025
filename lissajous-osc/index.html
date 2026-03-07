@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lissajous Oscilloscope Web</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000; overflow: hidden; font-family: monospace; }
+
+    #container { position: relative; width: 100vw; height: 100vh; }
+    canvas { display: block; }
+
+    /* ── Controls bar ─────────────────────────────────────────────────────── */
+    #controls {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.80) 0%, transparent 100%);
+      z-index: 10;
+    }
+    button {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #ccc; font-family: monospace; font-size: 12px;
+      padding: 4px 12px; border-radius: 4px; cursor: pointer;
+    }
+    button:hover  { background: rgba(255,255,255,0.16); color: #fff; }
+    button:disabled { opacity: 0.35; cursor: default; }
+
+    #audioFile { display: none; }
+    label[for="audioFile"] {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #ccc; font-family: monospace; font-size: 12px;
+      padding: 4px 12px; border-radius: 4px; cursor: pointer;
+    }
+    label[for="audioFile"]:hover { background: rgba(255,255,255,0.16); color: #fff; }
+
+    #status {
+      flex: 1; font-size: 11px; color: rgba(255,255,255,0.45);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #status.loading { color: #ffb347; }
+    #status.ready   { color: rgba(0,200,255,0.65); }
+
+    /* ── Level meters ────────────────────────────────────────────────────── */
+    .meter-group { display: flex; gap: 4px; align-items: flex-end; height: 22px; }
+    .meter-wrap  {
+      width: 8px; height: 22px;
+      background: rgba(255,255,255,0.07); border-radius: 2px;
+      overflow: hidden; display: flex; align-items: flex-end;
+    }
+    .meter-bar   { width: 100%; height: 0%; border-radius: 2px; transition: height 0.05s; }
+    #bassMeter   { background: #4488ff; }
+    #midMeter    { background: #44ccaa; }
+    #highMeter   { background: #aa88ff; }
+    .meter-label { font-size: 9px; color: rgba(255,255,255,0.30); text-align: center; }
+
+    /* ── Hint ────────────────────────────────────────────────────────────── */
+    #hint {
+      position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+      font-size: 11px; color: rgba(255,255,255,0.18); pointer-events: none;
+    }
+
+    /* ── Fullscreen: fade controls out, restore on hover ─────────────────── */
+    :fullscreen #controls { opacity: 0; transition: opacity 0.4s; }
+    :fullscreen #controls:hover { opacity: 1; }
+    :fullscreen #hint { display: none; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <canvas id="c"></canvas>
+
+    <div id="controls">
+      <button id="playBtn"       disabled>Play</button>
+      <button id="stopBtn"       disabled>Stop</button>
+      <button id="fullscreenBtn">⛶</button>
+      <input  type="file" id="audioFile" accept="audio/*">
+      <label  for="audioFile">Load Audio</label>
+
+      <div class="meter-group">
+        <div>
+          <div class="meter-wrap"><div class="meter-bar" id="bassMeter"></div></div>
+          <div class="meter-label">B</div>
+        </div>
+        <div>
+          <div class="meter-wrap"><div class="meter-bar" id="midMeter"></div></div>
+          <div class="meter-label">M</div>
+        </div>
+        <div>
+          <div class="meter-wrap"><div class="meter-bar" id="highMeter"></div></div>
+          <div class="meter-label">H</div>
+        </div>
+      </div>
+
+      <span id="status" class="loading">Loading…</span>
+    </div>
+
+    <div id="hint">scroll → zoom · F → fullscreen · R → reset zoom</div>
+  </div>
+
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

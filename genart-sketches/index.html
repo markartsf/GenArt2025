@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenArt2025 - Audio-Responsive Generative Art</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a0a0a;
+      color: #f5deb3;
+      overflow: hidden;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #controls {
+      padding: 14px 20px;
+      background: rgba(26, 10, 10, 0.95);
+      border-bottom: 2px solid rgba(205, 92, 92, 0.3);
+      z-index: 10;
+    }
+
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0a0a0a;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 20px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      margin-bottom: 8px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #c8a882;
+    }
+
+    input[type="file"] {
+      background: #222;
+      color: #fff;
+      padding: 6px;
+      border: 1px solid #444;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    input[type="file"]::-webkit-file-upload-button {
+      background: #444;
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+
+    select {
+      background: #222;
+      color: #fff;
+      padding: 7px;
+      border: 1px solid #444;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      width: 260px;
+    }
+
+    button {
+      background: #444;
+      color: #fff;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-right: 8px;
+    }
+
+    button:hover {
+      background: #666;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    #fullscreenBtn {
+      background: #2a3a2a;
+      border: 1px solid rgba(100, 200, 100, 0.3);
+    }
+
+    #fullscreenBtn:hover {
+      background: #3a5a3a;
+    }
+
+    #status {
+      font-size: 11px;
+      color: #a8886a;
+      margin-top: 6px;
+    }
+
+    #status.loading { color: #f4a460; }
+    #status.ready   { color: #90ee90; }
+    #status.error   { color: #ff6b6b; }
+
+    #audio-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+
+    .info-item {
+      background: rgba(40, 20, 15, 0.8);
+      padding: 6px 8px;
+      border-radius: 3px;
+      border: 1px solid rgba(205, 92, 92, 0.3);
+    }
+
+    .info-label {
+      color: #c8a882;
+      margin-bottom: 2px;
+      font-size: 10px;
+    }
+
+    .info-value {
+      color: #f4a460;
+      font-weight: bold;
+    }
+
+    /* Hide controls in fullscreen so the art fills the screen */
+    :fullscreen #controls,
+    :-webkit-full-screen #controls,
+    :-moz-full-screen #controls {
+      display: none;
+    }
+
+    :fullscreen #container,
+    :-webkit-full-screen #container,
+    :-moz-full-screen #container {
+      background: #0a0a0a;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="controls">
+      <div class="controls-row">
+
+        <div class="control-group">
+          <label for="sketchSelect">Visualization</label>
+          <select id="sketchSelect">
+            <optgroup label="Attractors & Particles">
+              <option value="lorenzReactive" selected>Lorenz Reactive (NEW)</option>
+              <option value="lorenz">Lorenz Attractor</option>
+              <option value="rossler">Rossler Attractor</option>
+              <option value="particles">Particle Field</option>
+              <option value="waveform">Audio Waveform</option>
+            </optgroup>
+            <optgroup label="Audio-Responsive">
+              <option value="rhythmGrid">Rhythm Grid</option>
+              <option value="timbreSpectrum">Timbre Spectrum</option>
+              <option value="longExposureBeams">Long Exposure Beams</option>
+              <option value="longExposureBeamsV2">Long Exposure V2 (Bezier)</option>
+              <option value="longExposureBeamsV3">Long Exposure V3 (Persistent)</option>
+              <option value="neonPainter">Neon Painter</option>
+            </optgroup>
+            <optgroup label="Light Trails">
+              <option value="lightHighway">Light Highway</option>
+              <option value="chromaticFlow">Chromatic Flow</option>
+            </optgroup>
+            <optgroup label="Geometric Patterns">
+              <option value="galaxy">Spiral Galaxy</option>
+              <option value="tree">Fractal Tree</option>
+              <option value="kaleidoscope">Chromatic Kaleidoscope</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <button id="playPause" disabled>Play</button>
+          <button id="stop" disabled>Stop</button>
+          <button id="fullscreenBtn">[ Fullscreen ]</button>
+        </div>
+
+        <div class="control-group">
+          <label for="audioFile">Override Audio</label>
+          <input type="file" id="audioFile" accept="audio/*">
+        </div>
+
+      </div>
+
+      <div id="status" class="loading">Loading circles01a.mp3...</div>
+      <div id="audio-info"></div>
+    </div>
+
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
