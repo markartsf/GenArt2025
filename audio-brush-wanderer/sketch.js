@@ -26,13 +26,49 @@ function hsbToHex(h, s, b) {
              + ('0' + bl.toString(16)).slice(-2);
 }
 
-// ─── Mood Palettes ──────────────────────────────────────────────────────────────
-var MOODS = [
-  { name: "Ink",     hues: [210, 220, 240, 190],  sat: [30, 70],  bri: [20, 55],  bg: [247, 245, 240] },
-  { name: "Ember",   hues: [0, 15, 35, 350],      sat: [60, 95],  bri: [40, 80],  bg: [250, 242, 232] },
-  { name: "Forest",  hues: [90, 120, 150, 60],     sat: [35, 75],  bri: [25, 60],  bg: [240, 245, 238] },
-  { name: "Violet",  hues: [270, 290, 310, 250],   sat: [50, 90],  bri: [35, 75],  bg: [245, 240, 248] },
+// ─── Late Winter Palette ─────────────────────────────────────────────────────────
+// End of winter, hint of fall — dark blues, indigo, blue-grey, off-white,
+// touches of amber/yellow, light blue sky
+var PALETTE = [
+  "#1a2744",  // dark navy
+  "#1e2d5a",  // deep blue
+  "#2d2455",  // dark indigo
+  "#3a4a6b",  // slate blue
+  "#6b7d8e",  // neutral blue-grey
+  "#8fb4c9",  // light sky blue
+  "#a8bfc8",  // pale blue-grey
+  "#c4a35a",  // amber / hint of fall
+  "#d4b96a",  // soft gold
+  "#dcd4c0",  // warm off-white
+  "#e8e4dc",  // ice white
 ];
+
+// Weights control how often each color is picked (dark blues dominate,
+// amber/gold appear as rare accents)
+var PALETTE_WEIGHTS = [
+  3,   // dark navy        — frequent
+  3,   // deep blue        — frequent
+  2,   // dark indigo      — common
+  2,   // slate blue       — common
+  2,   // neutral blue-grey — common
+  2,   // light sky blue   — common
+  1,   // pale blue-grey   — occasional
+  1,   // amber            — rare accent
+  1,   // soft gold        — rare accent
+  1,   // warm off-white   — occasional
+  1,   // ice white        — occasional
+];
+
+// Background color — warm off-white that complements the palette
+var BG_COLOR = [240, 237, 230];
+
+// Build a weighted array for easy random selection
+var WEIGHTED_PALETTE = [];
+for (var _pi = 0; _pi < PALETTE.length; _pi++) {
+  for (var _wi = 0; _wi < PALETTE_WEIGHTS[_pi]; _wi++) {
+    WEIGHTED_PALETTE.push(PALETTE[_pi]);
+  }
+}
 
 // ─── Wanderer Class ─────────────────────────────────────────────────────────────
 // Each wanderer is a point that moves through a noise field,
@@ -55,24 +91,26 @@ function Wanderer(band, noiseOffset) {
 }
 
 Wanderer.prototype.spawn = function(canvasW, canvasH) {
-  this.x = random(canvasW * 0.1, canvasW * 0.9);
-  this.y = random(canvasH * 0.1, canvasH * 0.9);
+  // WEBGL coordinates: (0,0) is center, range is -w/2..w/2, -h/2..h/2
+  var hw = canvasW / 2, hh = canvasH / 2;
+  this.x = random(-hw * 0.85, hw * 0.85);
+  this.y = random(-hh * 0.85, hh * 0.85);
   this.px = this.x;
   this.py = this.y;
   this.stepsAlive = 0;
   this.maxSteps = Math.floor(random(150, 500));
   this.active = true;
 
-  // Assign brush by band
+  // Assign brush by band — wide variety across all built-in + custom types
   if (this.band === "bass") {
-    this.brushName = random(["ink_wash", "thick_oil", "2B"]);
-    this.weight = random(2.5, 6.0);
+    this.brushName = random(["thick_oil", "2B", "charcoal", "marker", "marker2", "ink_wash"]);
+    this.weight = random(2.0, 5.0);
   } else if (this.band === "mid") {
-    this.brushName = random(["calligraphy", "HB", "ink_wash"]);
-    this.weight = random(1.0, 3.5);
+    this.brushName = random(["calligraphy", "HB", "pen", "cpencil", "2H", "hatch_brush"]);
+    this.weight = random(1.0, 3.0);
   } else {
-    this.brushName = random(["needle", "HB", "rotring"]);
-    this.weight = random(0.3, 1.2);
+    this.brushName = random(["HB", "rotring", "pen", "needle", "splatter", "2H"]);
+    this.weight = random(0.4, 1.5);
   }
 };
 
@@ -92,12 +130,17 @@ Wanderer.prototype.update = function(features, canvasW, canvasH, noiseScale) {
   var ns = noiseScale * (1 + level * 2);
   this.angle = noise(this.x * ns + this.nOff, this.y * ns + this.nOff, frameT * 0.15) * 720;
 
-  // Step length: quiet = tiny drifts, loud = bold strokes
-  var stepLen = 1 + level * 25;
+  // Step length: quiet = gentle drifts, loud = bold leaping strokes
+  var stepLen = 2 + level * 50;
 
   // Add beat impulse — sudden speed burst
   if (features.beatFlash > 0.3) {
-    stepLen += features.beatStrength * 15;
+    stepLen += features.beatStrength * 25;
+  }
+
+  // Spectral flux = musical transients → extra jolt
+  if ((features.spectralFlux || 0) > 0.5) {
+    stepLen += features.spectralFlux * 10;
   }
 
   this.x += Math.cos(this.angle * Math.PI / 180) * stepLen;
@@ -105,9 +148,10 @@ Wanderer.prototype.update = function(features, canvasW, canvasH, noiseScale) {
 
   this.stepsAlive++;
 
-  // Respawn if off-screen or lived too long
-  if (this.x < -20 || this.x > canvasW + 20 ||
-      this.y < -20 || this.y > canvasH + 20 ||
+  // Respawn if off-screen or lived too long (WEBGL coords: -w/2..w/2)
+  var hw = canvasW / 2, hh = canvasH / 2;
+  if (this.x < -hw - 20 || this.x > hw + 20 ||
+      this.y < -hh - 20 || this.y > hh + 20 ||
       this.stepsAlive > this.maxSteps ||
       random(1) < 0.003) {
     this.spawn(canvasW, canvasH);
@@ -123,11 +167,8 @@ Wanderer.prototype.draw = function(features) {
   else if (this.band === "mid") level = features.mid;
   else level = features.high;
 
-  // Only draw when there's some energy in this band
-  if (level < 0.05) return;
-
-  // Pressure mapped from band level
-  var pressure = map(level, 0.05, 0.5, 0.2, 2.5, true);
+  // Always draw — even at low energy, gentle marks; loud = heavy pressure
+  var pressure = map(level, 0, 0.6, 0.3, 3.0, true);
 
   brush.pick(this.brushName);
   brush.stroke(this.colorHex);
@@ -141,17 +182,15 @@ var brushScale = 1;
 var brushReady = false;
 var frameT = 0;
 
-// Wanderers — 3 bass, 4 mid, 3 high = 10 simultaneous paths
+// Wanderers — 5 bass, 6 mid, 4 high = 15 simultaneous paths
 var wanderers = [];
 var WANDERER_CONFIG = [
-  { band: "bass", count: 3 },
-  { band: "mid",  count: 4 },
-  { band: "high", count: 3 },
+  { band: "bass", count: 5 },
+  { band: "mid",  count: 6 },
+  { band: "high", count: 4 },
 ];
 
-// Mood / color state
-var moodIndex = 0;
-var hueAccum = 0;
+// Color state
 var beatCount = 0;
 var prevBeatFlash = 0;
 
@@ -161,55 +200,47 @@ var NOISE_SCALE = 0.004;  // base noise scale (wanderer adjusts per energy)
 // ─── Synthetic features for generative mode ─────────────────────────────────────
 function generateSyntheticFeatures(t) {
   return {
-    bass:         0.15 + 0.10 * Math.sin(t * 0.25),
-    mid:          0.12 + 0.08 * noise(t * 0.4),
-    high:         0.08 + 0.05 * noise(t * 0.7 + 100),
-    rms:          0.10 + 0.06 * Math.sin(t * 0.35),
+    bass:         0.25 + 0.15 * Math.sin(t * 0.25),
+    mid:          0.20 + 0.12 * noise(t * 0.4),
+    high:         0.12 + 0.08 * noise(t * 0.7 + 100),
+    rms:          0.15 + 0.10 * Math.sin(t * 0.35),
     centroid:     0.3 + 0.2 * noise(t * 0.12 + 200),
-    beatFlash:    Math.sin(t * 0.6) > 0.99 ? 1.0 : 0,
-    beatStrength: Math.sin(t * 0.6) > 0.99 ? random(0.3, 0.8) : 0,
-    beatDensity:  0.6,
-    bpm:          72,
-    spectralFlux: 0,
+    beatFlash:    Math.sin(t * 0.6) > 0.985 ? 1.0 : 0,
+    beatStrength: Math.sin(t * 0.6) > 0.985 ? random(0.4, 0.9) : 0,
+    beatDensity:  0.8,
+    bpm:          80,
+    spectralFlux: 0.2,
   };
 }
 
 // ─── Color Helpers ──────────────────────────────────────────────────────────────
-function getMoodColor(features, bandBias) {
-  var mood = MOODS[moodIndex];
-  var hueIdx = Math.floor(random(mood.hues.length));
-  var h = mood.hues[hueIdx] + hueAccum + random(-12, 12);
 
-  // Energy from audio
-  var energy = constrain((features.rms + features.bass) / 0.5, 0, 1);
-
-  // Saturation: pale when quiet, vivid when loud
-  var s = map(energy, 0, 1, 15, mood.sat[1]);
-  // Brightness: light and airy when quiet, deeper when loud
-  var b = map(energy, 0, 1, 88, mood.bri[0] + (mood.bri[1] - mood.bri[0]) * 0.5);
-
-  s = constrain(s + random(-6, 6), 8, 100);
-  b = constrain(b + random(-5, 5), 20, 100);
-
-  // Band-specific hue shift: bass warmer, high cooler
-  if (bandBias === "bass") h -= 15;
-  else if (bandBias === "high") h += 20;
-
-  return hsbToHex(h, s, b);
+// Pick a color from the weighted palette, with band bias:
+//   bass → darker colors (first half of palette)
+//   mid  → full range
+//   high → lighter colors + accents (second half)
+function getPaletteColor(bandBias) {
+  if (bandBias === "bass") {
+    // Bass gets dark navys, indigos, slate blues
+    return random(PALETTE.slice(0, 5));
+  } else if (bandBias === "high") {
+    // High gets light blues, blue-greys, off-whites, occasional amber
+    return random(PALETTE.slice(4));
+  } else {
+    // Mid gets the full weighted range
+    return random(WEIGHTED_PALETTE);
+  }
 }
 
+// Beat accent — amber/gold for warmth against the cool palette
 function getBeatColor() {
-  var mood = MOODS[moodIndex];
-  var h = mood.hues[0] + hueAccum + random(-15, 15);
-  var s = constrain(mood.sat[1] + 10, 50, 100);
-  var b = constrain(mood.bri[1] + 5, 55, 100);
-  return hsbToHex(h, s, b);
+  return random(["#c4a35a", "#d4b96a", "#8fb4c9", "#1e2d5a", "#e8e4dc"]);
 }
 
 // ─── Refresh wanderer colors ────────────────────────────────────────────────────
-function refreshWandererColors(features) {
+function refreshWandererColors() {
   for (var i = 0; i < wanderers.length; i++) {
-    wanderers[i].colorHex = getMoodColor(features, wanderers[i].band);
+    wanderers[i].colorHex = getPaletteColor(wanderers[i].band);
   }
 }
 
@@ -217,7 +248,7 @@ function refreshWandererColors(features) {
 function registerCustomBrushes() {
   brush.add("calligraphy", {
     type: "custom", weight: 3.5, vibration: 0.15,
-    opacity: 50, spacing: 0.35, blend: true,
+    opacity: 60, spacing: 0.3, blend: true,
     pressure: {
       type: "custom", min_max: [0.5, 1.4],
       curve: function(x) { return 0.5 + 0.5 * Math.sin(x * Math.PI); }
@@ -228,7 +259,7 @@ function registerCustomBrushes() {
 
   brush.add("ink_wash", {
     type: "custom", weight: 10, vibration: 2.5,
-    opacity: 12, spacing: 0.4, blend: true,
+    opacity: 25, spacing: 0.35, blend: true,
     pressure: { type: "standard", curve: [0.1, 0.2], min_max: [0.8, 1.2] },
     tip: function(_m) {
       _m.ellipse(0, 0, 7, 3);
@@ -253,7 +284,7 @@ function registerCustomBrushes() {
 
   brush.add("thick_oil", {
     type: "marker", weight: 4.5, vibration: 0.25,
-    opacity: 50, spacing: 0.3, blend: true,
+    opacity: 55, spacing: 0.3, blend: true,
     pressure: { type: "standard", curve: [0.25, 0.2], min_max: [0.9, 1.5] }
   });
 
@@ -269,8 +300,8 @@ function drawBeatBurst(features, canvasW, canvasH) {
     cx = randWanderer.x;
     cy = randWanderer.y;
   } else {
-    cx = random(canvasW * 0.2, canvasW * 0.8);
-    cy = random(canvasH * 0.2, canvasH * 0.8);
+    cx = random(-canvasW * 0.3, canvasW * 0.3);
+    cy = random(-canvasH * 0.3, canvasH * 0.3);
   }
 
   var strength = features.beatStrength || 0.5;
@@ -279,12 +310,12 @@ function drawBeatBurst(features, canvasW, canvasH) {
   // Choose brush based on beat density (staccato = sharp, sustained = soft)
   var burstBrush, burstWeight;
   if (features.beatDensity > 2.5) {
-    // Staccato: sharp needle bursts
-    burstBrush = "needle";
-    burstWeight = 0.4 + strength * 0.8;
+    // Staccato: sharp bursts
+    burstBrush = random(["needle", "rotring", "pen"]);
+    burstWeight = 0.4 + strength * 1.2;
   } else {
-    // Normal: splatter or thick_oil
-    burstBrush = random(["splatter", "thick_oil", "calligraphy"]);
+    // Normal: varied burst styles
+    burstBrush = random(["splatter", "thick_oil", "calligraphy", "marker", "charcoal"]);
     burstWeight = 1.0 + strength * 3.0;
   }
 
@@ -311,10 +342,10 @@ function drawWaveformPath(features, canvasW, canvasH) {
   var nSamples = 24;
   var step = Math.floor(audioEngine.timeData.length / nSamples);
 
-  // Position the waveform near a random wanderer
+  // Position the waveform near a random wanderer (WEBGL coords)
   var randW = wanderers[Math.floor(random(wanderers.length))];
-  var cx = (randW && randW.active) ? randW.x : random(canvasW * 0.2, canvasW * 0.8);
-  var cy = (randW && randW.active) ? randW.y : random(canvasH * 0.2, canvasH * 0.8);
+  var cx = (randW && randW.active) ? randW.x : random(-canvasW * 0.3, canvasW * 0.3);
+  var cy = (randW && randW.active) ? randW.y : random(-canvasH * 0.3, canvasH * 0.3);
 
   var spread = 80 + strength * 200;
   var pts = [];
@@ -326,9 +357,9 @@ function drawWaveformPath(features, canvasW, canvasH) {
     pts.push([px, py]);
   }
 
-  brush.pick(random(["calligraphy", "HB"]));
+  brush.pick(random(["calligraphy", "HB", "2B", "charcoal"]));
   brush.stroke(getBeatColor());
-  brush.strokeWeight(0.8 + strength * 2.0);
+  brush.strokeWeight(0.8 + strength * 2.5);
 
   // Draw as connected line segments
   for (var i = 0; i < pts.length - 1; i++) {
@@ -370,9 +401,7 @@ function setup() {
   // Wire up UI controls
   document.getElementById('playBtn').addEventListener('click', function() {
     audioEngine.play();
-    // Refresh all wanderer colors when audio starts
-    var f = audioEngine.analyze();
-    refreshWandererColors(f);
+    refreshWandererColors();
   });
   document.getElementById('stopBtn').addEventListener('click', function() {
     audioEngine.stop();
@@ -401,11 +430,14 @@ function setup() {
   }
 
   // Draw initial background
-  background('#f7f5f0');
+  var bgHex = '#' +
+    ('0' + BG_COLOR[0].toString(16)).slice(-2) +
+    ('0' + BG_COLOR[1].toString(16)).slice(-2) +
+    ('0' + BG_COLOR[2].toString(16)).slice(-2);
+  background(bgHex);
 
-  // Initial color assignment
-  var synthF = generateSyntheticFeatures(0);
-  refreshWandererColors(synthF);
+  // Initial color assignment from palette
+  refreshWandererColors();
 }
 
 // ─── p5 Draw ────────────────────────────────────────────────────────────────────
@@ -422,39 +454,27 @@ function draw() {
     features = generateSyntheticFeatures(frameT);
   }
 
-  // ─── Hue drift from spectral centroid ─────────────────────────────
-  hueAccum += (features.centroid || 0.3) * 1.2;
-
-  // ─── Beat detection → mood cycling + burst effects ────────────────
+  // ─── Beat detection → color refresh + burst effects ─────────────
   var beatEdge = (features.beatFlash > 0.7 && prevBeatFlash <= 0.7);
   prevBeatFlash = features.beatFlash;
 
   if (beatEdge) {
     beatCount++;
-    // Cycle mood every 6 beats
-    if (beatCount % 6 === 0) {
-      moodIndex = (moodIndex + 1) % MOODS.length;
-      // Refresh all wanderer colors for new mood
-      refreshWandererColors(features);
-    }
-    // Color refresh on every other beat (keeps colors dynamic)
-    if (beatCount % 2 === 0) {
-      refreshWandererColors(features);
-    }
+    // Refresh wanderer colors on every beat — keeps palette alive
+    refreshWandererColors();
   }
 
   // ─── Background fade ──────────────────────────────────────────────
-  // Slow fade to reveal accumulated strokes, faster when loud
-  var mood = MOODS[moodIndex];
-  var bpmFactor = constrain((features.bpm || 120) / 120, 0.8, 1.5);
-  var baseFade = 2;  // very slow base fade — strokes persist
+  // Moderate fade — strokes persist then dissolve, canvas breathes
+  var bpmFactor = constrain((features.bpm || 120) / 120, 0.8, 1.3);
+  var baseFade = 3;
   var fadeAlpha = baseFade * bpmFactor;
 
-  // During quiet moments fade slightly faster (canvas breathes)
-  if (features.rms < 0.05) fadeAlpha += 1;
+  // Fade faster during quiet (canvas clears), slower when loud (strokes pile)
+  if (features.rms < 0.05) fadeAlpha += 2;
+  else if (features.rms > 0.2) fadeAlpha = Math.max(1.5, fadeAlpha - 1);
 
-  var bgR = mood.bg[0], bgG = mood.bg[1], bgB = mood.bg[2];
-  fill(bgR, bgG, bgB, fadeAlpha);
+  fill(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], fadeAlpha);
   noStroke();
   rect(-width / 2, -height / 2, width, height);
 
@@ -478,7 +498,38 @@ function draw() {
   }
 
   // ─── Periodic color refresh (keeps things evolving) ───────────────
-  if (frameCount % 90 === 0) {
-    refreshWandererColors(features);
+  if (frameCount % 60 === 0) {
+    refreshWandererColors();
+  }
+}
+
+// ─── Regenerate: clear canvas + respawn all wanderers ───────────────────────────
+function regenerate() {
+  // Clear the canvas with background color
+  var bgHex = '#' +
+    ('0' + BG_COLOR[0].toString(16)).slice(-2) +
+    ('0' + BG_COLOR[1].toString(16)).slice(-2) +
+    ('0' + BG_COLOR[2].toString(16)).slice(-2);
+  background(bgHex);
+
+  // Reset noise seed for completely different field patterns
+  noiseSeed(Math.floor(random(100000)));
+
+  // Respawn all wanderers with new noise offsets, positions, and brushes
+  for (var i = 0; i < wanderers.length; i++) {
+    wanderers[i].nOff = random(1000);
+    wanderers[i].spawn(width, height);
+  }
+
+  // Fresh colors from the palette
+  refreshWandererColors();
+
+  console.log("Regenerated — fresh canvas");
+}
+
+// ─── Keyboard handler ───────────────────────────────────────────────────────────
+function keyPressed() {
+  if (key === 'r' || key === 'R') {
+    regenerate();
   }
 }

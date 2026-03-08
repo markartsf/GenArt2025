@@ -1,12 +1,34 @@
-// p5.brush v2 — Custom Brushes for Visual Variety
-// Each drawing role has a dedicated brush palette for distinct visual character
-// Audio responsiveness: dramatic contrast between quiet and loud
+// p5.brush v2 — Optimized for Audio Responsiveness and Fall Palette
+// Synchronized with genart-sketches aesthetic
+// Audio-responsive brush dynamics: bass drives weight, mid drives frequency, high drives vibration
 
-// ─── Palette & Config ───────────────────────────────────────────────────────
-var PALETTE = ["#7b4800", "#002185", "#003c32", "#fcd300", "#ff2702", "#6b9404"];
-var BEAT_PALETTE = ["#ff2702", "#fcd300", "#002185", "#6b9404"];
-var BG_HEX = "#fffceb";
-var BG_RGB = [255, 252, 235];
+// ─── Fall Palette (shared with genart-sketches) ─────────────────────────────
+const FALL_PALETTE = [
+  { h: 48,  s: 95, l: 60 },  // Cadmium Yellow
+  { h: 355, s: 85, l: 50 },  // Naphthol Red
+  { h: 25,  s: 90, l: 55 },  // Cadmium Orange
+  { h: 0,   s: 80, l: 28 },  // Dark Red
+  { h: 345, s: 70, l: 25 },  // Burgundy
+  { h: 15,  s: 65, l: 30 },  // Dark Brown
+  { h: 40,  s: 75, l: 58 },  // Neutral Orange
+  { h: 50,  s: 45, l: 65 },  // Yellow
+];
+
+// Hex versions for p5.brush (converting HSL to hex)
+var PALETTE = [
+  "#d4af37", // Golden Yellow
+  "#ff4500", // Cadmium Orange
+  "#8b0000", // Dark Red
+  "#800020", // Burgundy
+  "#3d2817", // Dark Brown
+  "#d2691e", // Chocolate
+  "#cc5500", // Orange
+  "#ffd700"  // Gold
+];
+
+var BEAT_PALETTE = ["#ff4500", "#d4af37", "#800020", "#8b0000"];
+var BG_HEX = "#0a0a0a";
+var BG_RGB = [10, 10, 10];
 
 // Seed strokes use a mix of all custom + select defaults
 var SEED_BRUSHES = [
@@ -246,36 +268,36 @@ function draw() {
   rect(0, 0, width, height);
   pop();
 
-  // Update flow field
-  fieldAngle += features.mid * 2.0;
-  fieldScale = 1.0 + features.bass * 0.8;
+  // Update flow field — now more responsive to mid + high frequencies
+  fieldAngle += features.mid * 2.5 + features.brightness * 0.5;
+  fieldScale = 1.0 + features.bass * 1.2 + features.harmonic * 0.3;
 
   if (frameCount % 3 === 0) {
     brush.refreshField(frameT * 0.08);
   }
 
   // ════════════════════════════════════════════════════════════════════════
-  // BEAT RESPONSE — splatter + thick oil for explosive impact
+  // BEAT RESPONSE — explosive impact from bass + spectral flux
   // ════════════════════════════════════════════════════════════════════════
   if (features.beatFlash > 0.8) {
     spiralCount++;
 
-    // Calligraphic spiral every other beat
+    // Calligraphic spiral — intensity driven by harmonic content
     if (spiralCount % 2 === 0) {
       drawSpiral(
         width * 0.15 + random(width * 0.7),
         height * 0.15 + random(height * 0.7),
-        features.bass
+        features.bass * (1 + features.harmonic)
       );
     }
 
-    // Explosive burst — splatter + thick_oil
-    var burstCount = Math.floor(6 + features.bass * 8);
+    // Explosive burst — intensity scales with spectral flux
+    var burstCount = Math.floor(6 + features.bass * 8 + features.complexity * 4);
     drawBeatBurst(burstCount, features);
 
-    // Bold oil-paint circle ring
-    var circleSize = 30 + features.bass * 80;
-    brush.set("thick_oil", random(BEAT_PALETTE), 0.8 + features.bass * 2.0);
+    // Bold oil-paint circle — size & opacity respond to bass + brightness
+    var circleSize = 30 + features.bass * 80 + features.brightness * 40;
+    brush.set("thick_oil", random(BEAT_PALETTE), 0.8 + features.bass * 2.0 + features.brightness * 0.5);
     brush.circle(
       random(width * 0.2, width * 0.8),
       random(height * 0.2, height * 0.8),
@@ -285,10 +307,10 @@ function draw() {
   }
 
   // ════════════════════════════════════════════════════════════════════════
-  // AMBIENT STROKES — dry rake + calligraphy + charcoal
+  // AMBIENT STROKES — modulated by mid frequencies + spectral complexity
   // ════════════════════════════════════════════════════════════════════════
   var ambientCount = isAudioPlaying
-    ? Math.floor(1 + features.rms * 12)
+    ? Math.floor(1 + features.rms * 12 + features.harmonic * 3)
     : Math.floor(1 + features.rms * 4);
 
   for (var i = 0; i < ambientCount; i++) {
@@ -315,25 +337,46 @@ function draw() {
 // ─── Drawing Helpers ────────────────────────────────────────────────────────
 
 function getAudioColor(features) {
-  var idx = Math.floor(map(features.centroid, 0, 1, 0, PALETTE.length - 0.01));
-  idx = constrain(idx, 0, PALETTE.length - 1);
-  return PALETTE[idx];
+  // Map spectral brightness to warm colors (reds/oranges/golds)
+  // Low freq = burgundy/brown, mid = orange/red, high = yellow/gold
+  var colorIdx;
+  
+  if (features.brightness > 0.6) {
+    // High frequencies → golden yellows
+    colorIdx = Math.floor(map(features.brightness, 0.6, 1, 6, 7));
+  } else if (features.mid > 0.5) {
+    // Mid frequencies → oranges/reds
+    colorIdx = Math.floor(map(features.mid, 0.3, 1, 1, 4));
+  } else {
+    // Low frequencies → burgundy/brown
+    colorIdx = Math.floor(map(features.bass, 0, 1, 4, 6));
+  }
+  
+  colorIdx = constrain(Math.floor(colorIdx), 0, PALETTE.length - 1);
+  return PALETTE[colorIdx];
 }
 
 // AMBIENT — dry_rake (multi-line texture) + calligraphy (thick-thin) + charcoal
+// Weight modulated by bass, stroke length by RMS energy + harmonic content
 function drawAmbientStroke(features, isAudio) {
   var col = getAudioColor(features);
 
   var w, len;
   if (isAudio) {
-    w = 0.2 + features.bass * 4.0;
-    len = 50 + features.rms * 400;
+    // Bass drives weight, creating heavy sustain during low frequencies
+    w = 0.3 + features.bass * 5.5 + features.harmonic * 1.5;
+    // RMS + mid frequency drive length/energy
+    len = 80 + features.rms * 380 + features.mid * 150;
   } else {
-    w = 0.3 + features.bass * 1.5;
-    len = 60 + features.rms * 180;
+    w = 0.4 + features.bass * 2.0;
+    len = 80 + features.rms * 200;
   }
 
-  var brushType = random(["dry_rake", "calligraphy", "charcoal"]);
+  // Choose brush based on complexity — simple strokes on low energy, varied on high
+  var brushType = features.complexity > 0.4
+    ? random(["dry_rake", "calligraphy", "charcoal"])
+    : random(["calligraphy", "charcoal"]);
+  
   brush.set(brushType, col, w);
   brush.flowLine(
     random(width * 0.02, width * 0.98),
@@ -344,17 +387,18 @@ function drawAmbientStroke(features, isAudio) {
 }
 
 // BEAT BURST — splatter (chaotic dots) + thick_oil (bold paint)
+// Radiates from center, intensity scales with spectral flux + bass
 function drawBeatBurst(count, features) {
   var cx = width * 0.2 + random(width * 0.6);
   var cy = height * 0.2 + random(height * 0.6);
 
   for (var i = 0; i < count; i++) {
     var col = random(BEAT_PALETTE);
-    var w = 0.8 + features.bass * 4.0;
-    var len = 120 + features.rms * 350;
+    var w = 0.9 + features.bass * 5.5 + features.spectralFlux * 0.2;
+    var len = 150 + features.rms * 400 + features.complexity * 200;
     var angle = random(360);
-    var ox = cx + random(-150, 150);
-    var oy = cy + random(-150, 150);
+    var ox = cx + random(-180, 180);
+    var oy = cy + random(-180, 180);
 
     // Alternate between splatter and thick_oil for each stroke
     var burstBrush = i % 2 === 0 ? "splatter" : "thick_oil";
@@ -386,14 +430,16 @@ function drawSpiral(x, y, intensity) {
 }
 
 // SPLINE CURVES — ink_wash (soft ghosts) + 2B (fine detail)
+// Mid frequencies drive point distribution, high frequencies drive line width
 function drawSplineCurve(features) {
-  var numPts = Math.floor(4 + features.mid * 5);
+  var numPts = Math.floor(4 + features.mid * 6 + features.harmonic * 2);
   var points = [];
   var startX = random(width * 0.05, width * 0.95);
   var startY = random(height * 0.05, height * 0.95);
 
   for (var i = 0; i < numPts; i++) {
-    var spread = 60 + features.bass * 150;
+    // Bass drives spread distance for sweeping curves
+    var spread = 80 + features.bass * 180 + features.complexity * 100;
     points.push([
       startX + random(-spread, spread) * (i + 1) * 0.4,
       startY + random(-spread, spread) * (i + 1) * 0.4,
@@ -402,16 +448,19 @@ function drawSplineCurve(features) {
   }
 
   var col = getAudioColor(features);
-  var w = 0.4 + features.high * 2.5;
+  // High frequencies sharpen the lines
+  var w = 0.5 + features.high * 3.5 + features.brightness * 1.5;
   brush.set(random(["ink_wash", "2B"]), col, w);
   brush.spline(points, random(0.4, 0.9));
 }
 
 // LONG SWEEPING LINES — needle + pen + rotring for fine precision
+// Weight modulated by bass + brightness, length by overall energy
 function drawLongFlowLine(features) {
   var col = random(PALETTE);
-  var w = 0.3 + features.bass * 2.5;
-  var len = 200 + features.bass * 500;
+  // Bass creates heavy sustains, brightness adds subtle accent
+  var w = 0.4 + features.bass * 3.5 + features.brightness * 1.2;
+  var len = 250 + features.bass * 600 + features.rms * 200;
   var brushType = random(["needle", "pen", "rotring"]);
 
   brush.set(brushType, col, w);

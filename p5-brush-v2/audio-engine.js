@@ -250,6 +250,19 @@ class AudioEngine {
     this.beatFlash *= 0.82;
     this.beatCooldown = Math.max(0, this.beatCooldown - 1);
 
+    // Compute harmonic complexity and presence (spectral brightness)
+    let harmonic = 0;
+    for (let i = Math.floor(bins * 0.05); i < Math.floor(bins * 0.3); i++) {
+      harmonic += Math.pow(10, this.freqData[i] / 20);
+    }
+    harmonic = Math.min(1, harmonic / (bins * 0.25) * 0.1);
+
+    let brightness = 0;
+    for (let i = Math.floor(bins * 0.7); i < bins; i++) {
+      brightness += Math.pow(10, this.freqData[i] / 20);
+    }
+    brightness = Math.min(1, brightness / (bins * 0.3) * 0.15);
+
     // Update meters
     document.getElementById('bassMeter').style.height = (this.sBass * 100) + '%';
     document.getElementById('midMeter').style.height  = (this.sMid  * 100) + '%';
@@ -265,7 +278,10 @@ class AudioEngine {
       bass: this.sBass, mid: this.sMid, high: this.sHigh,
       rms: this.sRMS, centroid: this.sCentroid,
       beatFlash: this.beatFlash, bpm: this.estimatedBPM,
-      spectralFlux: this.spectralFlux
+      spectralFlux: this.spectralFlux,
+      harmonic: harmonic,
+      brightness: brightness,
+      complexity: Math.sqrt(this.spectralFlux) * 0.5
     };
   }
 }
