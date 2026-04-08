@@ -4,12 +4,12 @@ import * as Tone from 'tone';
 // ─── Tuning ───────────────────────────────────────────────────────────────────
 const PRELOAD_SRC     = '/lorenz-attractor/GlassHorizon.mp3';
 const Z_CENTER        = 23;    // Lorenz z-mean — centres the butterfly vertically
-const BEAT_THRESHOLD  = 0.012;
 const BEAT_COOLDOWN_F = 22;
 const RMS_WIN         = 10;
-const BASS_NORM       = 1 / 0.18;
-const MID_NORM        = 1 / 0.15;
-const HIGH_NORM       = 1 / 0.03;
+const FLUX_THRESHOLD  = 1.5;   // spectral flux beat trigger
+const PEAK_DECAY      = 0.995; // adaptive peaks decay slowly each frame
+const ATTACK          = 0.40;  // fast rise — transients feel immediate
+const RELEASE         = 0.08;  // slow fall — levels linger naturally
 
 // ─── Particle ─────────────────────────────────────────────────────────────────
 class LorenzParticle {
@@ -214,6 +214,14 @@ class LorenzApp {
     this.sBass = 0; this.sMid = 0; this.sHigh = 0; this.sRMS = 0;
     this.sCentroid = 0;
 
+    // Adaptive peaks — self-calibrate to any track within a few seconds
+    this.peakBass = 0.001; this.peakMid = 0.001;
+    this.peakHigh = 0.001; this.peakRMS = 0.001;
+
+    // Spectral flux (timbral transient detector)
+    this.prevSpec = null;
+    this.sFlux    = 0;
+
     this.rmsWin       = new Array(RMS_WIN).fill(0);
     this.beatCooldown = 0;
     this.beatFlash    = 0;
@@ -314,6 +322,8 @@ class LorenzApp {
     this.player.stop(); this.isPlaying = false;
     document.getElementById('playBtn').textContent = 'Play';
     this.sBass = this.sMid = this.sHigh = this.sRMS = this.sCentroid = 0;
+    this.peakBass = this.peakMid = this.peakHigh = this.peakRMS = 0.001;
+    this.prevSpec = null; this.sFlux = 0;
     this.rmsWin.fill(0);
     this.beatCooldown = 0;
     this.beatFlash    = 0;
@@ -336,35 +346,59 @@ class LorenzApp {
     const bEnd = Math.floor(bins * 0.10);
     const mEnd = Math.floor(bins * 0.50);
 
-    let bSum = 0, mSum = 0, hSum = 0;
-    let wSum = 0, mMag = 0;
+    let bSum = 0, mSum = 0, hSum = 0, bN = 0, mN = 0, hN = 0;
+    let wSum = 0, mMag = 0, fluxPos = 0;
+    if (!this.prevSpec) this.prevSpec = new Float32Array(bins);
+
     for (let i = 0; i < bins; i++) {
       const lin = Math.pow(10, spec[i] / 20);
-      if      (i < bEnd) bSum += lin;
-      else if (i < mEnd) mSum += lin;
-      else               hSum += lin;
+      if      (i < bEnd) { bSum += lin; bN++; }
+      else if (i < mEnd) { mSum += lin; mN++; }
+      else               { hSum += lin; hN++; }
       wSum += i * lin; mMag += lin;
+      // Spectral flux: positive magnitude changes only
+      const diff = lin - this.prevSpec[i];
+      if (diff > 0) fluxPos += diff;
+      this.prevSpec[i] = lin;
     }
-    const rawBass = bSum / bEnd;
-    const rawMid  = mSum / (mEnd - bEnd);
-    const rawHigh = hSum / (bins - mEnd);
+    const rawBass = bN > 0 ? bSum / bN : 0;
+    const rawMid  = mN > 0 ? mSum / mN : 0;
+    const rawHigh = hN > 0 ? hSum / hN : 0;
     const rawCent = mMag > 0 ? (wSum / mMag) / bins : 0;
+    const rawFlux = fluxPos / bins;
 
     const wf = this.analyzer.getValue();
     let sq = 0; for (const v of wf) sq += v * v;
     const rawRMS = Math.sqrt(sq / wf.length);
 
-    const α = 0.3;
-    this.sBass     += α * (Math.min(1, rawBass * BASS_NORM) - this.sBass);
-    this.sMid      += α * (Math.min(1, rawMid  * MID_NORM)  - this.sMid);
-    this.sHigh     += α * (Math.min(1, rawHigh * HIGH_NORM)  - this.sHigh);
-    this.sRMS      += α * (rawRMS - this.sRMS);
-    this.sCentroid += α * (rawCent - this.sCentroid);
+    // Adaptive peak tracking — self-calibrates to any track
+    this.peakBass = Math.max(rawBass, this.peakBass * PEAK_DECAY);
+    this.peakMid  = Math.max(rawMid,  this.peakMid  * PEAK_DECAY);
+    this.peakHigh = Math.max(rawHigh, this.peakHigh * PEAK_DECAY);
+    this.peakRMS  = Math.max(rawRMS,  this.peakRMS  * PEAK_DECAY);
 
-    // Beat detection via local RMS average
+    // Normalize to 0–1 using adaptive peaks
+    const nB = this.peakBass > 0.0001 ? rawBass / this.peakBass : 0;
+    const nM = this.peakMid  > 0.0001 ? rawMid  / this.peakMid  : 0;
+    const nH = this.peakHigh > 0.0001 ? rawHigh / this.peakHigh : 0;
+    const nR = this.peakRMS  > 0.0001 ? rawRMS  / this.peakRMS  : 0;
+
+    // Asymmetric smoothing — fast attack, slow release
+    this.sBass     += (nB > this.sBass ? ATTACK : RELEASE) * (nB - this.sBass);
+    this.sMid      += (nM > this.sMid  ? ATTACK : RELEASE) * (nM - this.sMid);
+    this.sHigh     += (nH > this.sHigh ? ATTACK : RELEASE) * (nH - this.sHigh);
+    this.sRMS      += (nR > this.sRMS  ? ATTACK : RELEASE) * (nR - this.sRMS);
+    this.sCentroid += 0.10 * (rawCent - this.sCentroid);
+
+    // Spectral flux smoothing (asymmetric — fast up, slow down)
+    this.sFlux += (rawFlux > this.sFlux ? 0.3 : 0.05) * (rawFlux - this.sFlux);
+
+    // Dual beat detection: RMS spike above local avg OR spectral flux spike
     this.rmsWin.shift(); this.rmsWin.push(rawRMS);
-    const avgRMS = this.rmsWin.reduce((s, v) => s + v, 0) / RMS_WIN;
-    if (rawRMS - avgRMS > BEAT_THRESHOLD && this.beatCooldown <= 0) {
+    const avgRMS   = this.rmsWin.reduce((s, v) => s + v, 0) / RMS_WIN;
+    const rmsSpike  = rawRMS  > avgRMS       * 1.12;
+    const fluxSpike = rawFlux > this.sFlux   * FLUX_THRESHOLD;
+    if ((rmsSpike || fluxSpike) && this.beatCooldown <= 0) {
       this.beatFlash    = 1.0;
       this.beatCooldown = BEAT_COOLDOWN_F;
     }
