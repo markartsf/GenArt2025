@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tunnel — Audio Reactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  canvas { display: block; }
+  #info {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.4);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+  #status {
+    position: fixed;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+  #ui {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+    align-items: center;
+  }
+  button, .file-label {
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 7px 18px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background 0.2s, border-color 0.2s;
+    font-family: inherit;
+  }
+  button:hover, .file-label:hover { background: rgba(255,255,255,0.12); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.active { border-color: #ff6343; color: #ff6343; }
+  .file-label input { display: none; }
+  #track-name {
+    color: rgba(255,255,255,0.35);
+    font-size: 10px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="info">BASS → breathe &nbsp;|&nbsp; MIDS → morph &nbsp;|&nbsp; CENTROID → colour drift &nbsp;|&nbsp; Space = play</div>
+<div id="status"></div>
+<div id="ui">
+  <button id="playBtn" disabled>&#9654; Play</button>
+  <label class="file-label">
+    Load MP3
+    <input type="file" id="audioFile" accept="audio/*">
+  </label>
+  <span id="track-name">GlassHorizon.mp3</span>
+  <button id="fsBtn">&#x26F6; Fullscreen</button>
+</div>
+
+<script type="module" src="./sketch.js"></script>
+</body>
+</html>

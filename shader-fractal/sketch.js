@@ -1,3 +1,12 @@
+// Ensure p5 and Tone are loaded
+if (typeof window.p5 === 'undefined' || typeof window.Tone === 'undefined') {
+  const statusEl = document.getElementById('status');
+  if (statusEl) {
+    statusEl.textContent = 'Error: p5.js or Tone.js not loaded.';
+    statusEl.className = 'error';
+  }
+  throw new Error('p5.js or Tone.js not loaded');
+}
 // GLSL Fractal — Audio Reactive (shape-morphing edition)
 // Adapted from a p5.js WEBGL shader sketch.
 // Audio drives SHAPE / GEOMETRY — animation pace is constant (no dizzying speed changes).
@@ -12,8 +21,8 @@
 //   iScale    → UV scale for zoom (< 1 = zoomed in, > 1 = zoomed out)
 //   iRMS      → (available; currently unused — reserved for future use)
 
-import p5 from 'p5';
-import * as Tone from 'tone';
+// p5.js and Tone.js are loaded globally from CDN
+
 
 // ─── Audio preload ─────────────────────────────────────────────────────────────
 const PRELOAD_SRC = '/clifford-attractor/BreathBetweenCircuits.mp3';
@@ -128,6 +137,7 @@ void main() {
 // ─── p5 sketch (instance mode) ────────────────────────────────────────────────
 const sketch = (p) => {
   let theShader;
+  let shaderError = null;
 
   // Tone.js audio objects
   let player      = null;
@@ -156,12 +166,24 @@ const sketch = (p) => {
 
   // ── Setup ────────────────────────────────────────────────────────────────────
   p.setup = function () {
-    const cnv = p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
-    cnv.parent('canvas-container');
-    p.pixelDensity(1);
-    p.noStroke();
-    theShader = p.createShader(vertShader, fragShader);
-    _setupAudio();
+    try {
+      const cnv = p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
+      cnv.parent('canvas-container');
+      p.pixelDensity(1);
+      p.noStroke();
+      theShader = p.createShader(vertShader, fragShader);
+    } catch (e) {
+      shaderError = e;
+      document.getElementById('status').textContent = 'Shader error: ' + e.message;
+      document.getElementById('status').className = 'error';
+      return;
+    }
+    try {
+      _setupAudio();
+    } catch (e) {
+      document.getElementById('status').textContent = 'Audio error: ' + e.message;
+      document.getElementById('status').className = 'error';
+    }
   };
 
   // ── Audio setup ──────────────────────────────────────────────────────────────
@@ -336,22 +358,25 @@ const sketch = (p) => {
 
   // ── Draw ─────────────────────────────────────────────────────────────────────
   p.draw = function () {
-    _readAudio();
-
-    p.shader(theShader);
-
-    theShader.setUniform('iResolution', [p.width, p.height]);
-    theShader.setUniform('iTime',       p.millis() / 1000.0);
-    theShader.setUniform('iBass',       sBass);
-    theShader.setUniform('iMid',        sMid);
-    theShader.setUniform('iHigh',       sHigh);
-    theShader.setUniform('iRMS',        sRMS);
-    theShader.setUniform('iBeat',       beatFlash);
-    theShader.setUniform('iRotation',   orbitRotation);
-    theShader.setUniform('iScale',      orbitScale);
-
-    // Full-screen quad
-    p.rect(-p.width / 2, -p.height / 2, p.width, p.height);
+    if (shaderError) return;
+    try {
+      _readAudio();
+      p.shader(theShader);
+      theShader.setUniform('iResolution', [p.width, p.height]);
+      theShader.setUniform('iTime',       p.millis() / 1000.0);
+      theShader.setUniform('iBass',       sBass);
+      theShader.setUniform('iMid',        sMid);
+      theShader.setUniform('iHigh',       sHigh);
+      theShader.setUniform('iRMS',        sRMS);
+      theShader.setUniform('iBeat',       beatFlash);
+      theShader.setUniform('iRotation',   orbitRotation);
+      theShader.setUniform('iScale',      orbitScale);
+      // Full-screen quad
+      p.rect(-p.width / 2, -p.height / 2, p.width, p.height);
+    } catch (e) {
+      document.getElementById('status').textContent = 'Render error: ' + e.message;
+      document.getElementById('status').className = 'error';
+    }
   };
 
   // ── Mouse orbit controls ──────────────────────────────────────────────────────

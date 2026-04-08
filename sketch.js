@@ -1,296 +1,310 @@
-import p5 from 'p5';
-import * as Tone from 'tone';
+// --- Global Variables ---
+let scene, camera, renderer, particles, material;
+let audioContext, analyser, source, audio, dataArray;
+const clock = new THREE.Clock();
 
-// --- Global State ---
-let ribbons = [];
-let numRibbons = 8;
-let player, analyzer, fftAnalyzer;
-let isPlaying = false;
+// Audio analysis parameters
+const audioState = { bass: 0, mid: 0, treble: 0 };
+const FFT_SIZE = 512;
+const BASS_RANGE = [20, 140];    // Hz
+const MID_RANGE = [400, 2600];   // Hz
+const TREBLE_RANGE = [5200, 14000]; // Hz
 
-let audioFeatures = {
-  bass: 0,
-  mid: 0,
-  high: 0,
-  rms: 0,
-  spectrum: new Array(512).fill(0)
-};
+// Particle simulation API
+const PARTICLE_COUNT = 20000;
+const controls = {};
+const opts = {}; // Cache the options object to avoid 60fps re-allocations
 
-// Fall colors - warm flowing palette
-const palette = [
-  { h: 48, s: 95, l: 60 },  // Cadmium Yellow
-  { h: 355, s: 85, l: 50 }, // Naphthol Red
-  { h: 25, s: 90, l: 55 },  // Cadmium Orange
-  { h: 0, s: 80, l: 28 },   // Dark Red
-  { h: 345, s: 70, l: 25 }, // Burgundy
-  { h: 15, s: 65, l: 30 },  // Dark Brown
-  { h: 40, s: 75, l: 58 },  // Neutral Orange
-  { h: 50, s: 45, l: 65 },  // Yellow
-];
-
-// --- p5.js Setup ---
-const sketch = (p) => {
-  p.setup = () => {
-    // Create canvas and attach to container
-    const container = document.getElementById('canvas-container') || document.body;
-    const c = p.createCanvas(container.clientWidth || p.windowWidth, container.clientHeight || p.windowHeight);
-    if (document.getElementById('canvas-container')) {
-      c.parent('canvas-container');
-    }
+// --- Main Initialization ---
+function init() {
+    // 1. Scene Setup
+    scene = new THREE.Scene();
     
-    p.colorMode(p.HSL);
-    p.noStroke();
+    const canvasContainer = document.getElementById('canvas-container');
+    const width = canvasContainer ? canvasContainer.clientWidth : window.innerWidth;
+    const height = canvasContainer ? canvasContainer.clientHeight : window.innerHeight;
+
+    camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    camera.position.z = 100;
     
-    setupAudio();
-    setupControls();
-    resetRibbons();
-    p.background(5); // Immediate visual feedback
-  };
+    const canvasEl = document.getElementById('canvas');
+    // Pass the existing canvas to the renderer so it sits correctly in the layout
+    renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+    renderer.setSize(width, height);
 
-  p.draw = () => {
-    // 1. Update Audio Data
-    if (isPlaying) updateAudioFeatures();
+    // 2. Particle System Setup
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
 
-    // 2. Visual Update
-    // Slow fade for trails
-    p.fill(0, 0, 4, 0.15); // HSL very dark grey
-    p.rect(0, 0, p.width, p.height);
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Update and Draw Ribbons
-    updateRibbons();
-    drawRibbons();
+    material = new THREE.PointsMaterial({
+        size: 0.5,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.8
+    });
+
+    particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    // 3. Audio Setup
+    document.getElementById('audioFile').addEventListener('change', handleAudioUpload);
     
-    // Debug FPS (Optional, remove for production)
-    if (p.frameCount % 60 === 0) {
-      console.log("FPS:", Math.floor(p.frameRate()));
-    }
-  };
+    // Wire up the playback control buttons
+    document.getElementById('playPause').addEventListener('click', togglePlay);
+    document.getElementById('stop').addEventListener('click', stopAudio);
+    document.getElementById('reset').addEventListener('click', () => {
+        camera.position.set(0, 0, 100);
+        camera.lookAt(scene.position);
+    });
 
-  p.windowResized = () => {
-    const container = document.getElementById('canvas-container') || document.body;
-    p.resizeCanvas(container.clientWidth || p.windowWidth, container.clientHeight || p.windowHeight);
-    resetRibbons();
-  };
-
-  // --- Logic ---
-
-  function resetRibbons() {
-    ribbons = [];
-    const spacing = p.width / (numRibbons + 1);
-
-    for (let i = 0; i < numRibbons; i++) {
-      const centerX = spacing * (i + 1);
-      // Pre-allocate points array to avoid GC thrashing
-      const numPoints = 50;
-      
-      // Initialize with valid positions immediately so we don't draw degenerate gradients
-      const points = new Array(numPoints).fill(0).map((_, idx) => {
-        return { 
-          x: centerX, 
-          y: (idx / (numPoints - 1)) * p.height, 
-          width: 40 
-        };
-      });
-
-      ribbons.push({
-        centerX: centerX,
-        points: points, 
-        colorIndex: i % palette.length,
-        phase: Math.random() * Math.PI * 2,
-        phaseSpeed: 0.02 + Math.random() * 0.03,
-        baseWidth: 40 + Math.random() * 40,
-        numPoints: numPoints,
-      });
-    }
-  }
-
-  function updateRibbons() {
-    // Allow updates even when paused so we see the ribbons (just no audio reaction)
-    const currentRms = isPlaying ? audioFeatures.rms : 0.05; // Idle movement
-    const currentBass = isPlaying ? audioFeatures.bass : 0;
-    const currentMid = isPlaying ? audioFeatures.mid : 0;
-    const currentHigh = isPlaying ? audioFeatures.high : 0;
-
-    for (const ribbon of ribbons) {
-      // Phase advances with audio
-      ribbon.phase += ribbon.phaseSpeed * (isPlaying ? (currentRms * 10 + currentMid * 5) : 0.5);
-
-      for (let i = 0; i < ribbon.numPoints; i++) {
-        const t = i / (ribbon.numPoints - 1);
-        const y = t * p.height;
-
-        const waveAmplitude = (currentBass * 150 + currentMid * 80);
-        const wave1 = Math.sin(ribbon.phase + t * Math.PI * 3) * waveAmplitude;
-        const wave2 = Math.sin(ribbon.phase * 1.5 + t * Math.PI * 5) * waveAmplitude * 0.5;
-
-        const x = ribbon.centerX + wave1 + wave2;
-        const widthMod = 1 + Math.sin(t * Math.PI * 2 + ribbon.phase) * 0.5;
-        const w = ribbon.baseWidth * widthMod * (1 + currentHigh * 2);
-
-        // Update existing object instead of creating new one
-        ribbon.points[i].x = x;
-        ribbon.points[i].y = y;
-        ribbon.points[i].width = w;
-      }
-    }
-  }
-
-  function drawRibbons() {
-    for (const ribbon of ribbons) {
-      const color = palette[ribbon.colorIndex];
-      
-      // Glow
-      const glowAmount = 15 + audioFeatures.rms * 30 + audioFeatures.high * 40;
-      p.drawingContext.shadowBlur = glowAmount;
-      p.drawingContext.shadowColor = `hsla(${color.h}, ${color.s}%, ${color.l}%, 0.7)`;
-
-      for (let i = 0; i < ribbon.points.length - 1; i++) {
-        const p1 = ribbon.points[i];
-        const p2 = ribbon.points[i + 1];
-
-        // Performance: Skip invisible segments
-        if (p1.width < 1 || p2.width < 1) continue;
-
-        // Gradient per segment (Native Canvas API via p5 drawingContext)
-        const gradient = p.drawingContext.createLinearGradient(
-          p1.x - p1.width / 2, p1.y,
-          p1.x + p1.width / 2, p1.y
-        );
-
-        const alpha = 0.6 + audioFeatures.high * 0.4;
-        gradient.addColorStop(0, `hsla(${color.h}, ${color.s}%, ${color.l - 20}%, 0)`);
-        gradient.addColorStop(0.5, `hsla(${color.h}, ${color.s}%, ${color.l}%, ${alpha})`);
-        gradient.addColorStop(1, `hsla(${color.h}, ${color.s}%, ${color.l - 20}%, 0)`);
-
-        p.drawingContext.fillStyle = gradient;
-
-        p.beginShape();
-        p.vertex(p1.x - p1.width / 2, p1.y);
-        p.vertex(p1.x + p1.width / 2, p1.y);
-        p.vertex(p2.x + p2.width / 2, p2.y);
-        p.vertex(p2.x - p2.width / 2, p2.y);
-        p.endShape(p.CLOSE);
-      }
-    }
-    // Reset shadow to avoid affecting other elements
-    p.drawingContext.shadowBlur = 0;
-  }
-
-  // --- Audio & Controls (Kept mostly same, adapted for module scope) ---
-  
-  function setupAudio() {
-    analyzer = new Tone.Analyser('waveform', 1024);
-    fftAnalyzer = new Tone.Analyser('fft', 512);
-  }
-
-  function updateAudioFeatures() {
-    if (!analyzer || !fftAnalyzer || !isPlaying) return;
-
-    const waveform = analyzer.getValue();
-    const spectrum = fftAnalyzer.getValue();
-    const bins = spectrum.length;
-    const linearSpectrum = spectrum.map(db => Math.pow(10, db / 20));
-
-    const bassEnd = Math.floor(bins * 0.1);
-    const midEnd = Math.floor(bins * 0.5);
-
-    audioFeatures.bass = average(linearSpectrum.slice(0, bassEnd));
-    audioFeatures.mid = average(linearSpectrum.slice(bassEnd, midEnd));
-    audioFeatures.high = average(linearSpectrum.slice(midEnd));
-
-    const sumSquares = waveform.reduce((sum, val) => sum + val * val, 0);
-    audioFeatures.rms = Math.sqrt(sumSquares / waveform.length);
+    // 4. Handle Window Resizing
+    window.addEventListener('resize', onWindowResize, false);
     
-    // Update DOM UI if exists
-    updateAudioInfoDisplay();
-  }
+    // 5. Initial Info display
+    const statusEl = document.getElementById('status');
+    if (statusEl) statusEl.textContent = "Upload an MP3 file to begin.";
+    
+    // 6. Start Animation Loop
+    animate();
+}
 
-  function average(array) {
-    if (array.length === 0) return 0;
-    return array.reduce((sum, val) => sum + val, 0) / array.length;
-  }
+// --- Audio Handling ---
+function handleAudioUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
 
-  function setupControls() {
-    const audioFileInput = document.getElementById('audioFile');
-    const playPauseBtn = document.getElementById('playPause');
-    const stopBtn = document.getElementById('stop');
-    const resetBtn = document.getElementById('reset');
-    const statusText = document.getElementById('status');
+    // If audio is already playing, stop it.
+    if (audio) {
+        audio.pause();
+        // Revoke the old URL to free up memory.
+        URL.revokeObjectURL(audio.src);
+    }
+    // Disconnect the old source if it exists.
+    if (source) {
+        source.disconnect();
+    }
 
-    if(audioFileInput) {
-      audioFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          if(statusText) statusText.textContent = 'Loading audio...';
-          try {
-            if (player) {
-              player.stop();
-              player.dispose();
-            }
-            const url = URL.createObjectURL(file);
-            player = new Tone.Player(url).toDestination();
-            player.volume.value = 0;
-            player.connect(analyzer);
-            player.connect(fftAnalyzer);
-            await Tone.loaded();
-            
-            if(playPauseBtn) playPauseBtn.disabled = false;
-            if(stopBtn) stopBtn.disabled = false;
-            if(statusText) statusText.textContent = `✓ Audio loaded: ${file.name}`;
-          } catch (error) {
-            console.error(error);
-            if(statusText) statusText.textContent = '✗ Error loading audio';
-          }
+    const url = URL.createObjectURL(file);
+    audio = new Audio(url);
+    audio.loop = true;
+
+    // Initialize AudioContext if it's the first time.
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = FFT_SIZE;
+        analyser.connect(audioContext.destination); // Connect analyser to destination once
+        
+        // ✅ GOOD: Allocate the frequency array ONCE
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+
+    // Create a new source node for the new audio element.
+    source = audioContext.createMediaElementSource(audio);
+    // Connect the new source to the analyser.
+    source.connect(analyser);
+    
+    // Resume AudioContext after user gesture.
+    audioContext.resume();
+
+    // Enable UI controls
+    document.getElementById('playPause').disabled = false;
+    document.getElementById('stop').disabled = false;
+    document.getElementById('playPause').textContent = 'Pause';
+    
+    const statusEl = document.getElementById('status');
+    if (statusEl) statusEl.textContent = `Loading audio: ${file.name}...`;
+    
+    audio.play().catch(e => {
+        console.warn("Autoplay prevented:", e);
+        document.getElementById('playPause').textContent = 'Play';
+        if (statusEl) statusEl.textContent = `Ready: ${file.name} (Press Play)`;
+    });
+
+    audio.addEventListener('playing', () => {
+        if (statusEl) statusEl.textContent = `Playing: ${file.name}`;
+    });
+}
+
+function togglePlay() {
+    if (!audio) return;
+    if (audio.paused) {
+        audioContext.resume();
+        audio.play();
+        document.getElementById('playPause').textContent = 'Pause';
+    } else {
+        audio.pause();
+        document.getElementById('playPause').textContent = 'Play';
+    }
+}
+
+function stopAudio() {
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    document.getElementById('playPause').textContent = 'Play';
+}
+
+function analyzeAudio() {
+    if (!analyser || !dataArray) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    analyser.getByteFrequencyData(dataArray);
+
+    function getAverage(range) {
+        const sampleRate = audioContext.sampleRate;
+        const start = Math.round(range[0] * bufferLength / (sampleRate / 2));
+        const end = Math.round(range[1] * bufferLength / (sampleRate / 2));
+        let sum = 0;
+        for (let i = start; i < end; i++) {
+            sum += dataArray[i];
         }
-      });
+        const avg = (sum / (end - start)) / 255;
+        return isNaN(avg) ? 0 : avg;
     }
+    
+    audioState.bass = getAverage(BASS_RANGE);
+    audioState.mid = getAverage(MID_RANGE);
+    audioState.treble = getAverage(TREBLE_RANGE);
+}
 
-    if(playPauseBtn) {
-      playPauseBtn.addEventListener('click', async () => {
-        if (!player) return;
-        if (isPlaying) {
-          player.stop();
-          isPlaying = false;
-          playPauseBtn.textContent = 'Play';
-          if(statusText) statusText.textContent = 'Paused';
-        } else {
-          await Tone.start();
-          player.start();
-          isPlaying = true;
-          playPauseBtn.textContent = 'Pause';
-          if(statusText) statusText.textContent = '▶ Playing...';
+
+// --- Particle Simulation API Implementation ---
+function addControl(id, label, min, max, initialValue) {
+    if (!controls[id]) {
+        const slidersElement = document.getElementById('controls');
+        if (!slidersElement) return initialValue;
+
+        const controlDiv = document.createElement('div');
+        controlDiv.className = 'control-group';
+
+        const labelElement = document.createElement('label');
+        labelElement.setAttribute('for', id);
+        labelElement.textContent = label;
+        
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.id = id;
+        slider.min = min;
+        slider.max = max;
+        slider.step = (max - min) / 100;
+        slider.value = initialValue;
+        
+        controlDiv.appendChild(labelElement);
+        controlDiv.appendChild(slider);
+        slidersElement.appendChild(controlDiv);
+
+        controls[id] = slider;
+    }
+    return parseFloat(controls[id].value);
+}
+
+// --- The Creative Visualization Function ---
+function updateParticles(i, count, time, target, color, opts) {
+    const { bass, mid, treble, rotationSpeed, expansion, chaos, spiralArms } = opts;
+
+    const audioExpansion = expansion + (bass * bass * 40);
+    const audioChaos = chaos + mid * 0.8;
+
+    const angle = (i / count) * Math.PI * 2 * spiralArms;
+    // Use a stable hash instead of Math.random() so particles don't jitter randomly every frame
+    const radius = Math.pow(1 - hash(i), 3) * audioExpansion;
+
+    const timeFactor = time * rotationSpeed;
+    const wobble = Math.sin(angle * 2.5 + timeFactor) * audioChaos;
+
+    const x = Math.cos(angle + timeFactor) * radius;
+    const z = Math.sin(angle + timeFactor) * radius;
+    const y = Math.cos(angle * 3.0 + timeFactor * 0.5) * wobble * 5.0 + (bass * 15);
+
+    target.set(x, y, z);
+
+    const distanceFromCenter = Math.sqrt(x * x + y * y + z * z);
+    const hue = 0.6 + (distanceFromCenter / audioExpansion) * 0.2 + (treble * 0.2);
+    const saturation = 0.6 + bass * 0.4;
+    const lightness = 0.4 + mid * 0.3;
+
+    color.setHSL(hue, saturation, lightness);
+}
+
+
+// --- Animation Loop ---
+const target = new THREE.Vector3();
+const color = new THREE.Color();
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    try {
+        const time = clock.getElapsedTime();
+        analyzeAudio();
+
+        // --- Get UI Control Values (once per frame) ---
+        const rotationSpeed = addControl("rotation", "Rotation Speed", 0.0, 2.0, 0.2);
+        const expansion = addControl("expansion", "Expansion", 10, 80, 40);
+        const chaos = addControl("chaos", "Chaos", 0.0, 1.0, 0.3);
+        const spiralArms = addControl("arms", "Spiral Arms", 1, 8, 3);
+        
+        const positions = particles.geometry.attributes.position.array;
+        const colors = particles.geometry.attributes.color.array;
+
+        opts.bass = audioState.bass;
+        opts.mid = audioState.mid;
+        opts.treble = audioState.treble;
+        opts.rotationSpeed = rotationSpeed;
+        opts.expansion = expansion;
+        opts.chaos = chaos;
+        opts.spiralArms = spiralArms;
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            updateParticles(i, PARTICLE_COUNT, time, target, color, opts);
+
+            positions[i * 3] = target.x;
+            positions[i * 3 + 1] = target.y;
+            positions[i * 3 + 2] = target.z;
+
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
         }
-      });
+
+        particles.geometry.attributes.position.needsUpdate = true;
+        particles.geometry.attributes.color.needsUpdate = true;
+        
+        // Animate camera rotation for a more dynamic feel
+        camera.position.x = Math.sin(time * 0.15) * 100;
+        camera.position.z = Math.cos(time * 0.15) * 100;
+        camera.lookAt(scene.position);
+
+        renderer.render(scene, camera);
+    } catch (e) {
+        console.error("Error in animation loop:", e);
+        const statusEl = document.getElementById('status');
+        if (statusEl) statusEl.textContent = "An error occurred. Check the console for details.";
     }
+}
 
-    if(stopBtn) {
-      stopBtn.addEventListener('click', () => {
-        if (player) {
-          player.stop();
-          isPlaying = false;
-          if(playPauseBtn) playPauseBtn.textContent = 'Play';
-          if(statusText) statusText.textContent = 'Stopped';
-        }
-      });
-    }
+// --- Utility Functions ---
+function onWindowResize() {
+    const canvasContainer = document.getElementById('canvas-container');
+    if (!canvasContainer) return;
+    const width = canvasContainer.clientWidth;
+    const height = canvasContainer.clientHeight;
 
-    if(resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        resetRibbons();
-      });
-    }
-  }
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+}
 
-  function updateAudioInfoDisplay() {
-    const infoDiv = document.getElementById('audio-info');
-    if(!infoDiv) return;
-    infoDiv.innerHTML = `
-      <div class="info-item"><div class="info-label">Bass</div><div class="info-value">${(audioFeatures.bass * 100).toFixed(1)}%</div></div>
-      <div class="info-item"><div class="info-label">Mid</div><div class="info-value">${(audioFeatures.mid * 100).toFixed(1)}%</div></div>
-      <div class="info-item"><div class="info-label">High</div><div class="info-value">${(audioFeatures.high * 100).toFixed(1)}%</div></div>
-      <div class="info-item"><div class="info-label">Energy</div><div class="info-value">${(audioFeatures.rms * 100).toFixed(1)}%</div></div>
-    `;
-  }
-};
+// Simple hash to get a consistent random value for each particle
+function hash(n) {
+    return Math.abs(Math.sin(n * 12.9898) * 43758.5453) % 1;
+}
 
-// Initialize p5 in instance mode
-new p5(sketch);
+// --- Start Everything ---
+init();

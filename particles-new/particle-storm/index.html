@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Particle Storm</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #070710; overflow: hidden;
+      font-family: 'SF Mono', 'Fira Code', monospace; color: #8899aa; }
+    canvas { display: block; }
+    .hud { position: fixed; top: 16px; left: 20px; pointer-events: none; z-index: 5; }
+    .hud-title { font-size: 14px; letter-spacing: 3px; text-transform: uppercase; opacity: 0.4; }
+    .hud-desc  { font-size: 10px; opacity: 0.25; margin-top: 4px; }
+    #controlsPanel { position: fixed; top: 16px; right: 20px;
+      display: flex; flex-direction: column; gap: 6px; z-index: 5; min-width: 180px; }
+    .ctrl { display: flex; align-items: center; gap: 6px; font-size: 10px; opacity: 0.5; }
+    .ctrl label { min-width: 70px; text-align: right; }
+    .ctrl input[type=range] { flex: 1; height: 3px; accent-color: #6688aa;
+      background: rgba(255,255,255,0.08); appearance: auto; }
+    .ctrl-val { min-width: 36px; font-size: 9px; opacity: 0.6; }
+    .status { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%);
+      font-size: 11px; letter-spacing: 1px; opacity: 0.45; white-space: nowrap; pointer-events: none; }
+    .controls { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; align-items: center; z-index: 10; }
+    select, button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      color: #99aabb; padding: 7px 14px; border-radius: 3px; cursor: pointer;
+      font-family: inherit; font-size: 11px; transition: background 0.2s; }
+    select:hover, button:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.25); }
+    .file-input { display: none; }
+    :fullscreen .controls, :fullscreen .hud, :fullscreen #controlsPanel { opacity: 0; pointer-events: none; }
+    :fullscreen .status { bottom: 10px; opacity: 0.25; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="hud">
+    <div class="hud-title" id="hudTitle"></div>
+    <div class="hud-desc"  id="hudDesc"></div>
+  </div>
+  <div id="controlsPanel"></div>
+  <div class="status" id="status">ready</div>
+  <div class="controls">
+    <button id="playBtn" onclick="window._toggle()">Play</button>
+    <button onclick="document.getElementById('fileInput').click()">Load Audio</button>
+    <button onclick="window._fullscreen()">Fullscreen</button>
+    <input type="file" id="fileInput" class="file-input" accept="audio/*" onchange="window._loadFile(this)">
+  </div>
+  <script type="module">
+    import { startEngine } from '../_shared/engine.js';
+    import * as viz from './sketch.js';
+    startEngine(viz);
+  </script>
+</body>
+</html>

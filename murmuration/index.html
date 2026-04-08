@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murmuration</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #070710;
+      overflow: hidden;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      color: #8899aa;
+    }
+    canvas { display: block; }
+
+    .title {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .info {
+      position: fixed;
+      top: 46px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      opacity: 0.25;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .status {
+      position: fixed;
+      bottom: 58px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      letter-spacing: 1px;
+      opacity: 0.45;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      z-index: 10;
+    }
+    button {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #99aabb;
+      padding: 7px 18px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    button:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.25);
+    }
+    .file-input { display: none; }
+
+    :fullscreen .controls,
+    :fullscreen .title,
+    :fullscreen .info { opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+    :fullscreen .status { bottom: 12px; opacity: 0.3; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="title">Murmuration</div>
+  <div class="info">BASS &rarr; cohesion &nbsp;&middot;&nbsp; MID &rarr; wave &nbsp;&middot;&nbsp; HIGH &rarr; scatter &nbsp;&middot;&nbsp; BEATS &rarr; flash</div>
+
+  <div class="status" id="status">ready</div>
+
+  <div class="controls">
+    <button id="playBtn" onclick="window._toggle()">Play</button>
+    <button onclick="document.getElementById('fileInput').click()">Load Audio</button>
+    <button onclick="window._fullscreen()">Fullscreen</button>
+    <input type="file" id="fileInput" class="file-input" accept="audio/*"
+           onchange="window._loadFile(this)">
+  </div>
+
+  <script type="module" src="sketch.js"></script>
+</body>
+</html>

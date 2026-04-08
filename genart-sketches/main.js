@@ -24,6 +24,7 @@ import { LongExposureBeamsV2 } from './sketches/long-exposure-beams-v2.js';
 import { LongExposureBeamsV3 } from './sketches/long-exposure-beams-v3.js';
 // import { LongExposureP5 } from './sketches/long-exposure-p5.js'; // DISABLED - breaks app
 import { LorenzReactive } from './sketches/lorenz-reactive.js';
+import { BoidsFlock } from './sketches/boids-flock.js';
 
 // Preloaded audio file — served from project root via Vite
 const PRELOAD_AUDIO = '/geometric-morphing/circles01a.mp3';
@@ -308,7 +309,8 @@ class GenArt2025 {
       longExposureBeams: new LongExposureBeams(this.canvas, this.ctx),
       longExposureBeamsV2: new LongExposureBeamsV2(this.canvas, this.ctx),
       longExposureBeamsV3: new LongExposureBeamsV3(this.canvas, this.ctx),
-      lorenzReactive: new LorenzReactive(this.canvas, this.ctx)
+      lorenzReactive: new LorenzReactive(this.canvas, this.ctx),
+      boidsFlock: new BoidsFlock(this.canvas, this.ctx)
     };
 
     // Start with Lorenz Reactive as default

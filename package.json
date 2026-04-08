@@ -1,27 +1,24 @@
 {
-  "name": "genart2025",
+  "name": "audio-reactive-particles",
   "version": "1.0.0",
-  "description": "Audio-responsive generative art project",
-  "type": "module",
-  "main": "index.js",
+  "description": "A WebGL particle system that reacts to audio.",
+  "main": "sketch.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "playwright test",
-    "test:ui": "playwright test --ui",
-    "test:debug": "playwright test --debug"
+    "start": "http-server -c-1",
+    "dev": "vite"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "meyda": "^5.6.3",
-    "p5": "^2.0.5",
+    "http-server": "^14.1.1",
+    "three": "^0.183.2",
     "tone": "^15.1.22",
-    "vite": "^7.1.12"
+    "vite": "^8.0.0"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.58.2"
-  }
+  "keywords": [
+    "webgl",
+    "three.js",
+    "particles",
+    "audio-reactive"
+  ],
+  "author": "",
+  "license": "ISC"
 }

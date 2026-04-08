@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tunnel — Audio Reactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+  #ui {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 10;
+  }
+  button {
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background 0.2s;
+  }
+  button:hover { background: rgba(255,255,255,0.15); }
+  button.active { border-color: #ff6343; color: #ff6343; }
+  #info {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.45);
+    font-size: 11px;
+    font-family: monospace;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="info">BASS → tunnel breathe &nbsp;|&nbsp; MIDS → distortion intensity &nbsp;|&nbsp; HIGHS → point density &nbsp;|&nbsp; MOUSE → tunnel drift</div>
+<div id="ui">
+  <button id="audioBtn">🎙 Enable Audio</button>
+  <button id="fsBtn">⛶ Fullscreen</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
+<script>
+let t = 0;
+let w;
+
+// Audio
+let mic, fft;
+let audioStarted = false;
+let bass = 0, mids = 0, highs = 0, amp = 0;
+// Smoothed values
+let sBass = 0, sMids = 0, sHighs = 0, sAmp = 0;
+
+// Mouse-driven center offset (lerped)
+let cx, cy;
+
+// Color palettes — cycle on click
+const palettes = [
+  { bg: 9,   stroke: [255, 255, 255] },       // original white on black
+  { bg: 9,   stroke: [255, 120, 60]  },        // ember orange
+  { bg: 9,   stroke: [100, 200, 255] },        // ice blue
+  { bg: 9,   stroke: [180, 255, 120] },        // acid green
+  { bg: 245, stroke: [20, 20, 60]    },        // dark on light
+  { bg: 9,   stroke: [255, 80, 180]  },        // hot pink
+  { bg: 9,   stroke: [255, 220, 80]  },        // gold
+];
+let palIdx = 0;
+
+function setup() {
+  w = min(windowWidth, windowHeight);
+  createCanvas(w, w);
+  cx = w / 2;
+  cy = w / 2;
+
+  document.getElementById('audioBtn').addEventListener('click', startAudio);
+  document.getElementById('fsBtn').addEventListener('click', () => {
+    let el = document.documentElement;
+    if (!document.fullscreenElement) el.requestFullscreen();
+    else document.exitFullscreen();
+  });
+}
+
+function startAudio() {
+  userStartAudio().then(() => {
+    mic = new p5.AudioIn();
+    mic.start();
+    fft = new p5.FFT(0.8, 64);
+    fft.setInput(mic);
+    audioStarted = true;
+    let btn = document.getElementById('audioBtn');
+    btn.textContent = '🎙 Audio On';
+    btn.classList.add('active');
+  });
+}
+
+function windowResized() {
+  w = min(windowWidth, windowHeight);
+  resizeCanvas(w, w);
+}
+
+function mousePressed() {
+  // Cycle palette on click (but not on buttons)
+  if (mouseY < height - 60) {
+    palIdx = (palIdx + 1) % palettes.length;
+  }
+}
+
+function draw() {
+  let half = w / 2;
+  let pal = palettes[palIdx];
+
+  // Update audio
+  if (audioStarted && fft) {
+    fft.analyze();
+    bass  = fft.getEnergy('bass');
+    mids  = fft.getEnergy('mid');
+    highs = fft.getEnergy('treble');
+    amp   = mic.getLevel() * 5;
+
+    sBass  = lerp(sBass,  map(bass,  0, 255, 0, 1), 0.15);
+    sMids  = lerp(sMids,  map(mids,  0, 255, 0, 1), 0.15);
+    sHighs = lerp(sHighs, map(highs, 0, 255, 0, 1), 0.15);
+    sAmp   = lerp(sAmp,   constrain(amp, 0, 1), 0.1);
+  }
+
+  // Lerp center toward mouse for tunnel drift
+  cx = lerp(cx, mouseX || half, 0.03);
+  cy = lerp(cy, mouseY || half, 0.03);
+
+  background(pal.bg);
+
+  // Stroke color — opacity pulses with amplitude
+  let baseAlpha = 96;
+  let alpha = baseAlpha + sAmp * 80; // louder = brighter trails
+  stroke(pal.stroke[0], pal.stroke[1], pal.stroke[2], alpha);
+
+  t += PI / 45;
+
+  // Highs increase point count (denser at high frequencies)
+  let pointCount = floor(15000 + sHighs * 10000);
+
+  for (let i = pointCount; i--;) {
+    let m = (i % 2) * 3;
+
+    let e = i / 652 - 13;
+    let k = 9 * cos(i / 61);
+    let d = mag(k, e) ** 2 / 89 + 1;
+
+    // --- Audio mappings ---
+
+    // Bass: breathe the tunnel radius (q base value pulses)
+    let breathe = 79 + sBass * 40; // expands on bass hits
+
+    // Mids: intensify the nested sine distortion
+    let distortAmt = 5 + sMids * 12; // 5 base → up to 17 with mids
+
+    // Build radial distance
+    let q = breathe - (e / 2) * sin(k) + (k / d) * (6 + distortAmt * sin(sin(d * d + e / 9 - t + m)));
+
+    // Angle with slow rotation — bass also wobbles rotation speed
+    let rotSpeed = t / 16 - sBass * 0.3;
+    let c = d / 1.9 + cos(t - d * 3 + m) / 11 - rotSpeed + m;
+
+    // Project to 2D, offset toward mouse-driven center
+    let px = q * sin(c) + cx;
+    let py = (q + 40) * cos(c) + cy;
+
+    point(px, py);
+  }
+}
+</script>
+</body>
+</html>
