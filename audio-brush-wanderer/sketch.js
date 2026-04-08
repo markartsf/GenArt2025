@@ -59,8 +59,8 @@ var PALETTE_WEIGHTS = [
   1,   // ice white        — occasional
 ];
 
-// Background color — warm off-white that complements the palette
-var BG_COLOR = [240, 237, 230];
+// Background color — pure white
+var BG_COLOR = [255, 255, 255];
 
 // Build a weighted array for easy random selection
 var WEIGHTED_PALETTE = [];
@@ -91,17 +91,11 @@ function Wanderer(band, noiseOffset) {
 }
 
 Wanderer.prototype.spawn = function(canvasW, canvasH) {
-  // WEBGL coordinates: (0,0) is center, range is -w/2..w/2, -h/2..h/2
   var hw = canvasW / 2, hh = canvasH / 2;
-  this.x = random(-hw * 0.85, hw * 0.85);
-  this.y = random(-hh * 0.85, hh * 0.85);
-  this.px = this.x;
-  this.py = this.y;
   this.stepsAlive = 0;
-  this.maxSteps = Math.floor(random(150, 500));
   this.active = true;
 
-  // Assign brush by band — wide variety across all built-in + custom types
+  // Assign brush by band
   if (this.band === "bass") {
     this.brushName = random(["thick_oil", "2B", "charcoal", "marker", "marker2", "ink_wash"]);
     this.weight = random(2.0, 5.0);
@@ -112,6 +106,49 @@ Wanderer.prototype.spawn = function(canvasW, canvasH) {
     this.brushName = random(["HB", "rotring", "pen", "needle", "splatter", "2H"]);
     this.weight = random(0.4, 1.5);
   }
+
+  // ── Geometric path assignment ──────────────────────────────────────
+  this.t = random(Math.PI * 2);   // random starting phase on the path
+
+  if (this.band === "bass") {
+    // Large slow circles — dominant, calm orbital shapes
+    this.pathType   = "circle";
+    this.pathRadius = random(80, 200);
+    this.pathCX     = random(-hw * 0.45, hw * 0.45);
+    this.pathCY     = random(-hh * 0.45, hh * 0.45);
+    this.pathSpeed  = random(0.008, 0.018);
+    // Start on the circle
+    this.x  = this.pathCX + Math.cos(this.t) * this.pathRadius;
+    this.y  = this.pathCY + Math.sin(this.t) * this.pathRadius;
+
+  } else if (this.band === "mid") {
+    // Polygon edges — triangles, squares, hexagons, octagons
+    this.pathType   = "polygon";
+    this.pathSides  = random([3, 4, 5, 6, 6, 8]);
+    this.pathRadius = random(60, 150);
+    this.pathCX     = random(-hw * 0.45, hw * 0.45);
+    this.pathCY     = random(-hh * 0.45, hh * 0.45);
+    this.pathSpeed  = random(0.018, 0.040);
+    var a0 = -Math.PI / 2;
+    this.x  = this.pathCX + Math.cos(a0) * this.pathRadius;
+    this.y  = this.pathCY + Math.sin(a0) * this.pathRadius;
+
+  } else {
+    // Lissajous figures — tight interlocking curves
+    this.pathType   = "lissajous";
+    this.pathA      = random(45, 110);
+    this.pathB      = random(45, 110);
+    this.pathFreqX  = random([1, 2, 3]);
+    this.pathFreqY  = random([2, 3, 4]);
+    this.pathPhase  = random(Math.PI / 6, Math.PI / 2);
+    this.pathCX     = random(-hw * 0.35, hw * 0.35);
+    this.pathCY     = random(-hh * 0.35, hh * 0.35);
+    this.pathSpeed  = random(0.022, 0.055);
+    this.x  = this.pathCX + this.pathA * Math.sin(this.pathFreqX * this.t + this.pathPhase);
+    this.y  = this.pathCY + this.pathB * Math.sin(this.pathFreqY * this.t);
+  }
+  this.px = this.x;
+  this.py = this.y;
 };
 
 Wanderer.prototype.update = function(features, canvasW, canvasH, noiseScale) {
@@ -120,40 +157,59 @@ Wanderer.prototype.update = function(features, canvasW, canvasH, noiseScale) {
   this.px = this.x;
   this.py = this.y;
 
-  // Get the band level for this wanderer
   var level;
   if (this.band === "bass") level = features.bass;
   else if (this.band === "mid") level = features.mid;
   else level = features.high;
 
-  // Noise-field angle — scale varies with energy
+  // ── Advance along geometric path ───────────────────────────────────
+  this.t += this.pathSpeed * (1 + level * 2);
+
+  // Compute target point on the path
+  var targetX, targetY;
+  var TWO_PI = Math.PI * 2;
+
+  if (this.pathType === "circle") {
+    targetX = this.pathCX + Math.cos(this.t) * this.pathRadius;
+    targetY = this.pathCY + Math.sin(this.t) * this.pathRadius;
+
+  } else if (this.pathType === "polygon") {
+    var tNorm = ((this.t % TWO_PI) + TWO_PI) % TWO_PI;
+    var seg  = Math.floor(tNorm / TWO_PI * this.pathSides);
+    var segT = (tNorm / TWO_PI * this.pathSides) - seg;
+    var a1   = (seg       / this.pathSides) * TWO_PI - Math.PI / 2;
+    var a2   = ((seg + 1) / this.pathSides) * TWO_PI - Math.PI / 2;
+    targetX  = lerp(this.pathCX + Math.cos(a1) * this.pathRadius,
+                    this.pathCX + Math.cos(a2) * this.pathRadius, segT);
+    targetY  = lerp(this.pathCY + Math.sin(a1) * this.pathRadius,
+                    this.pathCY + Math.sin(a2) * this.pathRadius, segT);
+
+  } else { // lissajous
+    targetX = this.pathCX + this.pathA * Math.sin(this.pathFreqX * this.t + this.pathPhase);
+    targetY = this.pathCY + this.pathB * Math.sin(this.pathFreqY * this.t);
+  }
+
+  // ── Steer toward target, blended with noise by audio energy ────────
+  // Quiet → precise geometry.  Loud → organic chaos that still orbits.
+  var angleToTarget = Math.atan2(targetY - this.y, targetX - this.x);
   var ns = noiseScale * (1 + level * 2);
-  this.angle = noise(this.x * ns + this.nOff, this.y * ns + this.nOff, frameT * 0.15) * 720;
+  var noiseAngle = (noise(this.x * ns + this.nOff, this.y * ns + this.nOff, frameT * 0.15) - 0.5) * TWO_PI;
+  var deviation  = level * 0.65;
+  var finalAngle = angleToTarget * (1 - deviation) + noiseAngle * deviation;
 
-  // Step length: quiet = gentle drifts, loud = bold leaping strokes
-  var stepLen = 2 + level * 50;
+  // Step length
+  var stepLen = 2 + level * 40;
+  if (features.beatFlash > 0.3)       stepLen += (features.beatStrength || 0) * 20;
+  if ((features.spectralFlux || 0) > 0.5) stepLen += features.spectralFlux * 8;
 
-  // Add beat impulse — sudden speed burst
-  if (features.beatFlash > 0.3) {
-    stepLen += features.beatStrength * 25;
-  }
-
-  // Spectral flux = musical transients → extra jolt
-  if ((features.spectralFlux || 0) > 0.5) {
-    stepLen += features.spectralFlux * 10;
-  }
-
-  this.x += Math.cos(this.angle * Math.PI / 180) * stepLen;
-  this.y += Math.sin(this.angle * Math.PI / 180) * stepLen;
-
+  this.x += Math.cos(finalAngle) * stepLen;
+  this.y += Math.sin(finalAngle) * stepLen;
   this.stepsAlive++;
 
-  // Respawn if off-screen or lived too long (WEBGL coords: -w/2..w/2)
+  // Respawn only if wanderer escapes the canvas (path keeps it centred naturally)
   var hw = canvasW / 2, hh = canvasH / 2;
-  if (this.x < -hw - 20 || this.x > hw + 20 ||
-      this.y < -hh - 20 || this.y > hh + 20 ||
-      this.stepsAlive > this.maxSteps ||
-      random(1) < 0.003) {
+  if (this.x < -hw - 40 || this.x > hw + 40 ||
+      this.y < -hh - 40 || this.y > hh + 40) {
     this.spawn(canvasW, canvasH);
   }
 };
@@ -464,19 +520,12 @@ function draw() {
     refreshWandererColors();
   }
 
-  // ─── Background fade ──────────────────────────────────────────────
-  // Moderate fade — strokes persist then dissolve, canvas breathes
-  var bpmFactor = constrain((features.bpm || 120) / 120, 0.8, 1.3);
-  var baseFade = 3;
-  var fadeAlpha = baseFade * bpmFactor;
-
-  // Fade faster during quiet (canvas clears), slower when loud (strokes pile)
-  if (features.rms < 0.05) fadeAlpha += 2;
-  else if (features.rms > 0.2) fadeAlpha = Math.max(1.5, fadeAlpha - 1);
-
-  fill(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], fadeAlpha);
-  noStroke();
-  rect(-width / 2, -height / 2, width, height);
+  // ─── Canvas clear — sharp wipe on beat, periodic fallback ──────────
+  // No gradual fade: shapes accumulate in full colour, then wipe clean.
+  var shouldClear = beatEdge || (frameCount % 240 === 0);
+  if (shouldClear) {
+    background(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2]);
+  }
 
   // ─── Update and draw wanderers ────────────────────────────────────
   // Adjust noise scale based on spectral flux (flux = more turbulent field)
