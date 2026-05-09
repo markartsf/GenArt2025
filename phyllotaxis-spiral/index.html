@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phyllotaxis Spiral</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    svg { display: block; }
+    #info {
+      position: fixed; top: 16px; left: 20px;
+      color: rgba(255,255,255,0.4); font-family: monospace; font-size: 12px;
+    }
+    #ui {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 12px; z-index: 10; align-items: center;
+    }
+    button {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+      color: #fff; padding: 8px 18px; border-radius: 20px; cursor: pointer;
+      font-size: 13px; letter-spacing: 0.5px; transition: background 0.2s;
+    }
+    button:hover { background: rgba(255,255,255,0.2); }
+    label { color: rgba(255,255,255,0.5); font-family: monospace; font-size: 12px; }
+    input[type=range] { width: 100px; accent-color: #fff; }
+    #downloadBtn {
+      background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="info">PHYLLOTAXIS SPIRAL &nbsp;|&nbsp; SVG + JavaScript</div>
+  <svg id="canvas"></svg>
+  <div id="ui">
+    <button onclick="toggleAnimation()">Pause</button>
+    <button onclick="cyclePalette()">Palette</button>
+    <label>n <input type="range" id="nSlider" min="100" max="2000" value="800" oninput="setN(this.value)"></label>
+    <button id="downloadBtn" onclick="downloadSVG()">Export SVG</button>
+  </div>
+  <script src="sketch.js"></script>
+</body>
+</html>

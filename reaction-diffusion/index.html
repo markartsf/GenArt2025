@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reaction Diffusion — Winter</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: monospace; }
+    canvas { display: block; image-rendering: pixelated; }
+
+    #overlay {
+      position: fixed; inset: 0; background: rgba(0,5,20,0.9);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      gap: 18px; z-index: 100;
+    }
+    #overlay h1 {
+      color: rgba(180,220,255,0.9); font-size: 20px; letter-spacing: 4px;
+      font-weight: 300; text-transform: uppercase;
+    }
+    #overlay p {
+      color: rgba(160,200,240,0.45); font-size: 12px; letter-spacing: 1px;
+      text-align: center; max-width: 400px; line-height: 1.7;
+    }
+    .btn-group { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn {
+      background: rgba(0,80,160,0.2); border: 1px solid rgba(80,160,255,0.3);
+      color: rgba(180,220,255,0.9); padding: 9px 20px; border-radius: 24px;
+      cursor: pointer; font-size: 12px; letter-spacing: 1px; font-family: monospace;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(0,100,200,0.35); border-color: rgba(120,180,255,0.6); }
+    .btn.primary {
+      background: rgba(0,120,200,0.25); border-color: rgba(100,190,255,0.6);
+      color: #aaddff;
+    }
+    .btn.primary:hover { background: rgba(0,140,220,0.4); }
+
+    #ui {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 9px; z-index: 10; align-items: center;
+      transition: opacity 0.4s;
+    }
+    #ui .btn { padding: 7px 14px; font-size: 11px; }
+
+    #info {
+      position: fixed; top: 16px; left: 20px;
+      color: rgba(120,180,255,0.4); font-size: 11px; line-height: 1.8;
+      pointer-events: none; transition: opacity 0.4s;
+    }
+    #fps {
+      position: fixed; top: 16px; right: 20px;
+      color: rgba(120,180,255,0.3); font-size: 11px; text-align: right;
+      pointer-events: none; transition: opacity 0.4s;
+    }
+    #meters {
+      position: fixed; bottom: 56px; right: 20px;
+      color: rgba(120,180,240,0.4); font-size: 11px;
+      text-align: right; line-height: 1.9; pointer-events: none;
+      transition: opacity 0.4s;
+    }
+    .meter-bar {
+      display: inline-block; width: 55px; height: 5px;
+      background: rgba(255,255,255,0.08); border-radius: 3px;
+      vertical-align: middle; margin-left: 6px; overflow: hidden;
+    }
+    .meter-fill { height: 100%; border-radius: 3px; }
+
+    body.fullscreen-mode #ui,
+    body.fullscreen-mode #info,
+    body.fullscreen-mode #fps,
+    body.fullscreen-mode #meters { opacity: 0; }
+    body.fullscreen-mode:hover #ui,
+    body.fullscreen-mode:hover #info,
+    body.fullscreen-mode:hover #fps,
+    body.fullscreen-mode:hover #meters { opacity: 1; }
+
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="overlay">
+  <h1>Reaction Diffusion</h1>
+  <p>Gray-Scott simulation in a winter palette.<br>
+     Bass pluck triggers new seed bursts. Violin shifts growth rate.<br>
+     High frequencies drive color brightness.</p>
+  <div class="btn-group">
+    <button class="btn primary" onclick="loadBundled()">Load circles01a.mp3</button>
+    <label class="btn" for="file-input">Load your own audio</label>
+    <input type="file" id="file-input" accept="audio/*" onchange="loadFile(this)">
+    <button class="btn" onclick="startWithoutAudio()">Run without audio</button>
+  </div>
+</div>
+
+<div id="info">
+  REACTION DIFFUSION &nbsp;|&nbsp; Canvas API (Gray-Scott)<br>
+  WINTER PALETTE &nbsp;|&nbsp; Audio reactive
+</div>
+
+<div id="fps"></div>
+
+<div id="meters">
+  BASS PLUCK <span class="meter-bar"><span class="meter-fill" id="bass-meter" style="background:#5599ff;width:0%"></span></span><br>
+  VIOLIN MID &nbsp;<span class="meter-bar"><span class="meter-fill" id="mid-meter"  style="background:#00cccc;width:0%"></span></span><br>
+  HIGHS &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="high-meter" style="background:#aaddff;width:0%"></span></span>
+</div>
+
+<div id="ui">
+  <button class="btn" onclick="togglePause()" id="playBtn">Pause</button>
+  <button class="btn" onclick="resetSim()">Reset</button>
+  <button class="btn" onclick="nextPreset()" id="presetBtn">Preset: Maze</button>
+  <button class="btn" onclick="cyclePalette()" id="palBtn">Palette: Winter</button>
+  <button class="btn" onclick="addSeed()">Add Seeds</button>
+  <button class="btn" onclick="toggleFullscreen()" id="fsBtn">⛶ Fullscreen</button>
+</div>
+
+<script src="sketch.js"></script>
+<script>
+  window.startWithoutAudio = function () {
+    document.getElementById('overlay').style.display = 'none';
+  };
+</script>
+</body>
+</html>

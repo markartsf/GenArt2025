@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Mapping - Audio Reactive</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #fff; overflow: hidden; font-family: monospace; }
+    canvas { display: block; margin: auto; }
+
+    /* ── Overlay ── */
+    #overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      gap: 18px; z-index: 100;
+    }
+    #overlay h1 {
+      color: rgba(255,255,255,0.9); font-size: 22px; letter-spacing: 4px;
+      font-weight: 300; text-transform: uppercase;
+    }
+    #overlay p {
+      color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 1px;
+      text-align: center; max-width: 400px; line-height: 1.7;
+    }
+    .btn-group { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25);
+      color: #fff; padding: 10px 22px; border-radius: 24px; cursor: pointer;
+      font-size: 13px; letter-spacing: 1px; font-family: monospace; transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); }
+    .btn.primary {
+      background: rgba(100,200,100,0.15); border-color: rgba(100,200,100,0.5); color: #aaffaa;
+    }
+    .btn.primary:hover { background: rgba(100,200,100,0.3); }
+    #file-input { display: none; }
+
+    /* ── Bottom UI bar ── */
+    #ui {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 10; align-items: center;
+      transition: opacity 0.4s;
+    }
+    #ui .btn { padding: 7px 16px; font-size: 12px; }
+
+    /* ── Meters ── */
+    #meters {
+      position: fixed; top: 16px; right: 20px;
+      color: rgba(0,0,0,0.4); font-size: 11px; text-align: right;
+      line-height: 1.9; pointer-events: none; transition: opacity 0.4s;
+    }
+    .meter-bar {
+      display: inline-block; width: 60px; height: 6px;
+      background: rgba(0,0,0,0.1); border-radius: 3px;
+      vertical-align: middle; margin-left: 6px; overflow: hidden;
+    }
+    .meter-fill { height: 100%; border-radius: 3px; transition: width 0.05s; }
+
+    /* ── Fullscreen: hide UI on mouse-away ── */
+    body.fullscreen-mode #ui,
+    body.fullscreen-mode #meters { opacity: 0; }
+    body.fullscreen-mode:hover #ui,
+    body.fullscreen-mode:hover #meters { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Start overlay -->
+<div id="overlay">
+  <h1>Network Mapping</h1>
+  <p>An audio-reactive network diagram.<br>
+     Click to cycle layout modes. Space to pause orbiting.<br>
+     Scroll to zoom.</p>
+  <div class="btn-group">
+    <button class="btn primary" onclick="loadBundled()">Load circles01a.mp3</button>
+    <label class="btn" for="file-input">Load your own audio</label>
+    <input type="file" id="file-input" accept="audio/*" onchange="loadFile(this)">
+  </div>
+</div>
+
+<!-- Meters -->
+<div id="meters">
+  AMP &nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="amp-meter"    style="background:#88cc88;width:0%"></span></span><br>
+  BASS &nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="bass-meter"  style="background:#ff8844;width:0%"></span></span><br>
+  MIDS &nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="mid-meter"   style="background:#88ddff;width:0%"></span></span><br>
+  TREBLE<span class="meter-bar"><span class="meter-fill" id="high-meter"  style="background:#ffddaa;width:0%"></span></span>
+</div>
+
+<!-- Bottom controls -->
+<div id="ui">
+  <button class="btn" onclick="togglePlay()" id="playBtn">Pause</button>
+  <label class="btn" for="file-input2">Change audio</label>
+  <input type="file" id="file-input2" accept="audio/*" style="display:none" onchange="loadFile(this)">
+  <button class="btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/p5@1.11.5/lib/p5.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5@1.11.5/lib/addons/p5.sound.min.js"></script>
+<script src="node.js"></script>
+<script src="sketch.js"></script>
+</body>
+</html>

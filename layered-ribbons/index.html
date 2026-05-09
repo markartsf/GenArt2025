@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layered Ribbons - Dual Tempo Flow</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0a0a;
+      color: #f5deb3;
+      overflow: hidden;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #controls {
+      padding: 20px;
+      background: rgba(10, 10, 10, 0.95);
+      border-bottom: 2px solid rgba(205, 92, 92, 0.3);
+      z-index: 10;
+    }
+
+    .control-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    input[type="file"] {
+      background: #222;
+      color: #fff;
+      padding: 8px;
+      border: 1px solid #444;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    button {
+      background: #444;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 3px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0a0a0a;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .info {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #c8a882;
+    }
+
+    /* Hide controls in fullscreen mode */
+    :fullscreen #controls {
+      display: none;
+    }
+
+    :-webkit-full-screen #controls {
+      display: none;
+    }
+
+    :-moz-full-screen #controls {
+      display: none;
+    }
+
+    :fullscreen #container {
+      background: #0a0a0a;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="controls">
+      <h2 style="margin-bottom: 15px;">🌊 Layered Ribbons - Dual Tempo Flow</h2>
+
+      <div class="control-group">
+        <label for="audioFile">Audio File</label>
+        <input type="file" id="audioFile" accept="audio/*">
+      </div>
+
+      <div class="control-group">
+        <button id="playPause" disabled>Play</button>
+        <button id="stop" disabled>Stop</button>
+        <button id="reset">Reset</button>
+        <button id="fullscreen">⛶ Fullscreen</button>
+      </div>
+
+      <div class="info">
+        <p>🎵 DUAL LAYERS: Wide ribbons = violin flow | Thin ribbons = pluck spikes</p>
+        <p id="status">Load an audio file to begin...</p>
+        <p style="font-size: 10px; margin-top: 5px; color: #a8886a;">💡 4 violin ribbons (slow/thick) + 5 pluck ribbons (fast/thin) | Tone.Meter + Compressor | Press R to reset</p>
+      </div>
+    </div>
+
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+  <script type="module" src="/layered-ribbons/sketch.js"></script>
+</body>
+</html>

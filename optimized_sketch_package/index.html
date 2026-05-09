@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Optimized Audio-Reactive p5.js Sketch</title>
+  <style>
+    html,body { height:100%; margin:0; background:#0a0a0a; }
+    #ui { position:fixed; right:16px; top:16px; z-index:10; display:flex; gap:8px; align-items:center; }
+    button { padding:8px 12px; background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.06); border-radius:6px; cursor:pointer; }
+    .hint { font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#ddd; font-size:13px; opacity:0.9; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="play">Play</button>
+    <button id="pause">Pause</button>
+    <div class="hint">Click Play to start audio (autoplay blocked by browsers)</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/addons/p5.sound.min.js"></script>
+  <script>
+// Optimized p5.js sketch - audio reactive, smoother transitions, cached textures
+let song, fft, amp;
+let canvasW, canvasH;
+let layers = [];
+let baseTex;
+let particles = [];
+let lastBeat = 0;
+let beatHold = 200; // ms
+let bassSmoothed = 0;
+let midSmoothed = 0;
+let treBleSmoothed = 0;
+let globalTime = 0;
+let playing = false;
+
+// color palette (kept in the spirit of the original textures)
+const BACKGROUND = '#3a0b0b'; // deep, warm red-brown
+const ACCENT1 = '#f2a365'; // warm gold
+const ACCENT2 = '#b9fbc0'; // soft teal highlight
+const NOISE_ALPHA = 18;
+
+function preload() {
+  // load the provided track - must be in same directory
+  song = loadSound('track.mp3');
+}
+
+function setup() {
+  canvasW = windowWidth;
+  canvasH = windowHeight;
+  let cnv = createCanvas(canvasW, canvasH);
+  cnv.style('display','block');
+  noStroke();
+  fft = new p5.FFT(0.9, 1024); // high smoothing, high res
+  amp = new p5.Amplitude();
+  amp.smooth(0.8);
+
+  // create base cached texture (noise + subtle grain)
+  baseTex = createGraphics(canvasW, canvasH);
+  createBaseTexture();
+
+  // create layered graphics for blending
+  for (let i = 0; i < 3; i++) {
+    let g = createGraphics(canvasW, canvasH);
+    layers.push(g);
+  }
+
+  // particle field
+  for (let i = 0; i < 180; i++) {
+    particles.push(new Particle());
+  }
+
+  frameRate(60);
+  background(BACKGROUND);
+}
+
+function windowResized() {
+  canvasW = windowWidth;
+  canvasH = windowHeight;
+  resizeCanvas(canvasW, canvasH);
+  baseTex = createGraphics(canvasW, canvasH);
+  createBaseTexture();
+  // resize layer graphics
+  for (let g of layers) {
+    g.resizeCanvas(canvasW, canvasH);
+  }
+}
+
+// UI controls exposed in page
+document.addEventListener('DOMContentLoaded', () => {
+  const play = document.getElementById('play');
+  const pause = document.getElementById('pause');
+  play.addEventListener('click', () => {
+    if (!song.isPlaying()) {
+      song.loop();
+    }
+    playing = true;
+    userStartAudio();
+  });
+  pause.addEventListener('click', () => {
+    if (song.isPlaying()) song.pause();
+    playing = false;
+  });
+});
+
+function draw() {
+  globalTime += deltaTime / 1000.0;
+  background(BACKGROUND);
+
+  // analyze audio
+  if (song && (song.isPlaying() || playing)) {
+    fft.setInput(song);
+    amp.setInput(song);
+  }
+  let spectrum = fft.analyze();
+  // use getEnergy for bands - smoother and musically meaningful
+  let bass = fft.getEnergy("bass"); // 20-140Hz
+  let lowMid = fft.getEnergy("lowMid"); // 140-400Hz
+  let mid = fft.getEnergy("mid"); // 400-2600Hz
+  let treble = fft.getEnergy("treble"); // 6000-20000Hz
+  let level = amp.getLevel();
+
+  // smooth energies with lerp for fluid transitions
+  bassSmoothed = lerp(bassSmoothed, bass, 0.12);
+  midSmoothed = lerp(midSmoothed, mid, 0.10);
+  treBleSmoothed = lerp(treBleSmoothed, treble, 0.08);
+
+  // detect beat on bass threshold with adaptive scaling
+  let beat = false;
+  let threshold = 200; // raw
+  if (bass > threshold && millis() - lastBeat > beatHold) {
+    beat = true;
+    lastBeat = millis();
+  }
+
+  // prepare layers
+  // Layer 0: flowing gradient shapes (react to mids & treble)
+  let g0 = layers[0];
+  g0.clear();
+  g0.push();
+  g0.translate(canvasW/2, canvasH/2);
+  g0.blendMode(BLEND);
+  drawFlowShapes(g0, midSmoothed, treBleSmoothed, globalTime);
+  g0.pop();
+
+  // Layer 1: particle field (react to bass & level)
+  let g1 = layers[1];
+  g1.clear();
+  g1.push();
+  g1.translate(0,0);
+  g1.blendMode(ADD);
+  for (let p of particles) {
+    p.update(bassSmoothed, level, beat);
+    p.render(g1);
+  }
+  g1.pop();
+
+  // Layer 2: subtle mask & vignette (adds texture, reacts to amplitude)
+  let g2 = layers[2];
+  g2.clear();
+  g2.push();
+  drawVignetteMask(g2, level, globalTime);
+  g2.pop();
+
+  // Composite: draw base texture, then layers with controlled opacity and blend
+  image(baseTex, 0, 0, canvasW, canvasH);
+
+  // soft crossfades controlled by smoothed energies
+  let flowAlpha = map(midSmoothed, 30, 200, 0.08, 0.9, true);
+  let partAlpha = map(bassSmoothed, 20, 255, 0.03, 0.9, true);
+
+  // draw layers with blending
+  push();
+  blendMode(SCREEN);
+  tint(255, flowAlpha * 255);
+  image(g0, 0, 0);
+  tint(255, partAlpha * 255);
+  image(g1, 0, 0);
+  pop();
+
+  // overlay mask/vignette with multiply to darken edges
+  push();
+  blendMode(MULTIPLY);
+  image(g2, 0, 0);
+  pop();
+
+  // light dust/noise overlay for filmic texture (cached per frame to save perf)
+  push();
+  blendMode(OVERLAY);
+  drawingContext.globalAlpha = NOISE_ALPHA/255;
+  image(baseTex, 0, 0);
+  drawingContext.globalAlpha = 1;
+  pop();
+}
+
+// ----------------------- visual building blocks -----------------------
+function createBaseTexture() {
+  baseTex.background(BACKGROUND);
+  baseTex.noStroke();
+  // radial soft gradient center
+  for (let r = max(canvasW, canvasH); r > 0; r -= 40) {
+    let a = map(r, 0, max(canvasW, canvasH), 0, 28);
+    baseTex.fill(10, 5, 5, a);
+    baseTex.ellipse(canvasW/2, canvasH/2, r, r);
+  }
+  // grain / noise
+  baseTex.loadPixels();
+  for (let i = 0; i < canvasW * canvasH * 0.02; i++) {
+    let x = floor(random(canvasW));
+    let y = floor(random(canvasH));
+    let idx = 4 * (y * canvasW + x);
+    baseTex.pixels[idx] = baseTex.pixels[idx] + random(-20,20);
+    baseTex.pixels[idx+1] = baseTex.pixels[idx+1] + random(-20,20);
+    baseTex.pixels[idx+2] = baseTex.pixels[idx+2] + random(-20,20);
+    baseTex.pixels[idx+3] = min(255, baseTex.pixels[idx+3] + random(0,40));
+  }
+  baseTex.updatePixels();
+}
+
+function drawFlowShapes(g, mids, trebles, t) {
+  let n = 6;
+  g.clear();
+  g.push();
+  g.translate(g.width/2, g.height/2);
+  for (let i = 0; i < n; i++) {
+    g.push();
+    let angle = (TWO_PI / n) * i + t * 0.12 * (i%2?1:-1);
+    let r = min(g.width, g.height) * 0.35 + noise(i*0.2 + t*0.4) * 200 + map(mids, 0, 255, -60, 200);
+    g.rotate(angle);
+    // gradient fill for each petal-like shape
+    let grad = g.drawingContext.createLinearGradient(-r, -r, r, r);
+    grad.addColorStop(0, hexToRgba(ACCENT1, 0.95));
+    grad.addColorStop(0.5, hexToRgba(ACCENT2, 0.8));
+    grad.addColorStop(1, hexToRgba('#fff1e6', 0.05));
+    g.drawingContext.fillStyle = grad;
+    g.beginShape();
+    let steps = 120;
+    for (let a = -PI/2; a <= PI/2; a += PI/steps) {
+      let rad = r + sin(a*3 + t*0.6 + i) * 30 * noise(i + t*0.3);
+      let x = cos(a) * rad;
+      let y = sin(a) * rad * 0.6;
+      g.vertex(x, y);
+    }
+    for (let a = PI/2; a >= -PI/2; a -= PI/steps) {
+      let rad = r*0.45 + cos(a*2 + t*0.4 + i) * 15 * noise(i*1.1 + t*0.5);
+      let x = cos(a) * rad;
+      let y = sin(a) * rad * 0.45;
+      g.vertex(x, y);
+    }
+    g.endShape(CLOSE);
+    g.pop();
+  }
+  g.pop();
+}
+
+function drawVignetteMask(g, level, t) {
+  g.clear();
+  g.push();
+  g.drawingContext.save();
+  // soft vignette
+  g.noStroke();
+  let maxR = max(g.width, g.height) * 0.9;
+  for (let r = maxR; r > 0; r -= 40) {
+    let a = map(r, 0, maxR, 255*map(level, 0, 0.08, 0.3, 0.85, true), 0);
+    g.fill(0, 0, 0, a*0.4);
+    g.ellipse(g.width/2, g.height/2, r, r);
+  }
+  // subtle animated rings responding to level
+  let rings = 4;
+  for (let i = 0; i < rings; i++) {
+    let rr = map(i, 0, rings-1, maxR*0.2, maxR*0.9) + sin(t*1.2 + i) * 6 * pow(level*20+0.01,1.8);
+    g.noFill();
+    g.stroke(255, map(level, 0, 0.08, 0, 12));
+    g.strokeWeight(1 + i*0.5);
+    g.ellipse(g.width/2, g.height/2, rr, rr*0.6);
+  }
+  g.drawingContext.restore();
+  g.pop();
+}
+
+// ----------------- particle system -----------------
+class Particle {
+  constructor() {
+    this.reset(true);
+  }
+  reset(initial=false) {
+    this.pos = createVector(random(width), random(height));
+    this.velocity = p5.Vector.random2D().mult(random(0.2, 0.8));
+    this.size = random(1.5, 5);
+    this.baseSize = this.size;
+    this.hue = random(0,1);
+    this.life = random(4000, 12000);
+    this.birth = millis();
+    if (initial) this.birth -= random(0, this.life);
+  }
+  update(bass, level, beat) {
+    // bass drives expansion
+    let bassFactor = map(bass, 0, 255, 0.5, 6);
+    // subtle attraction toward center
+    let toCenter = createVector(width/2, height/2).sub(this.pos).mult(0.0005 * bassFactor);
+    this.velocity.add(toCenter);
+    // noise-driven drift
+    let n = noise(this.pos.x*0.002, this.pos.y*0.002, globalTime*0.2);
+    this.velocity.add(p5.Vector.fromAngle(n*TWO_PI).mult(0.03));
+    // amplify on beat
+    if (beat) {
+      this.velocity.mult(1.15 + random(0.02, 0.08));
+      this.size = this.baseSize * (1 + map(bass, 0, 255, 0.2, 2));
+    } else {
+      // relax size back
+      this.size = lerp(this.size, this.baseSize, 0.06);
+    }
+    this.pos.add(this.velocity);
+    // wrap-around
+    if (this.pos.x < -50) this.pos.x = width + 50;
+    if (this.pos.x > width + 50) this.pos.x = -50;
+    if (this.pos.y < -50) this.pos.y = height + 50;
+    if (this.pos.y > height + 50) this.pos.y = -50;
+    // respawn if too old
+    if (millis() - this.birth > this.life) this.reset();
+  }
+  render(g) {
+    g.push();
+    g.noStroke();
+    let alpha = map(this.size, 0, 12, 30, 240);
+    // color mix based on position for variety
+    let c = lerpColor(color(ACCENT1), color(ACCENT2), noise(this.pos.x*0.001, this.pos.y*0.001));
+    g.fill(red(c), green(c), blue(c), alpha);
+    g.ellipse(this.pos.x, this.pos.y, this.size, this.size);
+    g.pop();
+  }
+}
+
+// ---------------- utilities ----------------
+function hexToRgba(hex, alpha=1.0) {
+  // supports #rrggbb
+  let c = color(hex);
+  return 'rgba(' + floor(red(c)) + ',' + floor(green(c)) + ',' + floor(blue(c)) + ',' + alpha + ')';
+}
+
+// Save the sketch files prompt - not used in sketch, but nice to have in comments
+// ------------------------------------------------------------------------
+  </script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sacred Geometry Orb</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #info {
+      position: fixed; top: 16px; left: 20px;
+      color: rgba(255,255,255,0.4); font-family: monospace; font-size: 12px; z-index: 10;
+    }
+    #ui {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 12px; z-index: 10;
+    }
+    button {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+      color: #fff; padding: 8px 18px; border-radius: 20px; cursor: pointer;
+      font-size: 13px; letter-spacing: 0.5px; transition: background 0.2s;
+    }
+    button:hover { background: rgba(255,255,255,0.2); }
+  </style>
+</head>
+<body>
+  <div id="info">SACRED GEOMETRY ORB &nbsp;|&nbsp; Three.js</div>
+  <div id="ui">
+    <button onclick="toggleWireframe()">Wireframe</button>
+    <button onclick="toggleRotation()">Pause</button>
+    <button onclick="nextGeometry()">Shape</button>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="sketch.js"></script>
+</body>
+</html>

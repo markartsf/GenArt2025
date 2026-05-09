@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lissajous Web</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: monospace; }
+    canvas { display: block; }
+
+    #overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      gap: 18px; z-index: 100;
+    }
+    #overlay h1 {
+      color: rgba(255,255,255,0.9); font-size: 22px; letter-spacing: 4px;
+      font-weight: 300; text-transform: uppercase;
+    }
+    #overlay p {
+      color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 1px; text-align: center;
+      max-width: 380px; line-height: 1.7;
+    }
+    .btn-group { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25);
+      color: #fff; padding: 10px 22px; border-radius: 24px; cursor: pointer;
+      font-size: 13px; letter-spacing: 1px; font-family: monospace;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); }
+    .btn.primary {
+      background: rgba(0,180,255,0.15); border-color: rgba(0,180,255,0.5); color: #88ddff;
+    }
+    .btn.primary:hover { background: rgba(0,180,255,0.3); }
+
+    #ui {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 10; align-items: center;
+      transition: opacity 0.4s;
+    }
+    #ui .btn { padding: 7px 16px; font-size: 12px; }
+    body.fullscreen-mode #ui,
+    body.fullscreen-mode #info,
+    body.fullscreen-mode #meters {
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    body.fullscreen-mode:hover #ui,
+    body.fullscreen-mode:hover #info,
+    body.fullscreen-mode:hover #meters {
+      opacity: 1;
+    }
+
+    #info {
+      position: fixed; top: 16px; left: 20px;
+      color: rgba(255,255,255,0.3); font-family: monospace; font-size: 11px;
+      line-height: 1.8; pointer-events: none;
+    }
+    #meters {
+      position: fixed; top: 16px; right: 20px;
+      color: rgba(255,255,255,0.35); font-size: 11px; text-align: right;
+      line-height: 1.9; pointer-events: none;
+    }
+    .meter-bar {
+      display: inline-block; width: 60px; height: 6px;
+      background: rgba(255,255,255,0.1); border-radius: 3px; vertical-align: middle;
+      margin-left: 6px; overflow: hidden;
+    }
+    .meter-fill { height: 100%; border-radius: 3px; transition: width 0.05s; }
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="overlay">
+  <h1>Lissajous Web</h1>
+  <p>A stereo waveform plotter that maps the left and right audio channels to X/Y axes.<br>
+     The violin and bass pluck drive separate visual systems.</p>
+  <div class="btn-group">
+    <button class="btn primary" onclick="loadBundled()">Load circles01a.mp3</button>
+    <label class="btn" for="file-input">Load your own audio</label>
+    <input type="file" id="file-input" accept="audio/*" onchange="loadFile(this)">
+  </div>
+</div>
+
+<div id="info">
+  LISSAJOUS WEB &nbsp;|&nbsp; Canvas API<br>
+  <span id="mode-label">Mode: XY Stereo</span><br>
+  <span id="time-label">00:00</span>
+</div>
+
+<div id="meters">
+  VIOLIN (mid) <span class="meter-bar"><span class="meter-fill" id="mid-meter" style="background:#88ddff;width:0%"></span></span><br>
+  BASS PLUCK &nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="bass-meter" style="background:#ff8844;width:0%"></span></span><br>
+  HIGHS &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="meter-bar"><span class="meter-fill" id="high-meter" style="background:#aaffcc;width:0%"></span></span>
+</div>
+
+<div id="ui">
+  <button class="btn" onclick="togglePlay()" id="playBtn">Pause</button>
+  <button class="btn" onclick="toggleMode()" id="modeBtn">M/S Mode</button>
+  <button class="btn" onclick="cyclePalette()">Palette</button>
+  <button class="btn" onclick="clearWeb()">Clear</button>
+  <button class="btn" onclick="toggleFullscreen()" id="fsBtn">⛶ Fullscreen</button>
+</div>
+
+<script src="sketch.js"></script>
+</body>
+</html>

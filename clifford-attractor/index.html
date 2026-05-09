@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clifford Attractor — Audio Reactive</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #04020a;
+      color: #f5deb3;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* Controls bar */
+    #controls {
+      padding: 10px 18px;
+      background: rgba(4, 2, 10, 0.92);
+      border-bottom: 1px solid rgba(255, 160, 60, 0.2);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      z-index: 10;
+      font-size: 12px;
+    }
+
+    #title {
+      font-size: 13px;
+      letter-spacing: 2px;
+      color: #4a9fd8;
+      text-transform: uppercase;
+      margin-right: 6px;
+    }
+
+    button {
+      background: #2a2a3a;
+      color: #f5deb3;
+      border: 1px solid rgba(74, 159, 216, 0.3);
+      padding: 5px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+    button:hover  { background: #3a3a55; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    #fullscreenBtn {
+      border-color: rgba(100, 220, 220, 0.35);
+      margin-left: auto;
+    }
+
+    input[type="file"] {
+      background: #1a1a28;
+      color: #c8a882;
+      border: 1px solid rgba(74, 159, 216, 0.25);
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    input[type="file"]::-webkit-file-upload-button {
+      background: #2a2a3a;
+      color: #f5deb3;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-right: 6px;
+      font-size: 11px;
+    }
+
+    #status {
+      font-size: 11px;
+      color: #a8886a;
+      min-width: 220px;
+    }
+    #status.loading { color: #4a9fd8; }
+    #status.ready   { color: #90ee90; }
+    #status.error   { color: #ff6b6b; }
+
+    /* Meters */
+    #meters {
+      display: flex;
+      gap: 10px;
+      font-size: 10px;
+      color: #8a7060;
+    }
+    .meter { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .meter-bar {
+      width: 6px;
+      height: 30px;
+      background: #1a1020;
+      border-radius: 2px;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+    }
+    .meter-fill {
+      width: 100%;
+      border-radius: 2px;
+      transition: height 0.05s;
+    }
+    .bass-fill { background: #4a9fd8; }
+    .mid-fill  { background: #7b68ee; }
+    .high-fill { background: #87ceeb; }
+
+    /* Canvas */
+    #canvas-container {
+      flex: 1;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Fullscreen — hide controls */
+    :fullscreen #controls,
+    :-webkit-full-screen #controls,
+    :-moz-full-screen #controls { display: none; }
+  </style>
+</head>
+<body>
+<div id="container">
+  <div id="controls">
+    <span id="title">Clifford Attractor</span>
+
+    <button id="playBtn" disabled>Play</button>
+    <button id="stopBtn" disabled>Stop</button>
+
+    <div id="meters">
+      <div class="meter">
+        <div class="meter-bar"><div id="bassMeter" class="meter-fill bass-fill" style="height:0%"></div></div>
+        <span>B</span>
+      </div>
+      <div class="meter">
+        <div class="meter-bar"><div id="midMeter"  class="meter-fill mid-fill"  style="height:0%"></div></div>
+        <span>M</span>
+      </div>
+      <div class="meter">
+        <div class="meter-bar"><div id="highMeter" class="meter-fill high-fill" style="height:0%"></div></div>
+        <span>H</span>
+      </div>
+    </div>
+
+    <span id="status" class="loading">Loading GlassHorizon.mp3...</span>
+
+    <input type="file" id="audioFile" accept="audio/*" title="Load a different audio file">
+
+    <button id="fullscreenBtn">[ Fullscreen ]</button>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+</div>
+
+<script type="module" src="./sketch.js"></script>
+</body>
+</html>
