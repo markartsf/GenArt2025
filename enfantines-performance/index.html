@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enfantines Performance</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #controls {
+      padding: 7px 14px;
+      background: rgba(10,10,10,0.94);
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      z-index: 10;
+      font-size: 11px;
+      row-gap: 5px;
+    }
+
+    #title {
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: #a9c1ff;
+      text-transform: uppercase;
+      white-space: nowrap;
+      margin-right: 2px;
+    }
+
+    button, select {
+      background: #1e1e1e;
+      color: #bbb;
+      border: 1px solid #3a3a3a;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+    button:hover, select:hover { background: #272727; border-color: #555; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    select { padding: 3px 6px; }
+    #paletteSel { max-width: 156px; }
+    #styleSel   { max-width: 160px; }
+    #densitySel { max-width: 78px; }
+
+    .sep {
+      width: 1px; height: 20px;
+      background: #2a2a2a; flex-shrink: 0;
+    }
+
+    label {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: #777; cursor: pointer; white-space: nowrap;
+    }
+    label input[type=checkbox] { cursor: pointer; accent-color: #a9c1ff; }
+
+    input[type="file"] {
+      background: #1a1a1a; color: #999;
+      border: 1px solid #3a3a3a; padding: 3px 7px;
+      border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer;
+    }
+    input[type="file"]::-webkit-file-upload-button {
+      background: #272727; color: #bbb; border: none;
+      padding: 2px 7px; border-radius: 2px; cursor: pointer; margin-right: 5px; font-size: 11px;
+    }
+
+    #status {
+      font-size: 10px; color: #555; min-width: 180px;
+    }
+    #status.loading { color: #a9c1ff; }
+    #status.ready   { color: #6aaa6a; }
+    #status.error   { color: #ff6655; }
+
+    #meters {
+      display: flex; gap: 7px; font-size: 9px; color: #555;
+    }
+    .meter { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .meter-bar {
+      width: 5px; height: 24px; background: #222;
+      border-radius: 2px; overflow: hidden; display: flex; align-items: flex-end;
+    }
+    .meter-fill { width: 100%; border-radius: 2px; transition: height 0.05s; }
+    .bass-fill  { background: #ff5533; }
+    .mid-fill   { background: #fcd300; }
+    .high-fill  { background: #4499ff; }
+
+    .hint { color: #444; font-size: 10px; white-space: nowrap; }
+    #fullscreenBtn { margin-left: auto; }
+
+    #canvas-container {
+      flex: 1; position: relative; overflow: hidden;
+    }
+    /* CSS scaling keeps canvas full-size without calling resizeCanvas()
+       (which would break p5.brush internal framebuffers) */
+    #defaultCanvas0 {
+      display: block; position: absolute; top: 0; left: 0;
+      width: 100% !important; height: 100% !important;
+    }
+
+    :fullscreen #controls,
+    :-webkit-full-screen #controls,
+    :-moz-full-screen #controls { display: none; }
+  </style>
+</head>
+<body>
+<div id="container">
+  <div id="controls">
+
+    <span id="title">Enfantines</span>
+
+    <button id="playBtn" disabled>Play</button>
+    <button id="stopBtn" disabled>Stop</button>
+
+    <div class="sep"></div>
+
+    <!-- Palette + auto-cycle -->
+    <select id="paletteSel" title="Choose palette (← → keys also work)">
+      <!-- Populated by sketch.js -->
+    </select>
+    <label title="Advance palette automatically every 4 beats">
+      <input type="checkbox" id="autoCycleChk" checked> auto
+    </label>
+
+    <div class="sep"></div>
+
+    <!-- Foundation options -->
+    <select id="styleSel" title="Doodle fan style">
+      <!-- Populated by sketch.js -->
+    </select>
+    <select id="densitySel" title="Composition density">
+      <option value="sparse">sparse</option>
+      <option value="medium" selected>medium</option>
+      <option value="dense">dense</option>
+    </select>
+
+    <label title="Hatch line background"><input type="checkbox" id="hatchBgChk"> hatch bg</label>
+    <label title="Cross marks scattered across canvas"><input type="checkbox" id="crossMarksChk" checked>+ marks</label>
+    <label title="Gradient color curves"><input type="checkbox" id="colorCurvesChk" checked>color curves</label>
+
+    <button id="newCanvasBtn" title="Re-seed canvas with current settings (R key)">New Canvas</button>
+
+    <div class="sep"></div>
+
+    <!-- Audio meters + status -->
+    <div id="meters">
+      <div class="meter">
+        <div class="meter-bar"><div id="bassMeter" class="meter-fill bass-fill" style="height:0%"></div></div>
+        <span>B</span>
+      </div>
+      <div class="meter">
+        <div class="meter-bar"><div id="midMeter" class="meter-fill mid-fill" style="height:0%"></div></div>
+        <span>M</span>
+      </div>
+      <div class="meter">
+        <div class="meter-bar"><div id="highMeter" class="meter-fill high-fill" style="height:0%"></div></div>
+        <span>H</span>
+      </div>
+    </div>
+
+    <span id="status">Loading…</span>
+
+    <input type="file" id="audioFile" accept="audio/*" title="Load your own audio file">
+
+    <span class="hint">← → palette &nbsp;·&nbsp; R new &nbsp;·&nbsp; F fullscreen</span>
+
+    <button id="fullscreenBtn">[ ⛶ ]</button>
+
+  </div>
+
+  <div id="canvas-container"></div>
+</div>
+
+<script src="p5.min.js"></script>
+<script src="p5.brush.js"></script>
+<script src="audio-engine.js"></script>
+<script src="sketch.js"></script>
+</body>
+</html>
