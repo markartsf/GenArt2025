@@ -130,6 +130,11 @@ var showHatchBg    = false;
 var showCrossMarks = true;
 var showColorCurves = true;
 
+// Animated doodle queue — teeth drawn progressively over multiple frames
+var pendingDoodles  = [];   // doodles waiting to start
+var activeDoodle    = null; // doodle currently being drawn tooth-by-tooth
+var activeToothIdx  = 0;    // which tooth we're on within activeDoodle
+
 // ─── Synthetic features (no audio) ──────────────────────────────────────────────
 function generateSyntheticFeatures(t) {
   return {
@@ -362,9 +367,10 @@ function draw() {
     var washCount = { sparse: 3, medium: 5, dense: 8 }[currentDensity];
     for (var i = 0; i < washCount; i++) drawBgWash(pal);
 
-    // 3. Doodles — the Alejandro fan-stroke system (the main event)
-    var doodles = generateDoodles(pal, currentStyle, currentDensity);
-    for (var i = 0; i < doodles.length; i++) drawDoodle(doodles[i]);
+    // 3. Doodles — queue for progressive animated drawing (tooth-by-tooth)
+    pendingDoodles = generateDoodles(pal, currentStyle, currentDensity);
+    activeDoodle   = null;
+    activeToothIdx = 0;
 
     // 4. Color curves
     if (showColorCurves) {
@@ -401,6 +407,24 @@ function draw() {
   fill(bgRgb[0], bgRgb[1], bgRgb[2], fadeAlpha);
   rect(0, 0, width, height);
   pop();
+
+  // ── Animated doodle queue — draw teeth progressively each frame ─────────────
+  // Start next queued doodle when active one finishes
+  if (!activeDoodle && pendingDoodles.length > 0) {
+    activeDoodle   = pendingDoodles.shift();
+    activeToothIdx = 0;
+  }
+  if (activeDoodle) {
+    // Audio-responsive rate: quiet=2 teeth/frame, loud bass/beat=up to 10
+    var teethThisFrame = isAudioPlaying
+      ? Math.max(1, Math.floor(2 + features.bass * 5 + (features.beatFlash > 0.7 ? 5 : 0)))
+      : 2;
+    for (var ti = 0; ti < teethThisFrame && activeToothIdx < activeDoodle.teethCount; ti++) {
+      drawDoodleTooth(activeDoodle, activeToothIdx);
+      activeToothIdx++;
+    }
+    if (activeToothIdx >= activeDoodle.teethCount) activeDoodle = null;
+  }
 
   // Update flow field
   fieldAngle += features.mid * 1.5;
@@ -444,6 +468,13 @@ function draw() {
       features.beatStrength || features.bass
     );
 
+    // Every 2 beats: spawn a fresh spontaneous doodle (cap queue at 5)
+    if (beatCount % 2 === 0 && pendingDoodles.length < 5) {
+      var livePal = PALETTES[paletteIndex];
+      var sprouted = generateDoodles(livePal, currentStyle, "sparse");
+      if (sprouted.length > 0) pendingDoodles.push(sprouted[Math.floor(random(sprouted.length))]);
+    }
+
     // Palette auto-cycle every 4 beats
     if (autoCycle && beatCount % 4 === 0) {
       paletteIndex = (paletteIndex + 1) % PALETTES.length;
@@ -467,12 +498,13 @@ function draw() {
 
 // BACKGROUND WASH — large soft watercolor blob seeding the composition
 function drawBgWash(pal) {
+  var sz = random(80, 260);
   brush.noStroke();
-  brush.fill(random(pal.colors), random(20, 50));
-  brush.bleed(random(0.28, 0.55));  // higher bleed = softer, less rectangular
-  try { brush.fillTexture(0.4, 0.3); } catch(e) {}
-  brush.rect(random(width*0.1,width*0.9), random(height*0.1,height*0.9),
-    random(80,260), random(80,260), CENTER);
+  brush.fill(random(pal.colors), random(18, 45));
+  brush.bleed(random(0.55, 0.85));  // high bleed = organic cloud, not a rectangle
+  try { brush.fillTexture(0.35, 0.25); } catch(e) {}
+  // Use ~square dimensions so the bleed cloud reads as roughly circular
+  brush.rect(random(width*0.1,width*0.9), random(height*0.1,height*0.9), sz, sz, CENTER);
   brush.noFill();
 }
 
@@ -533,6 +565,12 @@ function generateDoodles(pal, styleName, density) {
       // Fan brushes — use style's fanBrushes
       var fanPool = style.fanBrushes;
 
+      // Pre-bake underWash decision so it's stable across animated playback
+      var hasUnderWash = style.underWashProb > 0 && random() < style.underWashProb;
+      var uwCol   = hasUnderWash ? stops[Math.floor(random(stops.length))] : null;
+      var uwOp    = hasUnderWash ? random(style.underWashOpacity[0], style.underWashOpacity[1]) : 0;
+      var uwBleed = hasUnderWash ? random(style.underWashBleed[0],   style.underWashBleed[1])   : 0;
+
       doodles.push({
         cx: cx, cy: cy, size: size, angle: angle,
         spinePts: spinePts, colorStops: stops,
@@ -542,6 +580,8 @@ function generateDoodles(pal, styleName, density) {
         brushType: random(fanPool),
         outline: style.showOutline && random() < 0.7,
         style: style,
+        // underWash (pre-baked)
+        hasUnderWash: hasUnderWash, uwCol: uwCol, uwOp: uwOp, uwBleed: uwBleed,
       });
       idx++;
     }
@@ -549,75 +589,74 @@ function generateDoodles(pal, styleName, density) {
   return doodles;
 }
 
-// DRAW DOODLE — fan of perpendicular strokes along a curving spine
-// This is the core Alejandro Campos Uribe Enfantines II technique:
-//   1. Walk spine in N steps
-//   2. At each step, draw a fat stroke PERPENDICULAR to the spine
-//   3. Color cycles through palette gradient with each stroke
-//   4. Spectral blending (blend:true) fuses overlapping colors like real paint
-function drawDoodle(d) {
+// DRAW DOODLE TOOTH — draws a single perpendicular stroke at position i along the spine.
+// Called once per frame (per tooth) when animating, or in a tight loop for static rendering.
+// On tooth 0: also draws the optional underWash (baked into the doodle object).
+function drawDoodleTooth(d, i) {
   var S = d.style;
+  var N = d.teethCount;
 
-  // Optional underlying wash — the marker strokes will spectrally blend with this
-  if (random() < S.underWashProb) {
-    var washCol = d.colorStops[Math.floor(random(d.colorStops.length))];
+  // First tooth: draw the pre-baked underWash swatch
+  if (i === 0 && d.hasUnderWash) {
     brush.noStroke();
-    brush.fill(washCol, random(S.underWashOpacity[0], S.underWashOpacity[1]));
-    brush.bleed(random(S.underWashBleed[0], S.underWashBleed[1]));
+    brush.fill(d.uwCol, d.uwOp);
+    brush.bleed(d.uwBleed);
     try { brush.fillTexture(0.35, 0.25); } catch(e) {}
     brush.rect(d.cx, d.cy, d.size * 0.85, d.size * 0.85, CENTER);
     brush.noFill();
   }
 
-  var N = d.teethCount;
-  for (var i = 0; i < N; i++) {
-    var t = i / (N - 1);
-    var here = sampleSpline(d.spinePts, t);
+  var t = N > 1 ? i / (N - 1) : 0;
+  var here = sampleSpline(d.spinePts, t);
 
-    // Tangent by finite difference → perpendicular = +90° + per-tooth jitter
-    var eps = 0.005;
-    var aHead = sampleSpline(d.spinePts, Math.min(1, t + eps));
-    var aBack = sampleSpline(d.spinePts, Math.max(0, t - eps));
-    var tanAngle = Math.atan2(aHead.y - aBack.y, aHead.x - aBack.x) * 180 / Math.PI;
-    var jitter = d.style.angleJitter || 4;
-    var perpAngle = tanAngle + 90 + random(-jitter, jitter);
+  // Tangent by finite difference → perpendicular = +90° + per-tooth jitter
+  var eps = 0.005;
+  var aHead = sampleSpline(d.spinePts, Math.min(1, t + eps));
+  var aBack = sampleSpline(d.spinePts, Math.max(0, t - eps));
+  var tanAngle = Math.atan2(aHead.y - aBack.y, aHead.x - aBack.x) * 180 / Math.PI;
+  var jitter = S.angleJitter || 4;
+  var perpAngle = tanAngle + 90 + random(-jitter, jitter);
 
-    // Color: cycle through gradient
-    var colorT = (t * S.cycleRate + random(-S.colorJitter, S.colorJitter)) % 1;
-    var col = sampleGradient(d.colorStops, colorT);
+  // Color: cycle through gradient
+  var colorT = (t * S.cycleRate + random(-S.colorJitter, S.colorJitter)) % 1;
+  var col = sampleGradient(d.colorStops, colorT);
 
-    // Fan tooth half-lengths by style
-    var halfA, halfB;
-    if (d.fanStyle === "symmetric") {
-      halfA = d.halfWidth * random(0.7, 1.0); halfB = d.halfWidth * random(0.7, 1.0);
-    } else if (d.fanStyle === "one-sided") {
-      halfA = d.halfWidth * random(0.85, 1.05); halfB = d.halfWidth * 0.05;
-    } else if (d.fanStyle === "staggered") {
-      halfA = d.halfWidth * (i % 2 === 0 ? random(0.9,1.05) : random(0.4,0.6));
-      halfB = d.halfWidth * (i % 2 === 1 ? random(0.9,1.05) : random(0.4,0.6));
-    } else { // tapered
-      var taper = Math.sin(t * Math.PI);
-      halfA = d.halfWidth * taper * random(0.85, 1.05);
-      halfB = d.halfWidth * taper * random(0.85, 1.05);
-    }
-
-    var weight = random(S.weightRange[0], S.weightRange[1]) * random(S.weightJitter[0], S.weightJitter[1]);
-    brush.set(d.brushType, col, weight);
-    brush.line(
-      here.x - cos(perpAngle) * halfA, here.y - sin(perpAngle) * halfA,
-      here.x + cos(perpAngle) * halfB, here.y + sin(perpAngle) * halfB
-    );
-
-    // Occasional accent stroke for detail
-    if (random() < S.accentProb) {
-      var accentCol = sampleGradient(d.colorStops, (colorT + 0.5) % 1);
-      brush.set("bristle", accentCol, random(0.5, 1.2));
-      brush.line(
-        here.x - cos(perpAngle) * halfA * 0.7, here.y - sin(perpAngle) * halfA * 0.7,
-        here.x + cos(perpAngle) * halfB * 0.7, here.y + sin(perpAngle) * halfB * 0.7
-      );
-    }
+  // Fan tooth half-lengths by style
+  var halfA, halfB;
+  if (d.fanStyle === "symmetric") {
+    halfA = d.halfWidth * random(0.7, 1.0); halfB = d.halfWidth * random(0.7, 1.0);
+  } else if (d.fanStyle === "one-sided") {
+    halfA = d.halfWidth * random(0.85, 1.05); halfB = d.halfWidth * 0.05;
+  } else if (d.fanStyle === "staggered") {
+    halfA = d.halfWidth * (i % 2 === 0 ? random(0.9,1.05) : random(0.4,0.6));
+    halfB = d.halfWidth * (i % 2 === 1 ? random(0.9,1.05) : random(0.4,0.6));
+  } else { // tapered
+    var taper = Math.sin(t * Math.PI);
+    halfA = d.halfWidth * taper * random(0.85, 1.05);
+    halfB = d.halfWidth * taper * random(0.85, 1.05);
   }
+
+  var weight = random(S.weightRange[0], S.weightRange[1]) * random(S.weightJitter[0], S.weightJitter[1]);
+  brush.set(d.brushType, col, weight);
+  brush.line(
+    here.x - cos(perpAngle) * halfA, here.y - sin(perpAngle) * halfA,
+    here.x + cos(perpAngle) * halfB, here.y + sin(perpAngle) * halfB
+  );
+
+  // Occasional accent stroke for detail
+  if (random() < S.accentProb) {
+    var accentCol = sampleGradient(d.colorStops, (colorT + 0.5) % 1);
+    brush.set("bristle", accentCol, random(0.5, 1.2));
+    brush.line(
+      here.x - cos(perpAngle) * halfA * 0.7, here.y - sin(perpAngle) * halfA * 0.7,
+      here.x + cos(perpAngle) * halfB * 0.7, here.y + sin(perpAngle) * halfB * 0.7
+    );
+  }
+}
+
+// DRAW DOODLE — draws all teeth at once (used for static/instant rendering)
+function drawDoodle(d) {
+  for (var i = 0; i < d.teethCount; i++) drawDoodleTooth(d, i);
 }
 
 // COLOR CURVE — long spline stroke shifting through palette colors
@@ -700,13 +739,16 @@ function generatePath(archetype) {
 function drawWatercolorBlob(features) {
   var col = getPaletteColor(features);
   var blobSize = 40 + features.bass * 160;
-  var aspect = random(0.6, 1.4);
-  brush.noStroke();  // prevent rectangle outlines from any prior brush.set()
-  brush.fill(col, random(45, 95));
-  brush.bleed(constrain(0.05 + features.bass * 0.3, 0, 0.5));
-  try { brush.fillTexture(0.3 + features.bass * 0.4, 0.3); } catch(e) {}
+  // Very high bleed makes the watercolor bleed far outside the rect boundary,
+  // creating an organic cloud shape rather than a rectangle.
+  var bleedAmt = constrain(0.55 + features.bass * 0.35, 0.5, 0.95);
+  var sz = blobSize * random(0.88, 1.12);  // ~square so the blob reads as circular
+  brush.noStroke();
+  brush.fill(col, random(30, 65));
+  brush.bleed(bleedAmt);
+  try { brush.fillTexture(0.25 + features.bass * 0.35, 0.25); } catch(e) {}
   brush.rect(random(width*0.08,width*0.92), random(height*0.08,height*0.92),
-    blobSize*aspect, blobSize/aspect, CENTER);
+    sz, sz, CENTER);
   brush.noFill();
 }
 
@@ -756,20 +798,22 @@ function drawWaveformPath(features) {
 function drawBeatSplash(features) {
   var strength = features.beatStrength || 0.5;
   var splashSize = 30 + strength * 150;
-  var bleedAmt = 0.05 + strength * 0.40;
-  brush.noStroke();  // prevent rectangle outlines
-  brush.fill(getBeatColor(), 35 + strength * 60);
+  // High bleed → organic watercolor cloud, not a rectangle
+  var bleedAmt = constrain(0.5 + strength * 0.45, 0.45, 0.95);
+  var sz = splashSize * random(0.88, 1.12);
+  brush.noStroke();
+  brush.fill(getBeatColor(), 30 + strength * 55);
   brush.bleed(bleedAmt);
-  try { brush.fillTexture(0.3 + strength*0.4, 0.3); } catch(e) {}
-  brush.rect(random(width*0.15,width*0.85), random(height*0.15,height*0.85),
-    splashSize*random(0.7,1.3), splashSize*random(0.7,1.3), CENTER);
+  try { brush.fillTexture(0.25 + strength*0.35, 0.25); } catch(e) {}
+  brush.rect(random(width*0.15,width*0.85), random(height*0.15,height*0.85), sz, sz, CENTER);
   brush.noFill();
   if (strength > 0.5) {
+    var sz2 = splashSize * random(0.45, 0.75);
     brush.noStroke();
-    brush.fill(getBeatColor2(), random(40, 70));
-    brush.bleed(bleedAmt * 0.8);
-    brush.rect(random(width*0.2,width*0.8), random(height*0.2,height*0.8),
-      splashSize*random(0.4,0.8), splashSize*random(0.4,0.8), CENTER);
+    brush.fill(getBeatColor2(), random(35, 60));
+    brush.bleed(constrain(bleedAmt * 0.85, 0.4, 0.9));
+    try { brush.fillTexture(0.2, 0.2); } catch(e) {}
+    brush.rect(random(width*0.2,width*0.8), random(height*0.2,height*0.8), sz2, sz2, CENTER);
     brush.noFill();
   }
 }
