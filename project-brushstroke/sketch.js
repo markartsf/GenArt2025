@@ -396,6 +396,40 @@ function registerCustomBrushes() {
     },
     rotate: "random"
   });
+
+  // CHALK DRAG — long granular path with broken-pigment texture.
+  // The tip is several tiny offset granules; high spacing + natural rotation
+  // means each step deposits a small irregular cluster aligned with the
+  // stroke direction, producing the "pastel-on-rough-paper" drag look from
+  // the reference images. blend:true so colors layer spectrally.
+  brush.add("chalk_drag", {
+    type: "custom", weight: 2.8, vibration: 0.6,
+    opacity: 95, spacing: 0.7, blend: true,
+    pressure: { type: "standard", curve: [0.2, 0.3], min_max: [0.7, 1.2] },
+    tip: function(m) {
+      m.ellipse(-1.4, 0, 1.3, 0.7);
+      m.ellipse( 0.3, 0.5, 1.1, 0.6);
+      m.ellipse( 1.5, -0.4, 1.4, 0.7);
+      m.ellipse(-0.6, -0.8, 0.9, 0.5);
+    },
+    rotate: "natural"
+  });
+
+  // CHALK SCRIBBLE — short fragmented dashes for the broken pigment marks.
+  // Smaller weight, larger spacing, more vibration than chalk_drag — when
+  // walked along a short path it reads as a torn / pixelated stroke rather
+  // than a continuous line. Use for accent passages and dense scribbled fills.
+  brush.add("chalk_scribble", {
+    type: "custom", weight: 2.0, vibration: 1.1,
+    opacity: 110, spacing: 0.85, blend: true,
+    pressure: { type: "standard", curve: [0.15, 0.4], min_max: [0.6, 1.3] },
+    tip: function(m) {
+      m.ellipse(-0.8, 0.2, 1.0, 0.6);
+      m.ellipse( 0.6, -0.3, 0.9, 0.5);
+      m.ellipse( 0.0, 0.7, 0.7, 0.4);
+    },
+    rotate: "natural"
+  });
 }
 
 // ─── Draw architecture ────────────────────────────────────────────────────────
