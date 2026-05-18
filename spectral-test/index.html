@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spectral.js — Pigment Blending Test</title>
+  <style>
+    body {
+      background: #1a1a1a; color: #ddd;
+      font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+      padding: 16px; margin: 0;
+    }
+    h1 { font-size: 14px; letter-spacing: 0.15em; color: #a9c1ff; margin-bottom: 4px; text-transform: uppercase; }
+    .subtitle { color: #888; margin-bottom: 20px; font-size: 11px; }
+    .row { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 18px; flex-wrap: wrap; }
+    .panel {
+      background: #0d0d0d; border: 1px solid #2a2a2a;
+      padding: 12px; border-radius: 4px;
+    }
+    .panel h2 { font-size: 11px; color: #9fd1a0; margin-bottom: 6px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .panel .desc { color: #888; font-size: 10px; margin-bottom: 8px; max-width: 280px; }
+    canvas { background: #fffceb; display: block; border-radius: 3px; }
+    .status { color: #ffb86c; margin-bottom: 12px; font-size: 11px; }
+    .pass { color: #9fd1a0; }
+    .fail { color: #ff9a9a; }
+    .swatches { display: flex; gap: 4px; margin-top: 6px; font-size: 10px; }
+    .swatch { padding: 3px 6px; border-radius: 2px; color: #000; }
+  </style>
+</head>
+<body>
+  <h1>Spectral.js — Pigment Blending Test</h1>
+  <div class="subtitle">Proof-of-concept: Kubelka-Munk pigment mixing in vanilla canvas-2D, no p5, no WEBGL.</div>
+  <div id="status" class="status">loading spectral.js…</div>
+
+  <div class="row">
+    <div class="panel">
+      <h2>Test 1 — Pure RGB additive blending (broken)</h2>
+      <div class="desc">Yellow + blue with standard alpha compositing. Should look muddy / grey-green, not real green. This is what happens WITHOUT spectral blending.</div>
+      <canvas id="canvas-rgb" width="400" height="200"></canvas>
+    </div>
+
+    <div class="panel">
+      <h2>Test 2 — Spectral.js pigment mixing</h2>
+      <div class="desc">Same colours, mixed via Spectral.js. Yellow + blue should produce real GREEN. Red + blue should give a violet/purple. Pink + yellow should give coral.</div>
+      <canvas id="canvas-spectral" width="400" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <h2>Test 3 — Alejandro palette stress test</h2>
+      <div class="desc">Multiple overlapping Alejandro palette colours, mixed spectrally with varying alpha. If colours layer coherently (not muddy), the library works for our use case.</div>
+      <canvas id="canvas-palette" width="820" height="260"></canvas>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/spectral.js"></script>
+  <script>
+    const status = document.getElementById('status');
+
+    function setStatus(msg, cls) {
+      status.textContent = msg;
+      status.className = 'status ' + (cls || '');
+    }
+
+    // Wrapper that works whether spectral is v2 (mix(a,b,t) → hex) or
+    // v3 (mix([Color,w],[Color,w]) → Color). Returns a hex string.
+    function mixHex(a, b, t) {
+      if (typeof spectral === 'undefined') throw new Error('spectral not loaded');
+      // v3 API: Color constructor + weighted arrays
+      if (typeof spectral.Color === 'function') {
+        const c1 = new spectral.Color(a);
+        const c2 = new spectral.Color(b);
+        const result = spectral.mix([c1, 1 - t], [c2, t]);
+        // Color.toString() returns hex
+        return typeof result.toString === 'function' ? result.toString() : ('#' + result);
+      }
+      // v2 API fallback
+      if (typeof spectral.mix === 'function') {
+        return spectral.mix(a, b, t);
+      }
+      throw new Error('spectral has neither Color() nor mix(a,b,t)');
+    }
+
+    function runTests() {
+      if (typeof spectral === 'undefined') {
+        setStatus('FAILED: spectral global not found on window', 'fail');
+        return;
+      }
+      try {
+        // Sanity test: yellow + blue should be green-ish
+        const mixed = mixHex('#FFD300', '#002185', 0.5);
+        const apiVer = typeof spectral.Color === 'function' ? 'v3 (Color constructor)' : 'v2 (legacy)';
+        setStatus(`Spectral.js loaded ✓ — API: ${apiVer} — yellow + blue at t=0.5 → ${mixed} (should be green-ish)`, 'pass');
+
+        drawRgbTest();
+        drawSpectralTest();
+        drawPaletteTest();
+      } catch (e) {
+        setStatus('FAILED during mix: ' + e.message + ' — spectral keys: ' + (typeof spectral !== 'undefined' ? Object.keys(spectral).join(',') : 'undef'), 'fail');
+        console.error(e);
+      }
+    }
+
+    // ── Test 1: RGB additive (broken) blending ──────────────────────────────
+    function drawRgbTest() {
+      const ctx = document.getElementById('canvas-rgb').getContext('2d');
+      ctx.fillStyle = '#fffceb'; ctx.fillRect(0, 0, 400, 200);
+
+      // Three overlapping circles — pure alpha compositing in source-over mode
+      ctx.globalAlpha = 0.65;
+      ctx.fillStyle = '#FFD300';  // yellow
+      ctx.beginPath(); ctx.arc(130, 100, 65, 0, Math.PI*2); ctx.fill();
+
+      ctx.fillStyle = '#002185';  // blue
+      ctx.beginPath(); ctx.arc(200, 100, 65, 0, Math.PI*2); ctx.fill();
+
+      ctx.fillStyle = '#FF2702';  // red
+      ctx.beginPath(); ctx.arc(270, 100, 65, 0, Math.PI*2); ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.font = '11px monospace'; ctx.fillStyle = '#666';
+      ctx.fillText('yellow + blue', 100, 180);
+      ctx.fillText('+ red', 250, 180);
+    }
+
+    // ── Test 2: Spectral.js pigment mixing ──────────────────────────────────
+    // We can't natively get spectral compositing in canvas, so we precompute the
+    // mixed colours for the overlap regions, then draw layered regions explicitly.
+    function drawSpectralTest() {
+      const ctx = document.getElementById('canvas-spectral').getContext('2d');
+      ctx.fillStyle = '#fffceb'; ctx.fillRect(0, 0, 400, 200);
+
+      // Draw the three base colours
+      const yellow = '#FFD300', blue = '#002185', red = '#FF2702';
+
+      // Yellow alone
+      ctx.fillStyle = yellow;
+      ctx.beginPath(); ctx.arc(130, 100, 65, 0, Math.PI*2); ctx.fill();
+
+      // Blue alone (right side that doesn't overlap)
+      ctx.fillStyle = blue;
+      ctx.beginPath(); ctx.arc(200, 100, 65, 0, Math.PI*2); ctx.fill();
+
+      // Red alone
+      ctx.fillStyle = red;
+      ctx.beginPath(); ctx.arc(270, 100, 65, 0, Math.PI*2); ctx.fill();
+
+      // Now overlap regions using clip + fill with spectrally mixed colour.
+      // Yellow ∩ blue → green
+      const yb = mixHex(yellow, blue, 0.5);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(130, 100, 65, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = yb;
+      ctx.beginPath(); ctx.arc(200, 100, 65, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // Blue ∩ red → purple
+      const br = mixHex(blue, red, 0.5);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(200, 100, 65, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = br;
+      ctx.beginPath(); ctx.arc(270, 100, 65, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // Triple overlap: yellow ∩ blue ∩ red — mix all three
+      const ybr = mixHex(yb, red, 0.5);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(130, 100, 65, 0, Math.PI*2); ctx.clip();
+      ctx.beginPath(); ctx.arc(200, 100, 65, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = ybr;
+      ctx.beginPath(); ctx.arc(270, 100, 65, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      ctx.font = '11px monospace'; ctx.fillStyle = '#222';
+      ctx.fillText(`y+b=${yb}`, 100, 180);
+      ctx.fillText(`b+r=${br}`, 240, 180);
+
+      // Show swatches under canvas
+      const sw = document.querySelector('#canvas-spectral').parentElement;
+      let row = sw.querySelector('.swatches');
+      if (!row) { row = document.createElement('div'); row.className='swatches'; sw.appendChild(row); }
+      row.innerHTML = '';
+      const labels = [
+        { c: yellow, t: 'yellow' }, { c: blue, t: 'blue' }, { c: red, t: 'red' },
+        { c: yb, t: 'y+b' }, { c: br, t: 'b+r' }, { c: ybr, t: '3-way' }
+      ];
+      for (const l of labels) {
+        const s = document.createElement('span');
+        s.className = 'swatch'; s.style.background = l.c;
+        s.textContent = `${l.t} ${l.c}`;
+        row.appendChild(s);
+      }
+    }
+
+    // ── Test 3: Alejandro palette stress test ────────────────────────────────
+    function drawPaletteTest() {
+      const ctx = document.getElementById('canvas-palette').getContext('2d');
+      ctx.fillStyle = '#fffceb'; ctx.fillRect(0, 0, 820, 260);
+
+      // Blanc Ivoire palette
+      const palette = ['#2c695a', '#4ad6af', '#7facc6', '#4e93cc', '#f6684f', '#ffd300'];
+
+      // Draw many overlapping ellipses; for each overlap compute spectral mix.
+      // To keep this simple, we layer in passes — each pass for a single colour,
+      // using clip regions for the spectrally-mixed overlaps with the previous pass.
+      let baseLayer = null;  // hex of base layer at each pixel — too expensive for true per-pixel, so we approximate by sampling.
+
+      // Simpler approach: just stamp ~24 large ellipses in random positions,
+      // each spectrally-mixed with the underlying background colour at one
+      // sample point. Good enough to visually validate.
+      const samples = [];
+      for (let i = 0; i < 24; i++) {
+        samples.push({
+          x: 60 + Math.random() * 700,
+          y: 50 + Math.random() * 160,
+          r: 40 + Math.random() * 50,
+          c: palette[Math.floor(Math.random() * palette.length)],
+        });
+      }
+
+      // First pass: paint all at low alpha so background shows through
+      for (const s of samples) {
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = s.c;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Second pass: for each ellipse, compute spectral mix with one neighbour and
+      // stamp a smaller spot in the overlap zone using the mixed colour.
+      for (let i = 0; i < samples.length; i++) {
+        const a = samples[i];
+        // Find an overlapping neighbour
+        let neighbour = null, neighDist = Infinity;
+        for (let j = 0; j < samples.length; j++) {
+          if (i === j) continue;
+          const b = samples[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d = Math.sqrt(dx*dx + dy*dy);
+          if (d < a.r + b.r && d < neighDist) {
+            neighDist = d; neighbour = b;
+          }
+        }
+        if (!neighbour) continue;
+        const mixed = mixHex(a.c, neighbour.c, 0.5);
+        const mx = (a.x + neighbour.x) / 2;
+        const my = (a.y + neighbour.y) / 2;
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = mixed;
+        ctx.beginPath(); ctx.arc(mx, my, Math.min(a.r, neighbour.r) * 0.4, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Wait for spectral script to finish loading
+    if (document.readyState === 'complete') {
+      runTests();
+    } else {
+      window.addEventListener('load', runTests);
+    }
+  </script>
+</body>
+</html>
