@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Project Brushstroke v2 — Composition (Phase 4)</title>
+  <title>Project Brushstroke v2 — Scenes</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -116,14 +116,19 @@
   <div id="container">
     <div id="sidebar">
       <h1>Project Brushstroke</h1>
-      <div class="subtitle">Phase 4 — brush editor</div>
+      <div class="subtitle">Phase 4b — scene editor</div>
+
+      <nav style="display:flex;gap:8px;margin-bottom:12px;font-size:10px;letter-spacing:0.08em;">
+        <a href="brushes.html" style="color:#6da9ff;text-decoration:none;">Brushes</a>
+        <span style="color:#9fd1a0;font-weight:bold;">Scenes</span>
+      </nav>
 
       <div class="group">
-        <div class="group-title">Brush</div>
+        <div class="group-title">Scene</div>
         <select id="brushSel"></select>
         <div class="row-pair">
-          <button id="saveAsBtn" class="row">★ Save as…</button>
-          <button id="deleteBtn" class="row">× Delete</button>
+          <button id="saveAsBtn" class="row">★ Save as scene…</button>
+          <button id="deleteBtn" class="row">× Delete scene</button>
         </div>
       </div>
 
@@ -310,7 +315,17 @@
   // ──────────────────────────────────────────────────────────────────────────
   // Custom brush storage
   // ──────────────────────────────────────────────────────────────────────────
-  const STORAGE_KEY = 'project-brushstroke-brushes-v1';
+  // One-time migration from old key
+  (function() {
+    const OLD = 'project-brushstroke-brushes-v1';
+    const NEW = 'project-brushstroke-scenes-v1';
+    if (localStorage.getItem(OLD) && !localStorage.getItem(NEW)) {
+      localStorage.setItem(NEW, localStorage.getItem(OLD));
+      localStorage.removeItem(OLD);
+    }
+  })();
+
+  const STORAGE_KEY = 'project-brushstroke-scenes-v1';
   function loadCustomBrushes() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
     catch (e) { return {}; }
@@ -878,7 +893,7 @@
 
     // Save as new brush
     document.getElementById('saveAsBtn').addEventListener('click', () => {
-      const name = prompt('Save current brush settings as…\n(includes ALL slider values)', 'My brush');
+      const name = prompt('Save current scene settings as…\n(includes ALL slider values)', 'My scene');
       if (!name || !name.trim()) return;
       const customs = loadCustomBrushes();
       customs[name.trim()] = cloneBrush(activeBrush);
@@ -892,15 +907,15 @@
     document.getElementById('deleteBtn').addEventListener('click', () => {
       const customs = loadCustomBrushes();
       if (!customs[brushName]) {
-        setStatus('can\'t delete a built-in brush', 'fail');
+        setStatus('can\'t delete a built-in scene', 'fail');
         return;
       }
-      if (!confirm(`Delete custom brush "${brushName}"?`)) return;
+      if (!confirm(`Delete custom scene "${brushName}"?`)) return;
       delete customs[brushName];
       saveCustomBrushes(customs);
       selectBrush('Soft & dreamy');
       refreshBrushDropdown();
-      setStatus(`deleted custom brush`);
+      setStatus(`deleted custom scene`);
     });
 
     // Actions

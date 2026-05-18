@@ -145,9 +145,9 @@
     ctx.globalAlpha = 1;
   }
 
-  function fatLozenge(ctx, path, { color, weight = 6, opacity = 0.75, blend = true, jitterAngle = 4 }) {
+  function fatLozenge(ctx, path, { color, weight = 6, opacity = 0.75, blend = true, jitterAngle = 4, spacing: spacingMult = 0.25 }) {
     const len = pathLength(path);
-    const spacing = weight * 0.25;
+    const spacing = weight * spacingMult;
     const steps = Math.max(4, Math.floor(len / spacing));
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -171,13 +171,13 @@
     ctx.globalAlpha = 1;
   }
 
-  function chalkDrag(ctx, path, { color, weight = 3, opacity = 0.55, blend = true, density = 1 }) {
+  function chalkDrag(ctx, path, { color, weight = 3, opacity = 0.55, blend = true, density = 1, spacing: spacingMult = 0.5, gappiness = 0.15 }) {
     const len = pathLength(path);
-    const spacing = weight * 0.5;
+    const spacing = weight * spacingMult;
     const steps = Math.max(8, Math.floor(len / spacing * density));
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      if (Math.random() < 0.15) continue;
+      if (Math.random() < gappiness) continue;
       const p = catmullRom(path, t);
       const ang = tangent(path, t);
       const w = weight * rand(0.7, 1.1);
@@ -276,46 +276,67 @@
     ctx.fill();
   }
 
-  function watercolorWash(ctx, shape, { color, opacity = 0.35, bleed = 0.4 }) {
-    const passes = 3 + randI(0, 2);
-    // For blob shapes, pre-compute base perturbation seed used across passes
-    // so each pass is a related (but shifted) variation of the same blob.
-    const isBlob = shape.type === 'blob';
-    for (let i = 0; i < passes; i++) {
-      const passAlpha = opacity * (i === 0 ? 1.0 : (0.20 + 0.18 * Math.random()));
-      const ox = i === 0 ? 0 : rand(-shape.w * bleed * 0.30, shape.w * bleed * 0.30);
-      const oy = i === 0 ? 0 : rand(-shape.h * bleed * 0.30, shape.h * bleed * 0.30);
-      const sw = shape.w * (i === 0 ? 1 : rand(0.65, 1.15));
-      const sh = shape.h * (i === 0 ? 1 : rand(0.65, 1.15));
-      ctx.fillStyle = color;
-      ctx.globalAlpha = passAlpha;
-      if (shape.type === 'rect') {
-        ctx.fillRect(shape.cx - sw / 2 + ox, shape.cy - sh / 2 + oy, sw, sh);
-      } else if (shape.type === 'blob') {
-        const pts = blobPoints(shape.cx + ox, shape.cy + oy, sw, sh,
-          12 + randI(0, 8), 0.18 + rand(0, 0.18));
-        fillBlob(ctx, pts);
+  function watercolorWash(ctx, shape, { color, opacity = 0.35, bleed = 0.4, passes: passesProp, edgeSoftness = 0.5 }) {
+    const totalPasses = passesProp != null ? passesProp : 10 + randI(0, 5);
+    const perPassAlpha = (opacity / totalPasses) * 1.4;
+
+    // Build ONE canonical blob shape; each pass just offsets + scales it so the
+    // result reads as a single cohesive wet smudge rather than stacked shapes.
+    const basePts = shape.type === 'blob'
+      ? blobPoints(shape.cx, shape.cy, shape.w, shape.h, 20, 0.20)
+      : null;
+
+    ctx.fillStyle = color;
+    for (let p = 0; p < totalPasses; p++) {
+      const dx = rand(-shape.w * bleed * 0.08, shape.w * bleed * 0.08);
+      const dy = rand(-shape.h * bleed * 0.08, shape.h * bleed * 0.08);
+      const scale = rand(0.93, 1.07);
+
+      ctx.globalAlpha = perPassAlpha * rand(0.7, 1.3);
+
+      // Blur on middle passes softens the interior wash
+      const isMiddle = p > 1 && p < totalPasses - 2;
+      if (isMiddle && edgeSoftness > 0.4) {
+        ctx.filter = `blur(${Math.round(edgeSoftness * 2)}px)`;
       } else {
+        ctx.filter = 'none';
+      }
+
+      if (shape.type === 'rect') {
+        const sw = shape.w * scale, sh = shape.h * scale;
+        ctx.fillRect(shape.cx - sw / 2 + dx, shape.cy - sh / 2 + dy, sw, sh);
+      } else if (shape.type === 'blob') {
+        const { cx, cy } = shape;
+        fillBlob(ctx, basePts.map(pt => ({
+          x: cx + (pt.x - cx) * scale + dx,
+          y: cy + (pt.y - cy) * scale + dy,
+        })));
+      } else {
+        const sw = (shape.w / 2) * scale, sh = (shape.h / 2) * scale;
         ctx.beginPath();
-        ctx.ellipse(shape.cx + ox, shape.cy + oy, sw / 2, sh / 2, 0, 0, Math.PI * 2);
+        ctx.ellipse(shape.cx + dx, shape.cy + dy, sw, sh, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    // Ragged edge dots — denser for blob shape so the perimeter feels wet
-    const edgeDots = (isBlob ? 50 : 30) + randI(0, 16);
+    ctx.filter = 'none';
+
+    // Ragged halo — more dots, wider radial spread, lower alpha per dot
+    const haloDots = Math.round(80 * (1 + bleed * 0.5)) + randI(0, 20);
     ctx.fillStyle = color;
-    for (let i = 0; i < edgeDots; i++) {
+    for (let i = 0; i < haloDots; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = bleed * Math.max(shape.w, shape.h) * 0.5;
-      const radialJitter = rand(-r * 0.25, r * 0.55);
+      const radialJitter = rand(-r * 0.20, r * 0.75);
       const x = shape.cx + Math.cos(a) * (shape.w / 2 + radialJitter);
       const y = shape.cy + Math.sin(a) * (shape.h / 2 + radialJitter);
-      ctx.globalAlpha = opacity * rand(0.10, 0.42);
+      ctx.globalAlpha = opacity * rand(0.04, 0.22);
+      ctx.filter = 'none';
       ctx.beginPath();
       ctx.arc(x, y, rand(0.5, 2.0), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+    ctx.filter = 'none';
   }
 
   function registrationCross(ctx, x, y, { color = '#2a2a2a', size = 6, weight = 1, rotation = 0, opacity = 0.85 }) {
@@ -334,7 +355,7 @@
     ctx.globalAlpha = 1;
   }
 
-  function gesturalSweep(ctx, path, { color, weight = 5, opacity = 0.65, blend = true }) {
+  function gesturalSweep(ctx, path, { color, weight = 5, opacity = 0.65, blend = true, taper = 1.6 }) {
     const len = pathLength(path);
     const spacing = weight * 0.2;
     const steps = Math.max(12, Math.floor(len / spacing));
@@ -342,7 +363,7 @@
       const t = i / steps;
       const p = catmullRom(path, t);
       const ang = tangent(path, t);
-      const pressure = 0.15 + 0.85 * Math.pow(Math.sin(t * Math.PI), 1.6);
+      const pressure = 0.15 + 0.85 * Math.pow(Math.sin(t * Math.PI), taper);
       const w = weight * pressure;
       const col = blendedColor(ctx, p.x, p.y, color, blend, 0.4);
       ctx.save();
