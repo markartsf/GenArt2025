@@ -114,77 +114,117 @@
   ];
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Style presets — adapted from enfantines-study to the new brush API.
-  // fanBrush picks which brush draws each fan tooth. accentBrush is for the
-  // optional thin overlay stroke. Geometry params (halfWidth, teeth, etc.)
-  // mirror the originals.
+  // Style presets — bundle of doodle-engine parameters that produce a "look".
+  // Phase 3b adds per-tooth variation: angleJitter (degrees off-perpendicular),
+  // brushMix (probability table of which brush draws each tooth),
+  // lengthClasses (weighted length buckets — some teeth short, some full),
+  // skipProb (occasionally omit a tooth), secondaryBrushProb (extra thin
+  // accent next to the main tooth).
+  //
+  // (UI-wise these are still called "Style" — a Phase 4 rename to "Brush"
+  // or "Preset" is planned per the working-style memo.)
   // ──────────────────────────────────────────────────────────────────────────
   const STYLES = {
     'Soft & dreamy': {
-      fanBrush: 'fatLozenge',
-      fanBrushOpts: { opacity: 0.70, jitterAngle: 6, blend: true },
-      weightRange: [3.5, 7.0],
-      weightJitter: [0.85, 1.15],
-      stopCount: [3, 5],
-      cycleRate: 3,
-      colorJitter: 0.05,
-      underWashProb: 0.6,
-      underWashOpacity: [0.25, 0.50],
-      underWashBleed: [0.30, 0.50],
-      accentBrush: 'hairLine',
-      accentProb: 0.15,
-      halfWidthRange: [0.20, 0.45],
-      teethMultiplier: 1.0,
+      // Fan stroke brush + how it's tuned
+      brushMix: { fatLozenge: 0.55, chalkDrag: 0.22, hairLine: 0.15, chalkScribble: 0.08 },
+      brushOpts: { opacity: 0.70, jitterAngle: 6, blend: true },
+      // Geometry per tooth
+      angleJitter: 10,
+      lengthClasses: [
+        { frac: [0.80, 1.05], weight: 0.55 },
+        { frac: [0.50, 0.80], weight: 0.30 },
+        { frac: [0.20, 0.50], weight: 0.15 },
+      ],
+      skipProb: 0.06,
+      secondaryBrushProb: 0.12,
+      secondaryBrush: 'hairLine',
+      // Colour
+      stopCount: [3, 5], cycleRate: 3, colorJitter: 0.05,
+      weightRange: [3.5, 7.0], weightJitter: [0.85, 1.15],
+      // Underwash
+      underWashProb: 0.6, underWashOpacity: [0.25, 0.50], underWashBleed: [0.30, 0.55],
+      // Composition
+      halfWidthRange: [0.20, 0.50], teethMultiplier: 1.0,
+      starburstProb: 0.20,
     },
     'Enfantines hard-edge': {
-      fanBrush: 'fatLozenge',
-      fanBrushOpts: { opacity: 0.85, jitterAngle: 3, blend: true },
-      weightRange: [3.5, 5.5],
-      weightJitter: [0.95, 1.05],
-      stopCount: [4, 7],
-      cycleRate: 5,
-      colorJitter: 0.02,
-      underWashProb: 0.4,
-      underWashOpacity: [0.15, 0.35],
-      underWashBleed: [0.20, 0.35],
-      accentBrush: 'hairLine',
-      accentProb: 0.0,
-      halfWidthRange: [0.22, 0.40],
-      teethMultiplier: 1.2,
+      brushMix: { fatLozenge: 0.85, hairLine: 0.10, chalkDrag: 0.05 },
+      brushOpts: { opacity: 0.88, jitterAngle: 3, blend: true },
+      angleJitter: 4,
+      lengthClasses: [
+        { frac: [0.85, 1.05], weight: 0.75 },
+        { frac: [0.55, 0.85], weight: 0.25 },
+      ],
+      skipProb: 0.03,
+      secondaryBrushProb: 0.0,
+      secondaryBrush: 'hairLine',
+      stopCount: [4, 7], cycleRate: 5, colorJitter: 0.02,
+      weightRange: [3.5, 5.5], weightJitter: [0.95, 1.05],
+      underWashProb: 0.4, underWashOpacity: [0.15, 0.35], underWashBleed: [0.20, 0.40],
+      halfWidthRange: [0.22, 0.45], teethMultiplier: 1.25,
+      starburstProb: 0.15,
     },
     'Crisp colored pencil': {
-      fanBrush: 'hairLine',
-      fanBrushOpts: { opacity: 0.85, blend: false },
-      weightRange: [0.8, 1.6],
-      weightJitter: [0.9, 1.1],
-      stopCount: [3, 6],
-      cycleRate: 4,
-      colorJitter: 0.04,
-      underWashProb: 0.5,
-      underWashOpacity: [0.20, 0.42],
-      underWashBleed: [0.25, 0.42],
-      accentBrush: 'hairLine',
-      accentProb: 0.1,
-      halfWidthRange: [0.20, 0.40],
-      teethMultiplier: 1.5,
+      brushMix: { hairLine: 0.75, chalkScribble: 0.15, chalkDrag: 0.10 },
+      brushOpts: { opacity: 0.85, blend: false },
+      angleJitter: 12,
+      lengthClasses: [
+        { frac: [0.75, 1.10], weight: 0.40 },
+        { frac: [0.40, 0.75], weight: 0.40 },
+        { frac: [0.15, 0.40], weight: 0.20 },
+      ],
+      skipProb: 0.08,
+      secondaryBrushProb: 0.18,
+      secondaryBrush: 'chalkScribble',
+      stopCount: [3, 6], cycleRate: 4, colorJitter: 0.04,
+      weightRange: [0.8, 1.6], weightJitter: [0.9, 1.1],
+      underWashProb: 0.55, underWashOpacity: [0.20, 0.42], underWashBleed: [0.30, 0.52],
+      halfWidthRange: [0.22, 0.45], teethMultiplier: 1.5,
+      starburstProb: 0.30,
     },
     'Chunky stripes': {
-      fanBrush: 'fatLozenge',
-      fanBrushOpts: { opacity: 0.80, jitterAngle: 4, blend: true },
-      weightRange: [6.0, 9.5],
-      weightJitter: [0.92, 1.08],
-      stopCount: [3, 5],
-      cycleRate: 4,
-      colorJitter: 0.03,
-      underWashProb: 0.5,
-      underWashOpacity: [0.20, 0.40],
-      underWashBleed: [0.25, 0.42],
-      accentBrush: 'hairLine',
-      accentProb: 0.05,
-      halfWidthRange: [0.25, 0.45],
-      teethMultiplier: 0.85,
+      brushMix: { fatLozenge: 0.70, chalkDrag: 0.18, chalkScribble: 0.08, hairLine: 0.04 },
+      brushOpts: { opacity: 0.82, jitterAngle: 5, blend: true },
+      angleJitter: 6,
+      lengthClasses: [
+        { frac: [0.90, 1.05], weight: 0.65 },
+        { frac: [0.55, 0.90], weight: 0.30 },
+        { frac: [0.25, 0.55], weight: 0.05 },
+      ],
+      skipProb: 0.04,
+      secondaryBrushProb: 0.08,
+      secondaryBrush: 'hairLine',
+      stopCount: [3, 5], cycleRate: 4, colorJitter: 0.03,
+      weightRange: [6.0, 9.5], weightJitter: [0.92, 1.08],
+      underWashProb: 0.5, underWashOpacity: [0.20, 0.42], underWashBleed: [0.25, 0.45],
+      halfWidthRange: [0.28, 0.50], teethMultiplier: 0.90,
+      starburstProb: 0.10,
     },
   };
+
+  // Weighted pick from a {key: weight} map
+  function weightedChoice(map) {
+    const keys = Object.keys(map);
+    let total = 0;
+    for (const k of keys) total += map[k];
+    let r = Math.random() * total;
+    for (const k of keys) {
+      r -= map[k];
+      if (r <= 0) return k;
+    }
+    return keys[keys.length - 1];
+  }
+  function pickLengthFrac(classes) {
+    let total = 0;
+    for (const c of classes) total += c.weight;
+    let r = Math.random() * total;
+    for (const c of classes) {
+      r -= c.weight;
+      if (r <= 0) return rand(c.frac[0], c.frac[1]);
+    }
+    return rand(classes[classes.length - 1].frac[0], classes[classes.length - 1].frac[1]);
+  }
 
   // ──────────────────────────────────────────────────────────────────────────
   // State
@@ -231,11 +271,17 @@
     let idx = 0;
     for (let r = 0; r < rows && idx < count; r++) {
       for (let c = 0; c < cols && idx < count; c++) {
-        const cx = (c + 0.5) * cellW + rand(-cellW * 0.25, cellW * 0.25);
-        const cy = (r + 0.5) * cellH + rand(-cellH * 0.25, cellH * 0.25);
-        const size = rand(Math.min(cellW, cellH) * 0.75, Math.min(cellW, cellH) * 1.35);
+        const cx = (c + 0.5) * cellW + rand(-cellW * 0.30, cellW * 0.30);
+        const cy = (r + 0.5) * cellH + rand(-cellH * 0.30, cellH * 0.30);
+        // Wider scale variation than Phase 3 — small/medium/large mix
+        const cellMin = Math.min(cellW, cellH);
+        const sizeRoll = Math.random();
+        const size = sizeRoll < 0.25
+          ? rand(cellMin * 0.35, cellMin * 0.65)   // small
+          : sizeRoll < 0.75
+          ? rand(cellMin * 0.70, cellMin * 1.10)   // medium
+          : rand(cellMin * 1.10, cellMin * 1.55);  // large
         const angle = rand(0, Math.PI * 2);
-        const spineLen = size * rand(0.6, 1.1);
 
         // Pick N colour stops from palette
         const stopCount = randI(style.stopCount[0], style.stopCount[1]);
@@ -246,29 +292,44 @@
           if (!used.has(ci)) { used.add(ci); stops.push(palette.colors[ci]); }
         }
 
-        // Spine — 4 control points wobbled perpendicular to angle
-        const halfLen = spineLen / 2;
-        const perpA = angle + Math.PI / 2;
-        const spinePts = [];
-        for (let i = 0; i < 4; i++) {
-          const t = i / 3;
-          const along = -halfLen + (2 * halfLen) * t;
-          const wobble = rand(-size * 0.18, size * 0.18);
-          spinePts.push({
-            x: cx + Math.cos(angle) * along + Math.cos(perpA) * wobble,
-            y: cy + Math.sin(angle) * along + Math.sin(perpA) * wobble,
+        // Doodle kind: 'fan' (spine + perpendicular teeth) or 'starburst'
+        // (spokes radiating from a point — like the starburst doodles in
+        // Alejandro's reference image 3).
+        const isStarburst = Math.random() < (style.starburstProb || 0);
+        const kind = isStarburst ? 'starburst' : 'fan';
+
+        if (kind === 'starburst') {
+          const spokeCount = randI(10, 20) +
+            Math.floor(({ sparse: -3, medium: 0, dense: 4 }[density]));
+          const lengthRange = [size * 0.30, size * 0.70];
+          doodles.push({
+            kind, cx, cy, size, colorStops: stops,
+            spokeCount, lengthRange,
+          });
+        } else {
+          const spineLen = size * rand(0.55, 1.10);
+          const halfLen = spineLen / 2;
+          const perpA = angle + Math.PI / 2;
+          const spinePts = [];
+          for (let i = 0; i < 4; i++) {
+            const t = i / 3;
+            const along = -halfLen + (2 * halfLen) * t;
+            const wobble = rand(-size * 0.20, size * 0.20);
+            spinePts.push({
+              x: cx + Math.cos(angle) * along + Math.cos(perpA) * wobble,
+              y: cy + Math.sin(angle) * along + Math.sin(perpA) * wobble,
+            });
+          }
+          const teethCount = Math.floor(rand(14, 28) * style.teethMultiplier *
+            ({ sparse: 0.7, medium: 1.0, dense: 1.3 }[density]));
+          const halfWidth = rand(size * style.halfWidthRange[0], size * style.halfWidthRange[1]);
+          const fanStyle = choice(['symmetric', 'one-sided', 'staggered', 'tapered']);
+          doodles.push({
+            kind: 'fan',
+            cx, cy, size, angle, spinePts, colorStops: stops,
+            halfWidth, teethCount, fanStyle,
           });
         }
-
-        const teethCount = Math.floor(rand(14, 28) * style.teethMultiplier *
-          ({ sparse: 0.7, medium: 1.0, dense: 1.3 }[density]));
-        const halfWidth = rand(size * style.halfWidthRange[0], size * style.halfWidthRange[1]);
-        const fanStyle = choice(['symmetric', 'one-sided', 'staggered', 'tapered']);
-
-        doodles.push({
-          cx, cy, size, angle, spinePts, colorStops: stops,
-          halfWidth, teethCount, fanStyle,
-        });
         idx++;
       }
     }
@@ -276,14 +337,28 @@
   }
 
   function drawDoodle(d, style) {
-    // Optional underwash
+    if (d.kind === 'starburst') {
+      drawStarburst(d, style);
+    } else {
+      drawFan(d, style);
+    }
+  }
+
+  // Build a small organic blob shape used for the doodle underwash — softer
+  // than a rect, less perfect than an ellipse. Some randomness in shape choice.
+  function pickWashShape(cx, cy, w, h) {
+    const r = Math.random();
+    if (r < 0.55) return { type: 'blob',   cx, cy, w, h };
+    if (r < 0.85) return { type: 'ellipse', cx, cy, w, h };
+    return { type: 'rect', cx, cy, w, h };
+  }
+
+  function drawFan(d, style) {
+    // Optional underwash with organic shape
     if (Math.random() < style.underWashProb) {
       const washCol = choice(d.colorStops);
-      watercolorWash(ctx, {
-        type: 'rect',
-        cx: d.cx, cy: d.cy,
-        w: d.size * 0.85, h: d.size * 0.85,
-      }, {
+      const shape = pickWashShape(d.cx, d.cy, d.size * 0.85, d.size * 0.85);
+      watercolorWash(ctx, shape, {
         color: washCol,
         opacity: rand(style.underWashOpacity[0], style.underWashOpacity[1]),
         bleed: rand(style.underWashBleed[0], style.underWashBleed[1]),
@@ -292,16 +367,22 @@
 
     const N = d.teethCount;
     for (let i = 0; i < N; i++) {
+      // Skip-tooth probability — breaks the rigid grid pattern
+      if (Math.random() < style.skipProb) continue;
+
       const t = i / (N - 1);
       const here = catmullRom(d.spinePts, t);
       const tan = tangent(d.spinePts, t);
-      const perpA = tan + Math.PI / 2;
 
-      // Colour along gradient with optional jitter
+      // Angle jitter: ± style.angleJitter degrees off the perpendicular
+      const angleJit = rand(-style.angleJitter, style.angleJitter) * Math.PI / 180;
+      const perpA = tan + Math.PI / 2 + angleJit;
+
+      // Colour along gradient
       const colorT = ((t * style.cycleRate) + rand(-style.colorJitter, style.colorJitter)) % 1;
       const col = sampleGradient(d.colorStops, (colorT + 1) % 1);
 
-      // Half-lengths per fan style
+      // Base half-lengths per fan style
       let halfA, halfB;
       switch (d.fanStyle) {
         case 'symmetric':
@@ -323,34 +404,109 @@
           break;
       }
 
+      // Per-tooth length class — multiplies the half-lengths
+      const lenFrac = pickLengthFrac(style.lengthClasses);
+      halfA *= lenFrac;
+      halfB *= lenFrac;
+
       const baseW = rand(style.weightRange[0], style.weightRange[1]);
       const weight = baseW * rand(style.weightJitter[0], style.weightJitter[1]);
 
-      // Build the perpendicular tooth as a 2-point path (we let the brush
-      // interpolate; for a tooth it's basically a straight line).
       const toothPath = [
         { x: here.x - Math.cos(perpA) * halfA, y: here.y - Math.sin(perpA) * halfA },
         { x: here.x + Math.cos(perpA) * halfB, y: here.y + Math.sin(perpA) * halfB },
       ];
 
-      callBrush(ctx, style.fanBrush, toothPath, {
+      // Pick brush from the mix table — different teeth use different brushes
+      const brushName = weightedChoice(style.brushMix);
+      callBrush(ctx, brushName, toothPath, {
         color: col,
         weight,
-        ...style.fanBrushOpts,
+        opacity: style.brushOpts.opacity,
+        blend: style.brushOpts.blend !== false,
+        jitterAngle: style.brushOpts.jitterAngle,
       });
 
-      // Optional accent stroke on top (different colour from gradient)
-      if (Math.random() < style.accentProb) {
+      // Secondary thin accent next to the tooth
+      if (Math.random() < style.secondaryBrushProb) {
         const accentT = (colorT + 0.5) % 1;
         const accentCol = sampleGradient(d.colorStops, accentT);
+        const accentScale = rand(0.55, 0.85);
         const accentPath = [
-          { x: here.x - Math.cos(perpA) * halfA * 0.7, y: here.y - Math.sin(perpA) * halfA * 0.7 },
-          { x: here.x + Math.cos(perpA) * halfB * 0.7, y: here.y + Math.sin(perpA) * halfB * 0.7 },
+          { x: here.x - Math.cos(perpA) * halfA * accentScale, y: here.y - Math.sin(perpA) * halfA * accentScale },
+          { x: here.x + Math.cos(perpA) * halfB * accentScale, y: here.y + Math.sin(perpA) * halfB * accentScale },
         ];
-        hairLine(ctx, accentPath, {
+        callBrush(ctx, style.secondaryBrush || 'hairLine', accentPath, {
           color: accentCol,
           weight: rand(0.5, 1.2),
           opacity: 0.8,
+          blend: false,
+        });
+      }
+    }
+  }
+
+  // Starburst doodle: N spokes from a centre point. Different from a fan —
+  // there's no spine, just radial lines. Matches the "round starburst" feel
+  // from Alejandro reference image 3.
+  function drawStarburst(d, style) {
+    // Optional underwash
+    if (Math.random() < style.underWashProb) {
+      const washCol = choice(d.colorStops);
+      const shape = pickWashShape(d.cx, d.cy, d.size * 0.7, d.size * 0.7);
+      watercolorWash(ctx, shape, {
+        color: washCol,
+        opacity: rand(style.underWashOpacity[0], style.underWashOpacity[1]),
+        bleed: rand(style.underWashBleed[0], style.underWashBleed[1]),
+      });
+    }
+
+    const N = d.spokeCount;
+    const baseAngle = rand(0, Math.PI * 2);
+    for (let i = 0; i < N; i++) {
+      if (Math.random() < style.skipProb) continue;
+
+      const evenAngle = baseAngle + (i / N) * Math.PI * 2;
+      const angleJit = rand(-style.angleJitter, style.angleJitter) * Math.PI / 180;
+      const ang = evenAngle + angleJit;
+
+      // Length class also drives spoke length
+      const lenFrac = pickLengthFrac(style.lengthClasses);
+      const baseLen = rand(d.lengthRange[0], d.lengthRange[1]);
+      const len = baseLen * lenFrac;
+      const innerR = len * 0.10;
+
+      // Spoke path: short curving line from inner radius to len
+      const path = [
+        { x: d.cx + Math.cos(ang) * innerR,        y: d.cy + Math.sin(ang) * innerR },
+        { x: d.cx + Math.cos(ang) * len * 0.4,     y: d.cy + Math.sin(ang) * len * 0.4 },
+        { x: d.cx + Math.cos(ang) * len * 0.8,     y: d.cy + Math.sin(ang) * len * 0.8 },
+        { x: d.cx + Math.cos(ang) * len,           y: d.cy + Math.sin(ang) * len },
+      ];
+
+      const colorT = (i / N + rand(-style.colorJitter, style.colorJitter)) % 1;
+      const col = sampleGradient(d.colorStops, (colorT + 1) % 1);
+
+      const baseW = rand(style.weightRange[0], style.weightRange[1]);
+      const weight = baseW * rand(style.weightJitter[0], style.weightJitter[1]);
+
+      const brushName = weightedChoice(style.brushMix);
+      callBrush(ctx, brushName, path, {
+        color: col,
+        weight,
+        opacity: style.brushOpts.opacity,
+        blend: style.brushOpts.blend !== false,
+        jitterAngle: style.brushOpts.jitterAngle,
+      });
+
+      if (Math.random() < style.secondaryBrushProb) {
+        const accentT = (colorT + 0.5) % 1;
+        const accentCol = sampleGradient(d.colorStops, accentT);
+        callBrush(ctx, style.secondaryBrush || 'hairLine', path, {
+          color: accentCol,
+          weight: rand(0.5, 1.0),
+          opacity: 0.75,
+          blend: false,
         });
       }
     }
@@ -415,10 +571,19 @@
         break;
       }
     }
-    // Walk the path, paint with gradient-shifting colour using gesturalSweep
-    // (we get long flowing strokes with taper). Use 2 stops for clarity.
-    const stop1 = choice(palette.colors), stop2 = choice(palette.colors);
-    const segments = 6;
+    // Walk the path with chunkier fat_lozenge segments for ribbon-like
+    // presence (was gesturalSweep — too thin). Use 3 stops for richer
+    // gradient shift along the length. Add occasional chalkScribble accents
+    // for texture.
+    const stops = [];
+    const stopN = randI(2, 3);
+    const used = new Set();
+    while (stops.length < stopN && used.size < palette.colors.length) {
+      const i = randI(0, palette.colors.length - 1);
+      if (!used.has(i)) { used.add(i); stops.push(palette.colors[i]); }
+    }
+    const segments = 8;
+    const baseWeight = rand(4, 8);
     for (let i = 0; i < segments; i++) {
       const t0 = i / segments, t1 = (i + 1) / segments;
       const sub = [];
@@ -427,8 +592,36 @@
         const t = t0 + (t1 - t0) * (j / subSamples);
         sub.push(catmullRom(path, t));
       }
-      const col = B.mixHex(stop1, stop2, (t0 + t1) / 2);
-      gesturalSweep(ctx, sub, { color: col, weight: rand(2, 4), opacity: 0.55, blend: false });
+      const col = sampleGradient(stops, (t0 + t1) / 2);
+      // Strong taper at ends via per-segment weight scaling
+      const segPressure = Math.sin(((t0 + t1) / 2) * Math.PI);
+      const segWeight = baseWeight * (0.35 + 0.65 * segPressure) * rand(0.85, 1.15);
+      fatLozenge(ctx, sub, {
+        color: col,
+        weight: segWeight,
+        opacity: rand(0.55, 0.78),
+        blend: true,
+        jitterAngle: 3,
+      });
+    }
+    // Occasional chalk-scribble accent dabs along the curve
+    if (Math.random() < 0.6) {
+      const dabs = randI(4, 10);
+      for (let i = 0; i < dabs; i++) {
+        const t = Math.random();
+        const p = catmullRom(path, t);
+        const tan = tangent(path, t);
+        const dabPath = [
+          { x: p.x - Math.cos(tan) * 8, y: p.y - Math.sin(tan) * 8 },
+          { x: p.x + Math.cos(tan) * 8, y: p.y + Math.sin(tan) * 8 },
+        ];
+        chalkScribble(ctx, dabPath, {
+          color: sampleGradient(stops, t),
+          weight: rand(1.5, 2.5),
+          opacity: 0.7,
+          blend: true,
+        });
+      }
     }
   }
 
@@ -436,15 +629,19 @@
     const col = choice(palette.colors);
     const cx = rand(canvasW * 0.1, canvasW * 0.9);
     const cy = rand(canvasH * 0.1, canvasH * 0.9);
-    const w = rand(80, 260);
-    const h = rand(80, 260);
+    // Wider size range — some big regions, some small
+    const sizeRoll = Math.random();
+    const sz = sizeRoll < 0.3 ? rand(60, 130) : sizeRoll < 0.8 ? rand(130, 230) : rand(230, 320);
+    const w = sz * rand(0.8, 1.2);
+    const h = sz * rand(0.8, 1.2);
+    // Favour blob and ellipse over rect for softer atmospheric feel
     watercolorWash(ctx, {
-      type: choice(['ellipse', 'ellipse', 'rect']),
+      type: choice(['blob', 'blob', 'ellipse', 'rect']),
       cx, cy, w, h,
     }, {
       color: col,
-      opacity: rand(0.25, 0.50),
-      bleed: rand(0.20, 0.45),
+      opacity: rand(0.22, 0.48),
+      bleed: rand(0.30, 0.55),
     });
   }
 

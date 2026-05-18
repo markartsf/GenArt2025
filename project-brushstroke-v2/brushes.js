@@ -246,34 +246,73 @@
     ctx.globalAlpha = 1;
   }
 
+  // Build a blob polyline: N points around the centre, each radius perturbed.
+  // Returns array of {x,y} forming a closed shape. Drawing uses quadratic
+  // curves between midpoints for soft organic edges.
+  function blobPoints(cx, cy, w, h, segments = 16, perturb = 0.25) {
+    const pts = [];
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const rx = (w / 2) * (1 + rand(-perturb, perturb));
+      const ry = (h / 2) * (1 + rand(-perturb, perturb));
+      pts.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+    }
+    return pts;
+  }
+  function fillBlob(ctx, pts) {
+    ctx.beginPath();
+    // Use quadratic curves through midpoints for soft edges
+    const last = pts[pts.length - 1];
+    const first = pts[0];
+    const startMid = { x: (last.x + first.x) / 2, y: (last.y + first.y) / 2 };
+    ctx.moveTo(startMid.x, startMid.y);
+    for (let i = 0; i < pts.length; i++) {
+      const cur = pts[i];
+      const next = pts[(i + 1) % pts.length];
+      const mid = { x: (cur.x + next.x) / 2, y: (cur.y + next.y) / 2 };
+      ctx.quadraticCurveTo(cur.x, cur.y, mid.x, mid.y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
   function watercolorWash(ctx, shape, { color, opacity = 0.35, bleed = 0.4 }) {
     const passes = 3 + randI(0, 2);
+    // For blob shapes, pre-compute base perturbation seed used across passes
+    // so each pass is a related (but shifted) variation of the same blob.
+    const isBlob = shape.type === 'blob';
     for (let i = 0; i < passes; i++) {
-      const passAlpha = opacity * (i === 0 ? 1.0 : (0.25 + 0.15 * Math.random()));
-      const ox = i === 0 ? 0 : rand(-shape.w * bleed * 0.25, shape.w * bleed * 0.25);
-      const oy = i === 0 ? 0 : rand(-shape.h * bleed * 0.25, shape.h * bleed * 0.25);
-      const sw = shape.w * (i === 0 ? 1 : rand(0.7, 1.1));
-      const sh = shape.h * (i === 0 ? 1 : rand(0.7, 1.1));
+      const passAlpha = opacity * (i === 0 ? 1.0 : (0.20 + 0.18 * Math.random()));
+      const ox = i === 0 ? 0 : rand(-shape.w * bleed * 0.30, shape.w * bleed * 0.30);
+      const oy = i === 0 ? 0 : rand(-shape.h * bleed * 0.30, shape.h * bleed * 0.30);
+      const sw = shape.w * (i === 0 ? 1 : rand(0.65, 1.15));
+      const sh = shape.h * (i === 0 ? 1 : rand(0.65, 1.15));
       ctx.fillStyle = color;
       ctx.globalAlpha = passAlpha;
       if (shape.type === 'rect') {
         ctx.fillRect(shape.cx - sw / 2 + ox, shape.cy - sh / 2 + oy, sw, sh);
+      } else if (shape.type === 'blob') {
+        const pts = blobPoints(shape.cx + ox, shape.cy + oy, sw, sh,
+          12 + randI(0, 8), 0.18 + rand(0, 0.18));
+        fillBlob(ctx, pts);
       } else {
         ctx.beginPath();
         ctx.ellipse(shape.cx + ox, shape.cy + oy, sw / 2, sh / 2, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    const edgeDots = 28 + randI(0, 12);
+    // Ragged edge dots — denser for blob shape so the perimeter feels wet
+    const edgeDots = (isBlob ? 50 : 30) + randI(0, 16);
     ctx.fillStyle = color;
     for (let i = 0; i < edgeDots; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = bleed * Math.max(shape.w, shape.h) * 0.5;
-      const x = shape.cx + Math.cos(a) * (shape.w / 2 + rand(-r * 0.2, r * 0.4));
-      const y = shape.cy + Math.sin(a) * (shape.h / 2 + rand(-r * 0.2, r * 0.4));
-      ctx.globalAlpha = opacity * rand(0.15, 0.45);
+      const radialJitter = rand(-r * 0.25, r * 0.55);
+      const x = shape.cx + Math.cos(a) * (shape.w / 2 + radialJitter);
+      const y = shape.cy + Math.sin(a) * (shape.h / 2 + radialJitter);
+      ctx.globalAlpha = opacity * rand(0.10, 0.42);
       ctx.beginPath();
-      ctx.arc(x, y, rand(0.6, 1.8), 0, Math.PI * 2);
+      ctx.arc(x, y, rand(0.5, 2.0), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
