@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Project Brushstroke v2 — Composition (Phase 3)</title>
+  <title>Project Brushstroke v2 — Composition (Phase 4)</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -11,48 +11,88 @@
       background: #1a1a1a;
       color: #ddd;
       font-family: 'SF Mono', Menlo, monospace;
-      font-size: 12px;
+      font-size: 11px;
       overflow: hidden;
     }
-    #container { display: flex; flex-direction: column; height: 100vh; }
-    #controls {
-      padding: 10px 16px;
-      background: rgba(20,20,20,0.95);
-      border-bottom: 1px solid #333;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      flex-wrap: wrap;
-      row-gap: 8px;
+    #container { display: flex; height: 100vh; }
+
+    /* Sidebar */
+    #sidebar {
+      width: 270px;
       flex-shrink: 0;
+      background: #121212;
+      border-right: 1px solid #2a2a2a;
+      overflow-y: auto;
+      padding: 12px 14px;
     }
-    #title {
-      font-size: 12px;
-      letter-spacing: 2px;
+    #sidebar h1 {
+      font-size: 11px;
+      letter-spacing: 0.15em;
       color: #a9c1ff;
       text-transform: uppercase;
-      margin-right: 4px;
+      margin-bottom: 4px;
     }
-    button, select {
-      background: #2a2a2a;
-      color: #ddd;
-      border: 1px solid #444;
-      padding: 5px 12px;
-      border-radius: 3px;
+    #sidebar .subtitle { color: #666; font-size: 10px; margin-bottom: 14px; }
+    #sidebar .group {
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #1f1f1f;
+    }
+    #sidebar .group:last-child { border-bottom: none; }
+    #sidebar .group-title {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: #9fd1a0;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    #sidebar label.block {
+      display: block;
+      margin-bottom: 8px;
+      color: #888;
+    }
+    #sidebar label.block > span.l {
+      display: inline-block;
+      width: 100%;
+      color: #aaa;
+      margin-bottom: 3px;
+      font-size: 10px;
+    }
+    #sidebar label.block > span.l > span.v {
+      float: right;
+      color: #6da9ff;
+    }
+    #sidebar label.flex {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 6px; color: #888;
       cursor: pointer;
+    }
+    #sidebar input[type=range] {
+      width: 100%;
+      accent-color: #6da9ff;
+    }
+    #sidebar button, #sidebar select {
+      width: 100%;
+      background: #232323;
+      color: #ddd;
+      border: 1px solid #3a3a3a;
+      padding: 5px 8px;
+      border-radius: 3px;
       font: inherit;
       font-size: 11px;
+      cursor: pointer;
+      margin-bottom: 4px;
     }
-    button:hover, select:hover { background: #353535; }
-    label { display: inline-flex; align-items: center; gap: 6px; color: #888; }
-    label input[type=checkbox] { cursor: pointer; }
-    #status {
-      color: #9fd1a0;
-      font-size: 11px;
-      margin-left: auto;
-    }
-    #status.warn { color: #ffb86c; }
-    #status.fail { color: #ff9a9a; }
+    #sidebar button:hover, #sidebar select:hover { background: #2c2c2c; }
+    #sidebar button.primary { background: #2a3a5a; border-color: #3a4a6a; }
+    #sidebar button.primary:hover { background: #344a72; }
+    #sidebar button.row { width: 49%; display: inline-block; }
+    #sidebar .row-pair { display: flex; gap: 4px; }
+    #sidebar .status { color: #9fd1a0; font-size: 10px; margin-top: 8px; }
+    #sidebar .status.warn { color: #ffb86c; }
+    #sidebar .status.fail { color: #ff9a9a; }
+
+    /* Canvas area */
     #canvas-container {
       flex: 1;
       position: relative;
@@ -74,23 +114,93 @@
 </head>
 <body>
   <div id="container">
-    <div id="controls">
-      <span id="title">project brushstroke v2 — composition</span>
-      <button id="newBtn">↻ New</button>
-      <button id="saveBtn">💾 PNG</button>
-      <label>Palette <select id="paletteSel"></select></label>
-      <label>Style <select id="styleSel"></select></label>
-      <label>Density <select id="densitySel">
-        <option value="sparse">sparse</option>
-        <option value="medium" selected>medium</option>
-        <option value="dense">dense</option>
-      </select></label>
-      <label><input type="checkbox" id="bgWash" checked>bg wash</label>
-      <label><input type="checkbox" id="crossMarks" checked>+ marks</label>
-      <label><input type="checkbox" id="colorCurves" checked>color curves</label>
-      <label><input type="checkbox" id="dashedFrame">dashed frame</label>
-      <span id="status">loading…</span>
+    <div id="sidebar">
+      <h1>Project Brushstroke</h1>
+      <div class="subtitle">Phase 4 — brush editor</div>
+
+      <div class="group">
+        <div class="group-title">Brush</div>
+        <select id="brushSel"></select>
+        <div class="row-pair">
+          <button id="saveAsBtn" class="row">★ Save as…</button>
+          <button id="deleteBtn" class="row">× Delete</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Palette &amp; layout</div>
+        <select id="paletteSel"></select>
+        <select id="densitySel">
+          <option value="sparse">Density — sparse</option>
+          <option value="medium" selected>Density — medium</option>
+          <option value="dense">Density — dense</option>
+        </select>
+        <label class="flex"><input type="checkbox" id="bgWash" checked>bg wash</label>
+        <label class="flex"><input type="checkbox" id="crossMarks" checked>+ marks</label>
+        <label class="flex"><input type="checkbox" id="colorCurves" checked>color curves</label>
+        <label class="flex"><input type="checkbox" id="dashedFrame">dashed frame</label>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Tooth variation</div>
+        <label class="block"><span class="l">angle jitter (°)<span class="v" data-display="angleJitter"></span></span>
+          <input type="range" id="angleJitter" min="0" max="30" step="0.5"></label>
+        <label class="block"><span class="l">skip prob<span class="v" data-display="skipProb"></span></span>
+          <input type="range" id="skipProb" min="0" max="0.30" step="0.005"></label>
+        <label class="block"><span class="l">secondary brush prob<span class="v" data-display="secondaryBrushProb"></span></span>
+          <input type="range" id="secondaryBrushProb" min="0" max="0.50" step="0.01"></label>
+        <label class="block"><span class="l">starburst prob<span class="v" data-display="starburstProb"></span></span>
+          <input type="range" id="starburstProb" min="0" max="0.60" step="0.01"></label>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Geometry</div>
+        <label class="block"><span class="l">teeth multiplier<span class="v" data-display="teethMultiplier"></span></span>
+          <input type="range" id="teethMultiplier" min="0.4" max="2.0" step="0.05"></label>
+        <label class="block"><span class="l">weight min<span class="v" data-display="weightMin"></span></span>
+          <input type="range" id="weightMin" min="0.4" max="10" step="0.1"></label>
+        <label class="block"><span class="l">weight max<span class="v" data-display="weightMax"></span></span>
+          <input type="range" id="weightMax" min="1" max="14" step="0.1"></label>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Underwash</div>
+        <label class="block"><span class="l">prob<span class="v" data-display="underWashProb"></span></span>
+          <input type="range" id="underWashProb" min="0" max="1" step="0.01"></label>
+        <label class="block"><span class="l">opacity (mid)<span class="v" data-display="underWashOpacity"></span></span>
+          <input type="range" id="underWashOpacity" min="0.05" max="0.65" step="0.01"></label>
+        <label class="block"><span class="l">bleed<span class="v" data-display="underWashBleed"></span></span>
+          <input type="range" id="underWashBleed" min="0.1" max="0.8" step="0.01"></label>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Colour</div>
+        <label class="block"><span class="l">cycle rate<span class="v" data-display="cycleRate"></span></span>
+          <input type="range" id="cycleRate" min="1" max="8" step="0.1"></label>
+        <label class="block"><span class="l">jitter<span class="v" data-display="colorJitter"></span></span>
+          <input type="range" id="colorJitter" min="0" max="0.20" step="0.005"></label>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Brush mix</div>
+        <label class="block"><span class="l">fat lozenge<span class="v" data-display="mixFat"></span></span>
+          <input type="range" id="mixFat" min="0" max="100" step="1"></label>
+        <label class="block"><span class="l">chalk drag<span class="v" data-display="mixChalkDrag"></span></span>
+          <input type="range" id="mixChalkDrag" min="0" max="100" step="1"></label>
+        <label class="block"><span class="l">hair line<span class="v" data-display="mixHair"></span></span>
+          <input type="range" id="mixHair" min="0" max="100" step="1"></label>
+        <label class="block"><span class="l">chalk scribble<span class="v" data-display="mixChalkScribble"></span></span>
+          <input type="range" id="mixChalkScribble" min="0" max="100" step="1"></label>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Actions</div>
+        <button id="newBtn" class="primary">↻ New (R)</button>
+        <button id="saveBtn">💾 Save PNG (S)</button>
+        <div class="status" id="status">loading…</div>
+      </div>
     </div>
+
     <div id="canvas-container">
       <canvas id="main"></canvas>
     </div>
@@ -114,22 +224,14 @@
   ];
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Style presets — bundle of doodle-engine parameters that produce a "look".
-  // Phase 3b adds per-tooth variation: angleJitter (degrees off-perpendicular),
-  // brushMix (probability table of which brush draws each tooth),
-  // lengthClasses (weighted length buckets — some teeth short, some full),
-  // skipProb (occasionally omit a tooth), secondaryBrushProb (extra thin
-  // accent next to the main tooth).
-  //
-  // (UI-wise these are still called "Style" — a Phase 4 rename to "Brush"
-  // or "Preset" is planned per the working-style memo.)
+  // Built-in brushes (was "Styles" in Phase 3). Each is a complete bundle
+  // of doodle-engine parameters. Custom brushes get saved alongside these
+  // in localStorage; they show with a ★ prefix in the dropdown.
   // ──────────────────────────────────────────────────────────────────────────
-  const STYLES = {
+  const BUILT_IN_BRUSHES = {
     'Soft & dreamy': {
-      // Fan stroke brush + how it's tuned
-      brushMix: { fatLozenge: 0.55, chalkDrag: 0.22, hairLine: 0.15, chalkScribble: 0.08 },
+      brushMix: { fatLozenge: 55, chalkDrag: 22, hairLine: 15, chalkScribble: 8 },
       brushOpts: { opacity: 0.70, jitterAngle: 6, blend: true },
-      // Geometry per tooth
       angleJitter: 10,
       lengthClasses: [
         { frac: [0.80, 1.05], weight: 0.55 },
@@ -139,17 +241,14 @@
       skipProb: 0.06,
       secondaryBrushProb: 0.12,
       secondaryBrush: 'hairLine',
-      // Colour
       stopCount: [3, 5], cycleRate: 3, colorJitter: 0.05,
       weightRange: [3.5, 7.0], weightJitter: [0.85, 1.15],
-      // Underwash
-      underWashProb: 0.6, underWashOpacity: [0.25, 0.50], underWashBleed: [0.30, 0.55],
-      // Composition
+      underWashProb: 0.6, underWashOpacity: 0.38, underWashBleed: 0.42,
       halfWidthRange: [0.20, 0.50], teethMultiplier: 1.0,
       starburstProb: 0.20,
     },
     'Enfantines hard-edge': {
-      brushMix: { fatLozenge: 0.85, hairLine: 0.10, chalkDrag: 0.05 },
+      brushMix: { fatLozenge: 85, chalkDrag: 5, hairLine: 10, chalkScribble: 0 },
       brushOpts: { opacity: 0.88, jitterAngle: 3, blend: true },
       angleJitter: 4,
       lengthClasses: [
@@ -161,12 +260,12 @@
       secondaryBrush: 'hairLine',
       stopCount: [4, 7], cycleRate: 5, colorJitter: 0.02,
       weightRange: [3.5, 5.5], weightJitter: [0.95, 1.05],
-      underWashProb: 0.4, underWashOpacity: [0.15, 0.35], underWashBleed: [0.20, 0.40],
+      underWashProb: 0.4, underWashOpacity: 0.25, underWashBleed: 0.30,
       halfWidthRange: [0.22, 0.45], teethMultiplier: 1.25,
       starburstProb: 0.15,
     },
     'Crisp colored pencil': {
-      brushMix: { hairLine: 0.75, chalkScribble: 0.15, chalkDrag: 0.10 },
+      brushMix: { fatLozenge: 0, chalkDrag: 10, hairLine: 75, chalkScribble: 15 },
       brushOpts: { opacity: 0.85, blend: false },
       angleJitter: 12,
       lengthClasses: [
@@ -179,12 +278,12 @@
       secondaryBrush: 'chalkScribble',
       stopCount: [3, 6], cycleRate: 4, colorJitter: 0.04,
       weightRange: [0.8, 1.6], weightJitter: [0.9, 1.1],
-      underWashProb: 0.55, underWashOpacity: [0.20, 0.42], underWashBleed: [0.30, 0.52],
+      underWashProb: 0.55, underWashOpacity: 0.32, underWashBleed: 0.40,
       halfWidthRange: [0.22, 0.45], teethMultiplier: 1.5,
       starburstProb: 0.30,
     },
     'Chunky stripes': {
-      brushMix: { fatLozenge: 0.70, chalkDrag: 0.18, chalkScribble: 0.08, hairLine: 0.04 },
+      brushMix: { fatLozenge: 70, chalkDrag: 18, hairLine: 4, chalkScribble: 8 },
       brushOpts: { opacity: 0.82, jitterAngle: 5, blend: true },
       angleJitter: 6,
       lengthClasses: [
@@ -197,17 +296,54 @@
       secondaryBrush: 'hairLine',
       stopCount: [3, 5], cycleRate: 4, colorJitter: 0.03,
       weightRange: [6.0, 9.5], weightJitter: [0.92, 1.08],
-      underWashProb: 0.5, underWashOpacity: [0.20, 0.42], underWashBleed: [0.25, 0.45],
+      underWashProb: 0.5, underWashOpacity: 0.31, underWashBleed: 0.35,
       halfWidthRange: [0.28, 0.50], teethMultiplier: 0.90,
       starburstProb: 0.10,
     },
   };
+
+  // Deep clone helper for brush params
+  function cloneBrush(b) {
+    return JSON.parse(JSON.stringify(b));
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Custom brush storage
+  // ──────────────────────────────────────────────────────────────────────────
+  const STORAGE_KEY = 'project-brushstroke-brushes-v1';
+  function loadCustomBrushes() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+    catch (e) { return {}; }
+  }
+  function saveCustomBrushes(map) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(map)); }
+    catch (e) { console.warn('Save failed:', e); }
+  }
+  function getAllBrushes() {
+    return { ...BUILT_IN_BRUSHES, ...loadCustomBrushes() };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // State
+  // ──────────────────────────────────────────────────────────────────────────
+  let palette = PALETTES[0];
+  let brushName = 'Soft & dreamy';
+  let activeBrush = cloneBrush(BUILT_IN_BRUSHES[brushName]);
+  let density = 'medium';
+  let opts = { bgWash: true, crossMarks: true, colorCurves: true, dashedFrame: false };
+  let canvasW, canvasH;
+  let canvas, ctx;
+
+  const { rand, randI, choice, catmullRom, tangent, sampleGradient,
+          hairLine, fatLozenge, chalkDrag, chalkScribble, gesturalSweep,
+          watercolorWash, registrationCross, callBrush } = B;
 
   // Weighted pick from a {key: weight} map
   function weightedChoice(map) {
     const keys = Object.keys(map);
     let total = 0;
     for (const k of keys) total += map[k];
+    if (total <= 0) return keys[0];
     let r = Math.random() * total;
     for (const k of keys) {
       r -= map[k];
@@ -227,19 +363,6 @@
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // State
-  // ──────────────────────────────────────────────────────────────────────────
-  let palette = PALETTES[0];
-  let styleName = 'Soft & dreamy';
-  let density = 'medium';
-  let opts = { bgWash: true, crossMarks: true, colorCurves: true, dashedFrame: false };
-  let canvasW, canvasH;
-  let canvas, ctx;
-  const { rand, randI, choice, catmullRom, tangent, sampleGradient,
-          hairLine, fatLozenge, chalkDrag, chalkScribble, gesturalSweep,
-          watercolorWash, registrationCross, callBrush } = B;
-
-  // ──────────────────────────────────────────────────────────────────────────
   // Canvas setup
   // ──────────────────────────────────────────────────────────────────────────
   function sizeCanvas() {
@@ -255,14 +378,9 @@
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Doodle generation — same algorithm as enfantines-study, adapted to use
-  // the new brush API and Spectral.js gradients.
-  //
-  // Each doodle is a spine (4 control points wobbled perpendicular to an
-  // angle) + N "teeth" (perpendicular strokes along the spine) + optional
-  // underwash + optional accent.
+  // Doodle generation
   // ──────────────────────────────────────────────────────────────────────────
-  function generateDoodles(count, style) {
+  function generateDoodles(count, br) {
     const cols = Math.ceil(Math.sqrt(count * 0.7));
     const rows = Math.ceil(count / cols);
     const cellW = canvasW / cols;
@@ -273,18 +391,16 @@
       for (let c = 0; c < cols && idx < count; c++) {
         const cx = (c + 0.5) * cellW + rand(-cellW * 0.30, cellW * 0.30);
         const cy = (r + 0.5) * cellH + rand(-cellH * 0.30, cellH * 0.30);
-        // Wider scale variation than Phase 3 — small/medium/large mix
         const cellMin = Math.min(cellW, cellH);
         const sizeRoll = Math.random();
         const size = sizeRoll < 0.25
-          ? rand(cellMin * 0.35, cellMin * 0.65)   // small
+          ? rand(cellMin * 0.35, cellMin * 0.65)
           : sizeRoll < 0.75
-          ? rand(cellMin * 0.70, cellMin * 1.10)   // medium
-          : rand(cellMin * 1.10, cellMin * 1.55);  // large
+          ? rand(cellMin * 0.70, cellMin * 1.10)
+          : rand(cellMin * 1.10, cellMin * 1.55);
         const angle = rand(0, Math.PI * 2);
 
-        // Pick N colour stops from palette
-        const stopCount = randI(style.stopCount[0], style.stopCount[1]);
+        const stopCount = randI(br.stopCount[0], br.stopCount[1]);
         const stops = [];
         const used = new Set();
         while (stops.length < stopCount && used.size < palette.colors.length) {
@@ -292,19 +408,13 @@
           if (!used.has(ci)) { used.add(ci); stops.push(palette.colors[ci]); }
         }
 
-        // Doodle kind: 'fan' (spine + perpendicular teeth) or 'starburst'
-        // (spokes radiating from a point — like the starburst doodles in
-        // Alejandro's reference image 3).
-        const isStarburst = Math.random() < (style.starburstProb || 0);
-        const kind = isStarburst ? 'starburst' : 'fan';
-
-        if (kind === 'starburst') {
+        const isStarburst = Math.random() < (br.starburstProb || 0);
+        if (isStarburst) {
           const spokeCount = randI(10, 20) +
             Math.floor(({ sparse: -3, medium: 0, dense: 4 }[density]));
-          const lengthRange = [size * 0.30, size * 0.70];
           doodles.push({
-            kind, cx, cy, size, colorStops: stops,
-            spokeCount, lengthRange,
+            kind: 'starburst', cx, cy, size, colorStops: stops,
+            spokeCount, lengthRange: [size * 0.30, size * 0.70],
           });
         } else {
           const spineLen = size * rand(0.55, 1.10);
@@ -320,9 +430,9 @@
               y: cy + Math.sin(angle) * along + Math.sin(perpA) * wobble,
             });
           }
-          const teethCount = Math.floor(rand(14, 28) * style.teethMultiplier *
+          const teethCount = Math.floor(rand(14, 28) * br.teethMultiplier *
             ({ sparse: 0.7, medium: 1.0, dense: 1.3 }[density]));
-          const halfWidth = rand(size * style.halfWidthRange[0], size * style.halfWidthRange[1]);
+          const halfWidth = rand(size * br.halfWidthRange[0], size * br.halfWidthRange[1]);
           const fanStyle = choice(['symmetric', 'one-sided', 'staggered', 'tapered']);
           doodles.push({
             kind: 'fan',
@@ -336,53 +446,39 @@
     return doodles;
   }
 
-  function drawDoodle(d, style) {
-    if (d.kind === 'starburst') {
-      drawStarburst(d, style);
-    } else {
-      drawFan(d, style);
-    }
-  }
-
-  // Build a small organic blob shape used for the doodle underwash — softer
-  // than a rect, less perfect than an ellipse. Some randomness in shape choice.
   function pickWashShape(cx, cy, w, h) {
     const r = Math.random();
-    if (r < 0.55) return { type: 'blob',   cx, cy, w, h };
+    if (r < 0.55) return { type: 'blob',    cx, cy, w, h };
     if (r < 0.85) return { type: 'ellipse', cx, cy, w, h };
     return { type: 'rect', cx, cy, w, h };
   }
 
-  function drawFan(d, style) {
-    // Optional underwash with organic shape
-    if (Math.random() < style.underWashProb) {
+  function drawDoodle(d, br) {
+    if (d.kind === 'starburst') drawStarburst(d, br);
+    else                         drawFan(d, br);
+  }
+
+  function drawFan(d, br) {
+    if (Math.random() < br.underWashProb) {
       const washCol = choice(d.colorStops);
-      const shape = pickWashShape(d.cx, d.cy, d.size * 0.85, d.size * 0.85);
-      watercolorWash(ctx, shape, {
+      watercolorWash(ctx, pickWashShape(d.cx, d.cy, d.size * 0.85, d.size * 0.85), {
         color: washCol,
-        opacity: rand(style.underWashOpacity[0], style.underWashOpacity[1]),
-        bleed: rand(style.underWashBleed[0], style.underWashBleed[1]),
+        opacity: br.underWashOpacity * rand(0.7, 1.3),
+        bleed: br.underWashBleed * rand(0.85, 1.15),
       });
     }
-
     const N = d.teethCount;
     for (let i = 0; i < N; i++) {
-      // Skip-tooth probability — breaks the rigid grid pattern
-      if (Math.random() < style.skipProb) continue;
-
+      if (Math.random() < br.skipProb) continue;
       const t = i / (N - 1);
       const here = catmullRom(d.spinePts, t);
       const tan = tangent(d.spinePts, t);
-
-      // Angle jitter: ± style.angleJitter degrees off the perpendicular
-      const angleJit = rand(-style.angleJitter, style.angleJitter) * Math.PI / 180;
+      const angleJit = rand(-br.angleJitter, br.angleJitter) * Math.PI / 180;
       const perpA = tan + Math.PI / 2 + angleJit;
 
-      // Colour along gradient
-      const colorT = ((t * style.cycleRate) + rand(-style.colorJitter, style.colorJitter)) % 1;
+      const colorT = ((t * br.cycleRate) + rand(-br.colorJitter, br.colorJitter)) % 1;
       const col = sampleGradient(d.colorStops, (colorT + 1) % 1);
 
-      // Base half-lengths per fan style
       let halfA, halfB;
       switch (d.fanStyle) {
         case 'symmetric':
@@ -403,32 +499,25 @@
           halfB = d.halfWidth * taper * rand(0.85, 1.05);
           break;
       }
-
-      // Per-tooth length class — multiplies the half-lengths
-      const lenFrac = pickLengthFrac(style.lengthClasses);
+      const lenFrac = pickLengthFrac(br.lengthClasses);
       halfA *= lenFrac;
       halfB *= lenFrac;
 
-      const baseW = rand(style.weightRange[0], style.weightRange[1]);
-      const weight = baseW * rand(style.weightJitter[0], style.weightJitter[1]);
+      const baseW = rand(br.weightRange[0], br.weightRange[1]);
+      const weight = baseW * rand(br.weightJitter[0], br.weightJitter[1]);
 
       const toothPath = [
         { x: here.x - Math.cos(perpA) * halfA, y: here.y - Math.sin(perpA) * halfA },
         { x: here.x + Math.cos(perpA) * halfB, y: here.y + Math.sin(perpA) * halfB },
       ];
-
-      // Pick brush from the mix table — different teeth use different brushes
-      const brushName = weightedChoice(style.brushMix);
+      const brushName = weightedChoice(br.brushMix);
       callBrush(ctx, brushName, toothPath, {
-        color: col,
-        weight,
-        opacity: style.brushOpts.opacity,
-        blend: style.brushOpts.blend !== false,
-        jitterAngle: style.brushOpts.jitterAngle,
+        color: col, weight,
+        opacity: br.brushOpts.opacity,
+        blend: br.brushOpts.blend !== false,
+        jitterAngle: br.brushOpts.jitterAngle,
       });
-
-      // Secondary thin accent next to the tooth
-      if (Math.random() < style.secondaryBrushProb) {
+      if (Math.random() < br.secondaryBrushProb) {
         const accentT = (colorT + 0.5) % 1;
         const accentCol = sampleGradient(d.colorStops, accentT);
         const accentScale = rand(0.55, 0.85);
@@ -436,84 +525,62 @@
           { x: here.x - Math.cos(perpA) * halfA * accentScale, y: here.y - Math.sin(perpA) * halfA * accentScale },
           { x: here.x + Math.cos(perpA) * halfB * accentScale, y: here.y + Math.sin(perpA) * halfB * accentScale },
         ];
-        callBrush(ctx, style.secondaryBrush || 'hairLine', accentPath, {
-          color: accentCol,
-          weight: rand(0.5, 1.2),
-          opacity: 0.8,
-          blend: false,
+        callBrush(ctx, br.secondaryBrush || 'hairLine', accentPath, {
+          color: accentCol, weight: rand(0.5, 1.2),
+          opacity: 0.8, blend: false,
         });
       }
     }
   }
 
-  // Starburst doodle: N spokes from a centre point. Different from a fan —
-  // there's no spine, just radial lines. Matches the "round starburst" feel
-  // from Alejandro reference image 3.
-  function drawStarburst(d, style) {
-    // Optional underwash
-    if (Math.random() < style.underWashProb) {
+  function drawStarburst(d, br) {
+    if (Math.random() < br.underWashProb) {
       const washCol = choice(d.colorStops);
-      const shape = pickWashShape(d.cx, d.cy, d.size * 0.7, d.size * 0.7);
-      watercolorWash(ctx, shape, {
+      watercolorWash(ctx, pickWashShape(d.cx, d.cy, d.size * 0.7, d.size * 0.7), {
         color: washCol,
-        opacity: rand(style.underWashOpacity[0], style.underWashOpacity[1]),
-        bleed: rand(style.underWashBleed[0], style.underWashBleed[1]),
+        opacity: br.underWashOpacity * rand(0.7, 1.3),
+        bleed: br.underWashBleed * rand(0.85, 1.15),
       });
     }
-
     const N = d.spokeCount;
     const baseAngle = rand(0, Math.PI * 2);
     for (let i = 0; i < N; i++) {
-      if (Math.random() < style.skipProb) continue;
-
+      if (Math.random() < br.skipProb) continue;
       const evenAngle = baseAngle + (i / N) * Math.PI * 2;
-      const angleJit = rand(-style.angleJitter, style.angleJitter) * Math.PI / 180;
+      const angleJit = rand(-br.angleJitter, br.angleJitter) * Math.PI / 180;
       const ang = evenAngle + angleJit;
-
-      // Length class also drives spoke length
-      const lenFrac = pickLengthFrac(style.lengthClasses);
+      const lenFrac = pickLengthFrac(br.lengthClasses);
       const baseLen = rand(d.lengthRange[0], d.lengthRange[1]);
       const len = baseLen * lenFrac;
       const innerR = len * 0.10;
-
-      // Spoke path: short curving line from inner radius to len
       const path = [
         { x: d.cx + Math.cos(ang) * innerR,        y: d.cy + Math.sin(ang) * innerR },
         { x: d.cx + Math.cos(ang) * len * 0.4,     y: d.cy + Math.sin(ang) * len * 0.4 },
         { x: d.cx + Math.cos(ang) * len * 0.8,     y: d.cy + Math.sin(ang) * len * 0.8 },
         { x: d.cx + Math.cos(ang) * len,           y: d.cy + Math.sin(ang) * len },
       ];
-
-      const colorT = (i / N + rand(-style.colorJitter, style.colorJitter)) % 1;
+      const colorT = (i / N + rand(-br.colorJitter, br.colorJitter)) % 1;
       const col = sampleGradient(d.colorStops, (colorT + 1) % 1);
-
-      const baseW = rand(style.weightRange[0], style.weightRange[1]);
-      const weight = baseW * rand(style.weightJitter[0], style.weightJitter[1]);
-
-      const brushName = weightedChoice(style.brushMix);
+      const baseW = rand(br.weightRange[0], br.weightRange[1]);
+      const weight = baseW * rand(br.weightJitter[0], br.weightJitter[1]);
+      const brushName = weightedChoice(br.brushMix);
       callBrush(ctx, brushName, path, {
-        color: col,
-        weight,
-        opacity: style.brushOpts.opacity,
-        blend: style.brushOpts.blend !== false,
-        jitterAngle: style.brushOpts.jitterAngle,
+        color: col, weight,
+        opacity: br.brushOpts.opacity,
+        blend: br.brushOpts.blend !== false,
+        jitterAngle: br.brushOpts.jitterAngle,
       });
-
-      if (Math.random() < style.secondaryBrushProb) {
+      if (Math.random() < br.secondaryBrushProb) {
         const accentT = (colorT + 0.5) % 1;
         const accentCol = sampleGradient(d.colorStops, accentT);
-        callBrush(ctx, style.secondaryBrush || 'hairLine', path, {
-          color: accentCol,
-          weight: rand(0.5, 1.0),
-          opacity: 0.75,
-          blend: false,
+        callBrush(ctx, br.secondaryBrush || 'hairLine', path, {
+          color: accentCol, weight: rand(0.5, 1.0),
+          opacity: 0.75, blend: false,
         });
       }
     }
   }
 
-  // Long curving multi-colour gestural stroke — for the "ribbon" passes
-  // that show in some Alejandro compositions.
   function drawColorCurve() {
     const archetype = choice(['arc', 's-curve', 'horizontal-wave', 'diagonal-drift']);
     const m = Math.min(canvasW, canvasH) * 0.10;
@@ -571,10 +638,6 @@
         break;
       }
     }
-    // Walk the path with chunkier fat_lozenge segments for ribbon-like
-    // presence (was gesturalSweep — too thin). Use 3 stops for richer
-    // gradient shift along the length. Add occasional chalkScribble accents
-    // for texture.
     const stops = [];
     const stopN = randI(2, 3);
     const used = new Set();
@@ -593,18 +656,13 @@
         sub.push(catmullRom(path, t));
       }
       const col = sampleGradient(stops, (t0 + t1) / 2);
-      // Strong taper at ends via per-segment weight scaling
       const segPressure = Math.sin(((t0 + t1) / 2) * Math.PI);
       const segWeight = baseWeight * (0.35 + 0.65 * segPressure) * rand(0.85, 1.15);
       fatLozenge(ctx, sub, {
-        color: col,
-        weight: segWeight,
-        opacity: rand(0.55, 0.78),
-        blend: true,
-        jitterAngle: 3,
+        color: col, weight: segWeight,
+        opacity: rand(0.55, 0.78), blend: true, jitterAngle: 3,
       });
     }
-    // Occasional chalk-scribble accent dabs along the curve
     if (Math.random() < 0.6) {
       const dabs = randI(4, 10);
       for (let i = 0; i < dabs; i++) {
@@ -617,9 +675,7 @@
         ];
         chalkScribble(ctx, dabPath, {
           color: sampleGradient(stops, t),
-          weight: rand(1.5, 2.5),
-          opacity: 0.7,
-          blend: true,
+          weight: rand(1.5, 2.5), opacity: 0.7, blend: true,
         });
       }
     }
@@ -629,19 +685,15 @@
     const col = choice(palette.colors);
     const cx = rand(canvasW * 0.1, canvasW * 0.9);
     const cy = rand(canvasH * 0.1, canvasH * 0.9);
-    // Wider size range — some big regions, some small
     const sizeRoll = Math.random();
     const sz = sizeRoll < 0.3 ? rand(60, 130) : sizeRoll < 0.8 ? rand(130, 230) : rand(230, 320);
     const w = sz * rand(0.8, 1.2);
     const h = sz * rand(0.8, 1.2);
-    // Favour blob and ellipse over rect for softer atmospheric feel
     watercolorWash(ctx, {
       type: choice(['blob', 'blob', 'ellipse', 'rect']),
       cx, cy, w, h,
     }, {
-      color: col,
-      opacity: rand(0.22, 0.48),
-      bleed: rand(0.30, 0.55),
+      color: col, opacity: rand(0.22, 0.48), bleed: rand(0.30, 0.55),
     });
   }
 
@@ -651,11 +703,8 @@
         rand(canvasW * 0.05, canvasW * 0.95),
         rand(canvasH * 0.05, canvasH * 0.95),
         {
-          color: '#2a2a2a',
-          size: rand(3.5, 7),
-          weight: rand(0.5, 1.1),
-          rotation: rand(-0.1, 0.1),
-          opacity: rand(0.55, 0.85),
+          color: '#2a2a2a', size: rand(3.5, 7), weight: rand(0.5, 1.1),
+          rotation: rand(-0.1, 0.1), opacity: rand(0.55, 0.85),
         });
     }
   }
@@ -663,86 +712,134 @@
   function drawDashedFrame() {
     const m = Math.min(canvasW, canvasH) * 0.04;
     B.dashedPerimeter(ctx, {
-      type: 'rect',
-      cx: canvasW / 2, cy: canvasH / 2,
-      w: canvasW - 2 * m,
-      h: canvasH - 2 * m,
-    }, {
-      color: '#3a3a3a', dashLen: 5, gapLen: 4, weight: 0.8, opacity: 0.6,
-    });
+      type: 'rect', cx: canvasW / 2, cy: canvasH / 2,
+      w: canvasW - 2 * m, h: canvasH - 2 * m,
+    }, { color: '#3a3a3a', dashLen: 5, gapLen: 4, weight: 0.8, opacity: 0.6 });
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Main render — synchronous, single-pass. Trade-off: 1–2s freeze per regen
-  // at medium density, but no chunked rendering means no clipping risk.
+  // Main render
   // ──────────────────────────────────────────────────────────────────────────
   function render() {
     const t0 = performance.now();
     setStatus('rendering…', 'warn');
-    // Background first
     ctx.fillStyle = palette.bg;
     ctx.fillRect(0, 0, canvasW, canvasH);
 
-    const style = STYLES[styleName];
+    const br = activeBrush;
     const baseCount = { sparse: 3, medium: 5, dense: 8 }[density];
     const doodleCount = baseCount + randI(0, 2);
 
-    // Pipeline: bg washes → doodles → color curves → cross marks → frame
     if (opts.bgWash) {
       const n = { sparse: 3, medium: 5, dense: 8 }[density];
       for (let i = 0; i < n; i++) drawBgWash();
     }
 
-    const doodles = generateDoodles(doodleCount, style);
-    for (const d of doodles) drawDoodle(d, style);
+    const doodles = generateDoodles(doodleCount, br);
+    for (const d of doodles) drawDoodle(d, br);
 
     if (opts.colorCurves) {
       const n = { sparse: 1, medium: 2, dense: 4 }[density];
       for (let i = 0; i < n; i++) drawColorCurve();
     }
-
     if (opts.crossMarks) {
       const n = { sparse: 6, medium: 14, dense: 26 }[density];
       drawCrossMarks(n);
     }
-
     if (opts.dashedFrame) drawDashedFrame();
 
     const dt = (performance.now() - t0).toFixed(0);
-    setStatus(`done · ${doodleCount} doodles · ${dt}ms · ${palette.name} · ${styleName}`);
+    setStatus(`${doodleCount} doodles · ${dt}ms · ${palette.name}`);
   }
 
   function setStatus(text, level) {
     const el = document.getElementById('status');
     el.textContent = text;
-    el.className = level || '';
+    el.className = 'status ' + (level || '');
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // UI wiring
+  // Brush ↔ sliders binding
   // ──────────────────────────────────────────────────────────────────────────
-  function buildPaletteSelector() {
-    const sel = document.getElementById('paletteSel');
-    PALETTES.forEach((p, i) => {
-      const o = document.createElement('option');
-      o.value = i; o.textContent = p.name;
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', e => { palette = PALETTES[parseInt(e.target.value)]; render(); });
+  // The sliders are bound to fields of `activeBrush`. Changing a slider
+  // mutates activeBrush and re-renders. activeBrush starts as a deep clone
+  // of the selected built-in / saved brush; saving captures it under a
+  // user-chosen name.
+
+  const SLIDER_BINDINGS = [
+    { id: 'angleJitter',         get: b => b.angleJitter,         set: (b, v) => b.angleJitter = v,         fmt: v => v.toFixed(1) + '°' },
+    { id: 'skipProb',            get: b => b.skipProb,            set: (b, v) => b.skipProb = v,            fmt: v => v.toFixed(3) },
+    { id: 'secondaryBrushProb',  get: b => b.secondaryBrushProb,  set: (b, v) => b.secondaryBrushProb = v,  fmt: v => v.toFixed(2) },
+    { id: 'starburstProb',       get: b => b.starburstProb,       set: (b, v) => b.starburstProb = v,       fmt: v => v.toFixed(2) },
+    { id: 'teethMultiplier',     get: b => b.teethMultiplier,     set: (b, v) => b.teethMultiplier = v,     fmt: v => v.toFixed(2) },
+    { id: 'weightMin',           get: b => b.weightRange[0],      set: (b, v) => b.weightRange[0] = v,      fmt: v => v.toFixed(1) },
+    { id: 'weightMax',           get: b => b.weightRange[1],      set: (b, v) => b.weightRange[1] = v,      fmt: v => v.toFixed(1) },
+    { id: 'underWashProb',       get: b => b.underWashProb,       set: (b, v) => b.underWashProb = v,       fmt: v => v.toFixed(2) },
+    { id: 'underWashOpacity',    get: b => b.underWashOpacity,    set: (b, v) => b.underWashOpacity = v,    fmt: v => v.toFixed(2) },
+    { id: 'underWashBleed',      get: b => b.underWashBleed,      set: (b, v) => b.underWashBleed = v,      fmt: v => v.toFixed(2) },
+    { id: 'cycleRate',           get: b => b.cycleRate,           set: (b, v) => b.cycleRate = v,           fmt: v => v.toFixed(1) },
+    { id: 'colorJitter',         get: b => b.colorJitter,         set: (b, v) => b.colorJitter = v,         fmt: v => v.toFixed(3) },
+    { id: 'mixFat',              get: b => b.brushMix.fatLozenge,        set: (b, v) => b.brushMix.fatLozenge = v,        fmt: v => v.toFixed(0) + '%' },
+    { id: 'mixChalkDrag',        get: b => b.brushMix.chalkDrag,         set: (b, v) => b.brushMix.chalkDrag = v,         fmt: v => v.toFixed(0) + '%' },
+    { id: 'mixHair',             get: b => b.brushMix.hairLine,          set: (b, v) => b.brushMix.hairLine = v,          fmt: v => v.toFixed(0) + '%' },
+    { id: 'mixChalkScribble',    get: b => b.brushMix.chalkScribble,     set: (b, v) => b.brushMix.chalkScribble = v,     fmt: v => v.toFixed(0) + '%' },
+  ];
+
+  function refreshSliders() {
+    for (const b of SLIDER_BINDINGS) {
+      const el = document.getElementById(b.id);
+      const disp = document.querySelector(`[data-display="${b.id}"]`);
+      const val = b.get(activeBrush);
+      if (el) el.value = val;
+      if (disp) disp.textContent = b.fmt(val);
+    }
   }
-  function buildStyleSelector() {
-    const sel = document.getElementById('styleSel');
-    Object.keys(STYLES).forEach(name => {
-      const o = document.createElement('option');
-      o.value = name; o.textContent = name;
-      sel.appendChild(o);
-    });
-    sel.value = styleName;
-    sel.addEventListener('change', e => { styleName = e.target.value; render(); });
+
+  function bindSliders() {
+    for (const b of SLIDER_BINDINGS) {
+      const el = document.getElementById(b.id);
+      const disp = document.querySelector(`[data-display="${b.id}"]`);
+      if (!el) continue;
+      // 'input' for live display, 'change' for regen (fires on release)
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        if (disp) disp.textContent = b.fmt(v);
+        b.set(activeBrush, v);
+      });
+      el.addEventListener('change', render);
+    }
   }
-  function bindCheckbox(id, key) {
-    const el = document.getElementById(id);
-    el.addEventListener('change', e => { opts[key] = e.target.checked; render(); });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Brush dropdown population + selection
+  // ──────────────────────────────────────────────────────────────────────────
+  function refreshBrushDropdown() {
+    const sel = document.getElementById('brushSel');
+    sel.innerHTML = '';
+    // Built-ins first
+    for (const name of Object.keys(BUILT_IN_BRUSHES)) {
+      const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o);
+    }
+    const customs = loadCustomBrushes();
+    const customNames = Object.keys(customs);
+    if (customNames.length) {
+      const sep = document.createElement('option');
+      sep.disabled = true; sep.textContent = '─── saved ───';
+      sel.appendChild(sep);
+      for (const name of customNames) {
+        const o = document.createElement('option'); o.value = name; o.textContent = '★ ' + name; sel.appendChild(o);
+      }
+    }
+    sel.value = brushName;
+  }
+
+  function selectBrush(name) {
+    const all = getAllBrushes();
+    if (!all[name]) return;
+    brushName = name;
+    activeBrush = cloneBrush(all[name]);
+    refreshSliders();
+    render();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -758,14 +855,55 @@
     ctx = canvas.getContext('2d');
     sizeCanvas();
 
-    buildPaletteSelector();
-    buildStyleSelector();
-    bindCheckbox('bgWash', 'bgWash');
-    bindCheckbox('crossMarks', 'crossMarks');
-    bindCheckbox('colorCurves', 'colorCurves');
-    bindCheckbox('dashedFrame', 'dashedFrame');
-    document.getElementById('densitySel').addEventListener('change', e => { density = e.target.value; render(); });
+    // Palette dropdown
+    const palSel = document.getElementById('paletteSel');
+    PALETTES.forEach((p, i) => {
+      const o = document.createElement('option'); o.value = i; o.textContent = p.name; palSel.appendChild(o);
+    });
+    palSel.addEventListener('change', e => { palette = PALETTES[parseInt(e.target.value)]; render(); });
 
+    // Brush dropdown
+    refreshBrushDropdown();
+    document.getElementById('brushSel').addEventListener('change', e => selectBrush(e.target.value));
+
+    // Density + toggles
+    document.getElementById('densitySel').addEventListener('change', e => { density = e.target.value; render(); });
+    ['bgWash', 'crossMarks', 'colorCurves', 'dashedFrame'].forEach(id => {
+      document.getElementById(id).addEventListener('change', e => { opts[id] = e.target.checked; render(); });
+    });
+
+    // Sliders
+    bindSliders();
+    refreshSliders();
+
+    // Save as new brush
+    document.getElementById('saveAsBtn').addEventListener('click', () => {
+      const name = prompt('Save current brush settings as…\n(includes ALL slider values)', 'My brush');
+      if (!name || !name.trim()) return;
+      const customs = loadCustomBrushes();
+      customs[name.trim()] = cloneBrush(activeBrush);
+      saveCustomBrushes(customs);
+      brushName = name.trim();
+      refreshBrushDropdown();
+      setStatus(`saved "${brushName}"`);
+    });
+
+    // Delete current custom brush
+    document.getElementById('deleteBtn').addEventListener('click', () => {
+      const customs = loadCustomBrushes();
+      if (!customs[brushName]) {
+        setStatus('can\'t delete a built-in brush', 'fail');
+        return;
+      }
+      if (!confirm(`Delete custom brush "${brushName}"?`)) return;
+      delete customs[brushName];
+      saveCustomBrushes(customs);
+      selectBrush('Soft & dreamy');
+      refreshBrushDropdown();
+      setStatus(`deleted custom brush`);
+    });
+
+    // Actions
     document.getElementById('newBtn').addEventListener('click', render);
     document.getElementById('saveBtn').addEventListener('click', () => {
       const link = document.createElement('a');
@@ -775,6 +913,7 @@
     });
     canvas.addEventListener('dblclick', render);
     window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
       if (e.key === 'r' || e.key === 'R') render();
       if (e.key === 's' || e.key === 'S') document.getElementById('saveBtn').click();
     });
@@ -786,7 +925,6 @@
       resizeTO = setTimeout(() => { sizeCanvas(); render(); }, 200);
     });
 
-    // Render after a brief delay so status repaint shows
     setTimeout(render, 30);
   }
   boot();
