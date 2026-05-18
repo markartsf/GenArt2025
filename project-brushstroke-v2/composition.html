@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Brushstroke v2 — Composition (Phase 3)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      background: #1a1a1a;
+      color: #ddd;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 12px;
+      overflow: hidden;
+    }
+    #container { display: flex; flex-direction: column; height: 100vh; }
+    #controls {
+      padding: 10px 16px;
+      background: rgba(20,20,20,0.95);
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      row-gap: 8px;
+      flex-shrink: 0;
+    }
+    #title {
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: #a9c1ff;
+      text-transform: uppercase;
+      margin-right: 4px;
+    }
+    button, select {
+      background: #2a2a2a;
+      color: #ddd;
+      border: 1px solid #444;
+      padding: 5px 12px;
+      border-radius: 3px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    button:hover, select:hover { background: #353535; }
+    label { display: inline-flex; align-items: center; gap: 6px; color: #888; }
+    label input[type=checkbox] { cursor: pointer; }
+    #status {
+      color: #9fd1a0;
+      font-size: 11px;
+      margin-left: auto;
+    }
+    #status.warn { color: #ffb86c; }
+    #status.fail { color: #ff9a9a; }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #0c0c0c;
+      padding: 20px;
+    }
+    canvas {
+      background: #fffceb;
+      display: block;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.6);
+      max-width: 100%;
+      max-height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="controls">
+      <span id="title">project brushstroke v2 — composition</span>
+      <button id="newBtn">↻ New</button>
+      <button id="saveBtn">💾 PNG</button>
+      <label>Palette <select id="paletteSel"></select></label>
+      <label>Style <select id="styleSel"></select></label>
+      <label>Density <select id="densitySel">
+        <option value="sparse">sparse</option>
+        <option value="medium" selected>medium</option>
+        <option value="dense">dense</option>
+      </select></label>
+      <label><input type="checkbox" id="bgWash" checked>bg wash</label>
+      <label><input type="checkbox" id="crossMarks" checked>+ marks</label>
+      <label><input type="checkbox" id="colorCurves" checked>color curves</label>
+      <label><input type="checkbox" id="dashedFrame">dashed frame</label>
+      <span id="status">loading…</span>
+    </div>
+    <div id="canvas-container">
+      <canvas id="main"></canvas>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/spectral.js"></script>
+  <script src="./brushes.js"></script>
+  <script>
+  // ──────────────────────────────────────────────────────────────────────────
+  // Palettes (Alejandro's 8)
+  // ──────────────────────────────────────────────────────────────────────────
+  const PALETTES = [
+    { name: 'Blanc Ivoire',        bg: '#fffceb', colors: ['#2c695a','#4ad6af','#7facc6','#4e93cc','#f6684f','#ffd300'] },
+    { name: 'Outremer Gris',       bg: '#e2e7dc', colors: ['#7b4800','#002185','#003c32','#fcd300','#ff2702','#6b9404'] },
+    { name: 'Gris Clair',          bg: '#ccccc6', colors: ['#474238','#f4bd48','#9c2128','#395a8e','#7facc6','#2c695a'] },
+    { name: 'Le Rubis',            bg: '#ffe6d4', colors: ['#6c2b3b','#c76282','#445e87','#003c32','#e0b411','#c8491b'] },
+    { name: 'Playgrounds',         bg: '#c49a70', colors: ['#4e0042','#002185','#076d16','#feec00','#ff6900','#ff2702'] },
+    { name: 'Bleu Outremer',       bg: '#4e6498', colors: ['#cdd3e3','#c6353c','#f6684f','#fcd300','#488b6d','#7fb4b5'] },
+    { name: 'Bleu Outremer Foncé', bg: '#0e2d58', colors: ['#f4f4f4','#c8c9ca','#939598','#616568','#0e1318','#080f15'] },
+    { name: "Noir d'Ivoire",       bg: '#080f15', colors: ['#C8C1B7','#d7d7d7','#b0b0b0','#8b8b8b','#676767','#464646'] },
+  ];
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Style presets — adapted from enfantines-study to the new brush API.
+  // fanBrush picks which brush draws each fan tooth. accentBrush is for the
+  // optional thin overlay stroke. Geometry params (halfWidth, teeth, etc.)
+  // mirror the originals.
+  // ──────────────────────────────────────────────────────────────────────────
+  const STYLES = {
+    'Soft & dreamy': {
+      fanBrush: 'fatLozenge',
+      fanBrushOpts: { opacity: 0.70, jitterAngle: 6, blend: true },
+      weightRange: [3.5, 7.0],
+      weightJitter: [0.85, 1.15],
+      stopCount: [3, 5],
+      cycleRate: 3,
+      colorJitter: 0.05,
+      underWashProb: 0.6,
+      underWashOpacity: [0.25, 0.50],
+      underWashBleed: [0.30, 0.50],
+      accentBrush: 'hairLine',
+      accentProb: 0.15,
+      halfWidthRange: [0.20, 0.45],
+      teethMultiplier: 1.0,
+    },
+    'Enfantines hard-edge': {
+      fanBrush: 'fatLozenge',
+      fanBrushOpts: { opacity: 0.85, jitterAngle: 3, blend: true },
+      weightRange: [3.5, 5.5],
+      weightJitter: [0.95, 1.05],
+      stopCount: [4, 7],
+      cycleRate: 5,
+      colorJitter: 0.02,
+      underWashProb: 0.4,
+      underWashOpacity: [0.15, 0.35],
+      underWashBleed: [0.20, 0.35],
+      accentBrush: 'hairLine',
+      accentProb: 0.0,
+      halfWidthRange: [0.22, 0.40],
+      teethMultiplier: 1.2,
+    },
+    'Crisp colored pencil': {
+      fanBrush: 'hairLine',
+      fanBrushOpts: { opacity: 0.85, blend: false },
+      weightRange: [0.8, 1.6],
+      weightJitter: [0.9, 1.1],
+      stopCount: [3, 6],
+      cycleRate: 4,
+      colorJitter: 0.04,
+      underWashProb: 0.5,
+      underWashOpacity: [0.20, 0.42],
+      underWashBleed: [0.25, 0.42],
+      accentBrush: 'hairLine',
+      accentProb: 0.1,
+      halfWidthRange: [0.20, 0.40],
+      teethMultiplier: 1.5,
+    },
+    'Chunky stripes': {
+      fanBrush: 'fatLozenge',
+      fanBrushOpts: { opacity: 0.80, jitterAngle: 4, blend: true },
+      weightRange: [6.0, 9.5],
+      weightJitter: [0.92, 1.08],
+      stopCount: [3, 5],
+      cycleRate: 4,
+      colorJitter: 0.03,
+      underWashProb: 0.5,
+      underWashOpacity: [0.20, 0.40],
+      underWashBleed: [0.25, 0.42],
+      accentBrush: 'hairLine',
+      accentProb: 0.05,
+      halfWidthRange: [0.25, 0.45],
+      teethMultiplier: 0.85,
+    },
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // State
+  // ──────────────────────────────────────────────────────────────────────────
+  let palette = PALETTES[0];
+  let styleName = 'Soft & dreamy';
+  let density = 'medium';
+  let opts = { bgWash: true, crossMarks: true, colorCurves: true, dashedFrame: false };
+  let canvasW, canvasH;
+  let canvas, ctx;
+  const { rand, randI, choice, catmullRom, tangent, sampleGradient,
+          hairLine, fatLozenge, chalkDrag, chalkScribble, gesturalSweep,
+          watercolorWash, registrationCross, callBrush } = B;
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Canvas setup
+  // ──────────────────────────────────────────────────────────────────────────
+  function sizeCanvas() {
+    const wrap = document.getElementById('canvas-container');
+    const maxW = wrap.clientWidth - 40, maxH = wrap.clientHeight - 40;
+    const aspect = 0.85;
+    const h = Math.min(maxH, Math.floor(maxW / aspect));
+    const w = Math.floor(h * aspect);
+    canvas.width = w;
+    canvas.height = h;
+    canvasW = w;
+    canvasH = h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Doodle generation — same algorithm as enfantines-study, adapted to use
+  // the new brush API and Spectral.js gradients.
+  //
+  // Each doodle is a spine (4 control points wobbled perpendicular to an
+  // angle) + N "teeth" (perpendicular strokes along the spine) + optional
+  // underwash + optional accent.
+  // ──────────────────────────────────────────────────────────────────────────
+  function generateDoodles(count, style) {
+    const cols = Math.ceil(Math.sqrt(count * 0.7));
+    const rows = Math.ceil(count / cols);
+    const cellW = canvasW / cols;
+    const cellH = canvasH / rows;
+    const doodles = [];
+    let idx = 0;
+    for (let r = 0; r < rows && idx < count; r++) {
+      for (let c = 0; c < cols && idx < count; c++) {
+        const cx = (c + 0.5) * cellW + rand(-cellW * 0.25, cellW * 0.25);
+        const cy = (r + 0.5) * cellH + rand(-cellH * 0.25, cellH * 0.25);
+        const size = rand(Math.min(cellW, cellH) * 0.75, Math.min(cellW, cellH) * 1.35);
+        const angle = rand(0, Math.PI * 2);
+        const spineLen = size * rand(0.6, 1.1);
+
+        // Pick N colour stops from palette
+        const stopCount = randI(style.stopCount[0], style.stopCount[1]);
+        const stops = [];
+        const used = new Set();
+        while (stops.length < stopCount && used.size < palette.colors.length) {
+          const ci = randI(0, palette.colors.length - 1);
+          if (!used.has(ci)) { used.add(ci); stops.push(palette.colors[ci]); }
+        }
+
+        // Spine — 4 control points wobbled perpendicular to angle
+        const halfLen = spineLen / 2;
+        const perpA = angle + Math.PI / 2;
+        const spinePts = [];
+        for (let i = 0; i < 4; i++) {
+          const t = i / 3;
+          const along = -halfLen + (2 * halfLen) * t;
+          const wobble = rand(-size * 0.18, size * 0.18);
+          spinePts.push({
+            x: cx + Math.cos(angle) * along + Math.cos(perpA) * wobble,
+            y: cy + Math.sin(angle) * along + Math.sin(perpA) * wobble,
+          });
+        }
+
+        const teethCount = Math.floor(rand(14, 28) * style.teethMultiplier *
+          ({ sparse: 0.7, medium: 1.0, dense: 1.3 }[density]));
+        const halfWidth = rand(size * style.halfWidthRange[0], size * style.halfWidthRange[1]);
+        const fanStyle = choice(['symmetric', 'one-sided', 'staggered', 'tapered']);
+
+        doodles.push({
+          cx, cy, size, angle, spinePts, colorStops: stops,
+          halfWidth, teethCount, fanStyle,
+        });
+        idx++;
+      }
+    }
+    return doodles;
+  }
+
+  function drawDoodle(d, style) {
+    // Optional underwash
+    if (Math.random() < style.underWashProb) {
+      const washCol = choice(d.colorStops);
+      watercolorWash(ctx, {
+        type: 'rect',
+        cx: d.cx, cy: d.cy,
+        w: d.size * 0.85, h: d.size * 0.85,
+      }, {
+        color: washCol,
+        opacity: rand(style.underWashOpacity[0], style.underWashOpacity[1]),
+        bleed: rand(style.underWashBleed[0], style.underWashBleed[1]),
+      });
+    }
+
+    const N = d.teethCount;
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const here = catmullRom(d.spinePts, t);
+      const tan = tangent(d.spinePts, t);
+      const perpA = tan + Math.PI / 2;
+
+      // Colour along gradient with optional jitter
+      const colorT = ((t * style.cycleRate) + rand(-style.colorJitter, style.colorJitter)) % 1;
+      const col = sampleGradient(d.colorStops, (colorT + 1) % 1);
+
+      // Half-lengths per fan style
+      let halfA, halfB;
+      switch (d.fanStyle) {
+        case 'symmetric':
+          halfA = d.halfWidth * rand(0.7, 1.0);
+          halfB = d.halfWidth * rand(0.7, 1.0);
+          break;
+        case 'one-sided':
+          halfA = d.halfWidth * rand(0.85, 1.05);
+          halfB = d.halfWidth * 0.05;
+          break;
+        case 'staggered':
+          halfA = d.halfWidth * (i % 2 === 0 ? rand(0.9, 1.05) : rand(0.4, 0.6));
+          halfB = d.halfWidth * (i % 2 === 1 ? rand(0.9, 1.05) : rand(0.4, 0.6));
+          break;
+        case 'tapered':
+          const taper = Math.sin(t * Math.PI);
+          halfA = d.halfWidth * taper * rand(0.85, 1.05);
+          halfB = d.halfWidth * taper * rand(0.85, 1.05);
+          break;
+      }
+
+      const baseW = rand(style.weightRange[0], style.weightRange[1]);
+      const weight = baseW * rand(style.weightJitter[0], style.weightJitter[1]);
+
+      // Build the perpendicular tooth as a 2-point path (we let the brush
+      // interpolate; for a tooth it's basically a straight line).
+      const toothPath = [
+        { x: here.x - Math.cos(perpA) * halfA, y: here.y - Math.sin(perpA) * halfA },
+        { x: here.x + Math.cos(perpA) * halfB, y: here.y + Math.sin(perpA) * halfB },
+      ];
+
+      callBrush(ctx, style.fanBrush, toothPath, {
+        color: col,
+        weight,
+        ...style.fanBrushOpts,
+      });
+
+      // Optional accent stroke on top (different colour from gradient)
+      if (Math.random() < style.accentProb) {
+        const accentT = (colorT + 0.5) % 1;
+        const accentCol = sampleGradient(d.colorStops, accentT);
+        const accentPath = [
+          { x: here.x - Math.cos(perpA) * halfA * 0.7, y: here.y - Math.sin(perpA) * halfA * 0.7 },
+          { x: here.x + Math.cos(perpA) * halfB * 0.7, y: here.y + Math.sin(perpA) * halfB * 0.7 },
+        ];
+        hairLine(ctx, accentPath, {
+          color: accentCol,
+          weight: rand(0.5, 1.2),
+          opacity: 0.8,
+        });
+      }
+    }
+  }
+
+  // Long curving multi-colour gestural stroke — for the "ribbon" passes
+  // that show in some Alejandro compositions.
+  function drawColorCurve() {
+    const archetype = choice(['arc', 's-curve', 'horizontal-wave', 'diagonal-drift']);
+    const m = Math.min(canvasW, canvasH) * 0.10;
+    let path;
+    switch (archetype) {
+      case 'arc': {
+        const side = Math.random() < 0.5;
+        const x0 = side ? m : canvasW - m;
+        const x1 = side ? canvasW - m : m;
+        const y0 = rand(canvasH * 0.2, canvasH * 0.8);
+        const y1 = rand(canvasH * 0.2, canvasH * 0.8);
+        const yMid = (y0 + y1) / 2 + rand(-canvasH * 0.25, canvasH * 0.25);
+        path = [
+          { x: x0, y: y0 },
+          { x: canvasW * 0.35, y: yMid + rand(-30, 30) },
+          { x: canvasW * 0.65, y: yMid + rand(-30, 30) },
+          { x: x1, y: y1 },
+        ];
+        break;
+      }
+      case 's-curve': {
+        const x0 = rand(canvasW * 0.1, canvasW * 0.3);
+        const x1 = rand(canvasW * 0.7, canvasW * 0.9);
+        path = [
+          { x: x0, y: m + rand(0, canvasH * 0.2) },
+          { x: rand(canvasW * 0.25, canvasW * 0.45), y: canvasH * 0.35 + rand(-30, 30) },
+          { x: rand(canvasW * 0.55, canvasW * 0.75), y: canvasH * 0.65 + rand(-30, 30) },
+          { x: x1, y: canvasH - m - rand(0, canvasH * 0.2) },
+        ];
+        break;
+      }
+      case 'horizontal-wave': {
+        const y = rand(canvasH * 0.25, canvasH * 0.75);
+        const amp = rand(20, 70);
+        path = [
+          { x: m, y },
+          { x: canvasW * 0.3, y: y + amp * choice([-1, 1]) },
+          { x: canvasW * 0.5, y: y + amp * choice([-1, 1]) },
+          { x: canvasW * 0.7, y: y + amp * choice([-1, 1]) },
+          { x: canvasW - m, y },
+        ];
+        break;
+      }
+      case 'diagonal-drift': {
+        const x0 = rand(m, canvasW * 0.3);
+        const y0 = rand(m, canvasH * 0.3);
+        const x1 = rand(canvasW * 0.7, canvasW - m);
+        const y1 = rand(canvasH * 0.7, canvasH - m);
+        path = [
+          { x: x0, y: y0 },
+          { x: x0 + (x1 - x0) * 0.4 + rand(-50, 50), y: y0 + (y1 - y0) * 0.4 + rand(-50, 50) },
+          { x: x0 + (x1 - x0) * 0.7 + rand(-50, 50), y: y0 + (y1 - y0) * 0.7 + rand(-50, 50) },
+          { x: x1, y: y1 },
+        ];
+        break;
+      }
+    }
+    // Walk the path, paint with gradient-shifting colour using gesturalSweep
+    // (we get long flowing strokes with taper). Use 2 stops for clarity.
+    const stop1 = choice(palette.colors), stop2 = choice(palette.colors);
+    const segments = 6;
+    for (let i = 0; i < segments; i++) {
+      const t0 = i / segments, t1 = (i + 1) / segments;
+      const sub = [];
+      const subSamples = 4;
+      for (let j = 0; j <= subSamples; j++) {
+        const t = t0 + (t1 - t0) * (j / subSamples);
+        sub.push(catmullRom(path, t));
+      }
+      const col = B.mixHex(stop1, stop2, (t0 + t1) / 2);
+      gesturalSweep(ctx, sub, { color: col, weight: rand(2, 4), opacity: 0.55, blend: false });
+    }
+  }
+
+  function drawBgWash() {
+    const col = choice(palette.colors);
+    const cx = rand(canvasW * 0.1, canvasW * 0.9);
+    const cy = rand(canvasH * 0.1, canvasH * 0.9);
+    const w = rand(80, 260);
+    const h = rand(80, 260);
+    watercolorWash(ctx, {
+      type: choice(['ellipse', 'ellipse', 'rect']),
+      cx, cy, w, h,
+    }, {
+      color: col,
+      opacity: rand(0.25, 0.50),
+      bleed: rand(0.20, 0.45),
+    });
+  }
+
+  function drawCrossMarks(count) {
+    for (let i = 0; i < count; i++) {
+      registrationCross(ctx,
+        rand(canvasW * 0.05, canvasW * 0.95),
+        rand(canvasH * 0.05, canvasH * 0.95),
+        {
+          color: '#2a2a2a',
+          size: rand(3.5, 7),
+          weight: rand(0.5, 1.1),
+          rotation: rand(-0.1, 0.1),
+          opacity: rand(0.55, 0.85),
+        });
+    }
+  }
+
+  function drawDashedFrame() {
+    const m = Math.min(canvasW, canvasH) * 0.04;
+    B.dashedPerimeter(ctx, {
+      type: 'rect',
+      cx: canvasW / 2, cy: canvasH / 2,
+      w: canvasW - 2 * m,
+      h: canvasH - 2 * m,
+    }, {
+      color: '#3a3a3a', dashLen: 5, gapLen: 4, weight: 0.8, opacity: 0.6,
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Main render — synchronous, single-pass. Trade-off: 1–2s freeze per regen
+  // at medium density, but no chunked rendering means no clipping risk.
+  // ──────────────────────────────────────────────────────────────────────────
+  function render() {
+    const t0 = performance.now();
+    setStatus('rendering…', 'warn');
+    // Background first
+    ctx.fillStyle = palette.bg;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    const style = STYLES[styleName];
+    const baseCount = { sparse: 3, medium: 5, dense: 8 }[density];
+    const doodleCount = baseCount + randI(0, 2);
+
+    // Pipeline: bg washes → doodles → color curves → cross marks → frame
+    if (opts.bgWash) {
+      const n = { sparse: 3, medium: 5, dense: 8 }[density];
+      for (let i = 0; i < n; i++) drawBgWash();
+    }
+
+    const doodles = generateDoodles(doodleCount, style);
+    for (const d of doodles) drawDoodle(d, style);
+
+    if (opts.colorCurves) {
+      const n = { sparse: 1, medium: 2, dense: 4 }[density];
+      for (let i = 0; i < n; i++) drawColorCurve();
+    }
+
+    if (opts.crossMarks) {
+      const n = { sparse: 6, medium: 14, dense: 26 }[density];
+      drawCrossMarks(n);
+    }
+
+    if (opts.dashedFrame) drawDashedFrame();
+
+    const dt = (performance.now() - t0).toFixed(0);
+    setStatus(`done · ${doodleCount} doodles · ${dt}ms · ${palette.name} · ${styleName}`);
+  }
+
+  function setStatus(text, level) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.className = level || '';
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // UI wiring
+  // ──────────────────────────────────────────────────────────────────────────
+  function buildPaletteSelector() {
+    const sel = document.getElementById('paletteSel');
+    PALETTES.forEach((p, i) => {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = p.name;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', e => { palette = PALETTES[parseInt(e.target.value)]; render(); });
+  }
+  function buildStyleSelector() {
+    const sel = document.getElementById('styleSel');
+    Object.keys(STYLES).forEach(name => {
+      const o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      sel.appendChild(o);
+    });
+    sel.value = styleName;
+    sel.addEventListener('change', e => { styleName = e.target.value; render(); });
+  }
+  function bindCheckbox(id, key) {
+    const el = document.getElementById(id);
+    el.addEventListener('change', e => { opts[key] = e.target.checked; render(); });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Boot
+  // ──────────────────────────────────────────────────────────────────────────
+  function boot() {
+    if (typeof spectral === 'undefined' || !window.B) {
+      setStatus('waiting for deps…', 'warn');
+      setTimeout(boot, 60);
+      return;
+    }
+    canvas = document.getElementById('main');
+    ctx = canvas.getContext('2d');
+    sizeCanvas();
+
+    buildPaletteSelector();
+    buildStyleSelector();
+    bindCheckbox('bgWash', 'bgWash');
+    bindCheckbox('crossMarks', 'crossMarks');
+    bindCheckbox('colorCurves', 'colorCurves');
+    bindCheckbox('dashedFrame', 'dashedFrame');
+    document.getElementById('densitySel').addEventListener('change', e => { density = e.target.value; render(); });
+
+    document.getElementById('newBtn').addEventListener('click', render);
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `brushstroke-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+    canvas.addEventListener('dblclick', render);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'r' || e.key === 'R') render();
+      if (e.key === 's' || e.key === 'S') document.getElementById('saveBtn').click();
+    });
+
+    // Debounced resize
+    let resizeTO = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTO);
+      resizeTO = setTimeout(() => { sizeCanvas(); render(); }, 200);
+    });
+
+    // Render after a brief delay so status repaint shows
+    setTimeout(render, 30);
+  }
+  boot();
+  </script>
+</body>
+</html>
