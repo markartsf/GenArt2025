@@ -144,28 +144,8 @@
         <label class="flex"><input type="checkbox" id="crossMarks" checked>+ marks</label>
         <label class="flex"><input type="checkbox" id="colorCurves" checked>color curves</label>
         <label class="flex"><input type="checkbox" id="dashedFrame">dashed frame</label>
-      </div>
-
-      <div class="group">
-        <div class="group-title">Tooth variation</div>
-        <label class="block"><span class="l">angle jitter (°)<span class="v" data-display="angleJitter"></span></span>
-          <input type="range" id="angleJitter" min="0" max="30" step="0.5"></label>
-        <label class="block"><span class="l">skip prob<span class="v" data-display="skipProb"></span></span>
-          <input type="range" id="skipProb" min="0" max="0.30" step="0.005"></label>
-        <label class="block"><span class="l">secondary brush prob<span class="v" data-display="secondaryBrushProb"></span></span>
-          <input type="range" id="secondaryBrushProb" min="0" max="0.50" step="0.01"></label>
         <label class="block"><span class="l">starburst prob<span class="v" data-display="starburstProb"></span></span>
           <input type="range" id="starburstProb" min="0" max="0.60" step="0.01"></label>
-      </div>
-
-      <div class="group">
-        <div class="group-title">Geometry</div>
-        <label class="block"><span class="l">teeth multiplier<span class="v" data-display="teethMultiplier"></span></span>
-          <input type="range" id="teethMultiplier" min="0.4" max="2.0" step="0.05"></label>
-        <label class="block"><span class="l">weight min<span class="v" data-display="weightMin"></span></span>
-          <input type="range" id="weightMin" min="0.4" max="10" step="0.1"></label>
-        <label class="block"><span class="l">weight max<span class="v" data-display="weightMax"></span></span>
-          <input type="range" id="weightMax" min="1" max="14" step="0.1"></label>
       </div>
 
       <div class="group">
@@ -782,13 +762,7 @@
   // user-chosen name.
 
   const SLIDER_BINDINGS = [
-    { id: 'angleJitter',         get: b => b.angleJitter,         set: (b, v) => b.angleJitter = v,         fmt: v => v.toFixed(1) + '°' },
-    { id: 'skipProb',            get: b => b.skipProb,            set: (b, v) => b.skipProb = v,            fmt: v => v.toFixed(3) },
-    { id: 'secondaryBrushProb',  get: b => b.secondaryBrushProb,  set: (b, v) => b.secondaryBrushProb = v,  fmt: v => v.toFixed(2) },
     { id: 'starburstProb',       get: b => b.starburstProb,       set: (b, v) => b.starburstProb = v,       fmt: v => v.toFixed(2) },
-    { id: 'teethMultiplier',     get: b => b.teethMultiplier,     set: (b, v) => b.teethMultiplier = v,     fmt: v => v.toFixed(2) },
-    { id: 'weightMin',           get: b => b.weightRange[0],      set: (b, v) => b.weightRange[0] = v,      fmt: v => v.toFixed(1) },
-    { id: 'weightMax',           get: b => b.weightRange[1],      set: (b, v) => b.weightRange[1] = v,      fmt: v => v.toFixed(1) },
     { id: 'underWashProb',       get: b => b.underWashProb,       set: (b, v) => b.underWashProb = v,       fmt: v => v.toFixed(2) },
     { id: 'underWashOpacity',    get: b => b.underWashOpacity,    set: (b, v) => b.underWashOpacity = v,    fmt: v => v.toFixed(2) },
     { id: 'underWashBleed',      get: b => b.underWashBleed,      set: (b, v) => b.underWashBleed = v,      fmt: v => v.toFixed(2) },

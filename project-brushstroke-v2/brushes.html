@@ -150,7 +150,7 @@
       <div id="sliders-hairLine" class="slider-panel group">
         <div class="group-title">Parameters</div>
         <label class="block"><span class="l">weight<span class="v" data-disp="hl-weight"></span></span>
-          <input type="range" id="hl-weight" min="0.5" max="4" step="0.1" value="1"></label>
+          <input type="range" id="hl-weight" min="0.5" max="10" step="0.1" value="1"></label>
         <label class="block"><span class="l">opacity<span class="v" data-disp="hl-opacity"></span></span>
           <input type="range" id="hl-opacity" min="0.1" max="1.0" step="0.01" value="0.85"></label>
         <label class="flex"><input type="checkbox" id="hl-blend" checked> blend with background</label>
@@ -158,23 +158,40 @@
 
       <!-- fat lozenge -->
       <div id="sliders-fatLozenge" class="slider-panel group">
-        <div class="group-title">Parameters</div>
+        <div class="group-title">Stamp parameters</div>
         <label class="block"><span class="l">weight<span class="v" data-disp="fl-weight"></span></span>
-          <input type="range" id="fl-weight" min="2" max="14" step="0.5" value="6"></label>
+          <input type="range" id="fl-weight" min="2" max="30" step="0.5" value="6"></label>
         <label class="block"><span class="l">opacity<span class="v" data-disp="fl-opacity"></span></span>
           <input type="range" id="fl-opacity" min="0.2" max="1.0" step="0.01" value="0.75"></label>
-        <label class="block"><span class="l">jitter angle (°)<span class="v" data-disp="fl-jitter"></span></span>
+        <label class="block"><span class="l">stamp jitter (°)<span class="v" data-disp="fl-jitter"></span></span>
           <input type="range" id="fl-jitter" min="0" max="20" step="0.5" value="4"></label>
         <label class="block"><span class="l">spacing mult<span class="v" data-disp="fl-spacing"></span></span>
           <input type="range" id="fl-spacing" min="0.1" max="1.0" step="0.05" value="0.25"></label>
         <label class="flex"><input type="checkbox" id="fl-blend" checked> blend with background</label>
+        <div style="border-top:1px solid #2a2a2a;margin:8px 0 6px;padding-top:6px;">
+          <div class="group-title" style="margin-bottom:6px;">Fan composition</div>
+          <label class="block"><span class="l">fan angle jitter (°)<span class="v" data-disp="fl-fan-angle"></span></span>
+            <input type="range" id="fl-fan-angle" min="0" max="30" step="0.5" value="10"></label>
+          <label class="block"><span class="l">skip prob<span class="v" data-disp="fl-skip"></span></span>
+            <input type="range" id="fl-skip" min="0" max="0.30" step="0.005" value="0.06"></label>
+          <label class="block"><span class="l">secondary brush prob<span class="v" data-disp="fl-secondary"></span></span>
+            <input type="range" id="fl-secondary" min="0" max="0.50" step="0.01" value="0.12"></label>
+          <label class="block"><span class="l">starburst prob<span class="v" data-disp="fl-starburst"></span></span>
+            <input type="range" id="fl-starburst" min="0" max="0.60" step="0.01" value="0.20"></label>
+          <label class="block"><span class="l">teeth multiplier<span class="v" data-disp="fl-teeth"></span></span>
+            <input type="range" id="fl-teeth" min="0.4" max="2.0" step="0.05" value="1.0"></label>
+          <label class="block"><span class="l">weight min<span class="v" data-disp="fl-wmin"></span></span>
+            <input type="range" id="fl-wmin" min="0.5" max="15" step="0.1" value="3.5"></label>
+          <label class="block"><span class="l">weight max<span class="v" data-disp="fl-wmax"></span></span>
+            <input type="range" id="fl-wmax" min="1" max="30" step="0.1" value="7.0"></label>
+        </div>
       </div>
 
       <!-- chalk drag -->
       <div id="sliders-chalkDrag" class="slider-panel group">
         <div class="group-title">Parameters</div>
         <label class="block"><span class="l">weight<span class="v" data-disp="cd-weight"></span></span>
-          <input type="range" id="cd-weight" min="1" max="8" step="0.5" value="3"></label>
+          <input type="range" id="cd-weight" min="1" max="20" step="0.5" value="3"></label>
         <label class="block"><span class="l">density<span class="v" data-disp="cd-density"></span></span>
           <input type="range" id="cd-density" min="0.5" max="3.0" step="0.1" value="1.0"></label>
         <label class="block"><span class="l">opacity<span class="v" data-disp="cd-opacity"></span></span>
@@ -190,7 +207,7 @@
       <div id="sliders-chalkScribble" class="slider-panel group">
         <div class="group-title">Parameters</div>
         <label class="block"><span class="l">weight<span class="v" data-disp="cs-weight"></span></span>
-          <input type="range" id="cs-weight" min="1" max="6" step="0.5" value="2.5"></label>
+          <input type="range" id="cs-weight" min="1" max="16" step="0.5" value="2.5"></label>
         <label class="block"><span class="l">opacity<span class="v" data-disp="cs-opacity"></span></span>
           <input type="range" id="cs-opacity" min="0.2" max="1.0" step="0.01" value="0.65"></label>
         <label class="block"><span class="l">break prob<span class="v" data-disp="cs-break"></span></span>
@@ -248,7 +265,7 @@
       <div id="sliders-gesturalSweep" class="slider-panel group">
         <div class="group-title">Parameters</div>
         <label class="block"><span class="l">weight<span class="v" data-disp="gs-weight"></span></span>
-          <input type="range" id="gs-weight" min="2" max="12" step="0.5" value="5"></label>
+          <input type="range" id="gs-weight" min="2" max="30" step="0.5" value="5"></label>
         <label class="block"><span class="l">opacity<span class="v" data-disp="gs-opacity"></span></span>
           <input type="range" id="gs-opacity" min="0.2" max="1.0" step="0.01" value="0.65"></label>
         <label class="block"><span class="l">taper<span class="v" data-disp="gs-taper"></span></span>
@@ -298,7 +315,7 @@
   let canvas, ctx, canvasW, canvasH;
 
   const { rand, randI, choice,
-          catmullRom, pathLength, tangent,
+          catmullRom, pathLength, tangent, sampleGradient,
           hairLine, fatLozenge, chalkDrag, chalkScribble,
           sprayField, watercolorWash, registrationCross, gesturalSweep } = B;
 
@@ -343,7 +360,7 @@
   function brushOpts() {
     switch (currentBrush) {
       case 'hairLine':         return { weight: getVal('hl-weight'), opacity: getVal('hl-opacity'), blend: getChk('hl-blend') };
-      case 'fatLozenge':       return { weight: getVal('fl-weight'), opacity: getVal('fl-opacity'), jitterAngle: getVal('fl-jitter'), spacing: getVal('fl-spacing'), blend: getChk('fl-blend') };
+      case 'fatLozenge':       return { weight: getVal('fl-weight'), opacity: getVal('fl-opacity'), jitterAngle: getVal('fl-jitter'), spacing: getVal('fl-spacing'), blend: getChk('fl-blend'), fanAngleJitter: getVal('fl-fan-angle'), skipProb: getVal('fl-skip'), secondaryBrushProb: getVal('fl-secondary'), starburstProb: getVal('fl-starburst'), teethMultiplier: getVal('fl-teeth'), weightMin: getVal('fl-wmin'), weightMax: getVal('fl-wmax') };
       case 'chalkDrag':        return { weight: getVal('cd-weight'), density: getVal('cd-density'), opacity: getVal('cd-opacity'), spacing: getVal('cd-spacing'), gappiness: getVal('cd-gappiness'), blend: getChk('cd-blend') };
       case 'chalkScribble':    return { weight: getVal('cs-weight'), opacity: getVal('cs-opacity'), breakProb: getVal('cs-break'), blend: getChk('cs-blend') };
       case 'sprayField':       return { radius: getVal('sf-radius'), density: getVal('sf-density'), falloff: getVal('sf-falloff'), opacity: getVal('sf-opacity') };
@@ -374,7 +391,9 @@
     const opts = brushOpts();
     const cols = palette.colors;
 
-    if (currentBrush === 'sprayField') {
+    if (currentBrush === 'fatLozenge') {
+      renderFanSamples(opts, cols);
+    } else if (currentBrush === 'sprayField') {
       renderSpraySamples(opts, cols);
     } else if (currentBrush === 'watercolorWash') {
       renderWashSamples(opts, cols);
@@ -387,6 +406,121 @@
     Math.random = savedRandom;
     const dt = (performance.now() - t0).toFixed(0);
     setStatus(`${currentBrush} · ${dt}ms`);
+  }
+
+  function renderFanSamples(opts, cols) {
+    const W = canvasW, H = canvasH;
+    const minDim = Math.min(W, H);
+
+    function pickStops(n) {
+      const stops = [], used = new Set();
+      while (stops.length < n && used.size < cols.length) {
+        const ci = Math.floor(Math.random() * cols.length);
+        if (!used.has(ci)) { used.add(ci); stops.push(cols[ci]); }
+      }
+      return stops;
+    }
+
+    const showStarburst = opts.starburstProb > 0.4;
+    const doodles = showStarburst
+      ? [
+          { kind: 'fan',       cx: W * 0.30, cy: H * 0.38, size: minDim * 0.46, angle: Math.PI * 0.08 },
+          { kind: 'starburst', cx: W * 0.72, cy: H * 0.64, size: minDim * 0.36 },
+        ]
+      : [
+          { kind: 'fan', cx: W * 0.28, cy: H * 0.37, size: minDim * 0.46, angle: Math.PI * 0.08 },
+          { kind: 'fan', cx: W * 0.72, cy: H * 0.65, size: minDim * 0.42, angle: Math.PI * 1.05 },
+        ];
+
+    for (const d of doodles) {
+      const stops = pickStops(4);
+      if (d.kind === 'starburst') drawStarburstPreview(d, opts, stops);
+      else                         drawFanPreview(d, opts, stops);
+    }
+  }
+
+  function drawFanPreview({ cx, cy, size, angle }, opts, stops) {
+    const halfLen = size * 0.5;
+    const perpA = angle + Math.PI / 2;
+    const spinePts = [];
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      const along = -halfLen + 2 * halfLen * t;
+      const wobble = (Math.random() - 0.5) * size * 0.18;
+      spinePts.push({
+        x: cx + Math.cos(angle) * along + Math.cos(perpA) * wobble,
+        y: cy + Math.sin(angle) * along + Math.sin(perpA) * wobble,
+      });
+    }
+
+    const N = Math.round(22 * opts.teethMultiplier);
+    const halfWidth = size * 0.32;
+
+    for (let i = 0; i < N; i++) {
+      if (Math.random() < opts.skipProb) continue;
+      const t = i / Math.max(1, N - 1);
+      const here = catmullRom(spinePts, t);
+      const tan = tangent(spinePts, t);
+      const angleJit = (Math.random() * 2 - 1) * opts.fanAngleJitter * Math.PI / 180;
+      const perpDir = tan + Math.PI / 2 + angleJit;
+
+      const colorT = ((t * 3) + (Math.random() - 0.5) * 0.08) % 1;
+      const col = sampleGradient(stops, (colorT + 1) % 1);
+
+      const halfA = halfWidth * rand(0.7, 1.0);
+      const halfB = halfWidth * rand(0.7, 1.0);
+      const weight = rand(opts.weightMin, opts.weightMax);
+
+      const toothPath = [
+        { x: here.x - Math.cos(perpDir) * halfA, y: here.y - Math.sin(perpDir) * halfA },
+        { x: here.x + Math.cos(perpDir) * halfB, y: here.y + Math.sin(perpDir) * halfB },
+      ];
+
+      fatLozenge(ctx, toothPath, {
+        color: col, weight,
+        opacity: opts.opacity,
+        jitterAngle: opts.jitterAngle,
+        spacing: opts.spacing,
+        blend: opts.blend,
+      });
+
+      if (Math.random() < opts.secondaryBrushProb) {
+        const accentCol = sampleGradient(stops, (colorT + 0.5) % 1);
+        const scale = rand(0.55, 0.85);
+        const accentPath = [
+          { x: here.x - Math.cos(perpDir) * halfA * scale, y: here.y - Math.sin(perpDir) * halfA * scale },
+          { x: here.x + Math.cos(perpDir) * halfB * scale, y: here.y + Math.sin(perpDir) * halfB * scale },
+        ];
+        hairLine(ctx, accentPath, { color: accentCol, weight: rand(0.5, 1.2), opacity: 0.75, blend: false });
+      }
+    }
+  }
+
+  function drawStarburstPreview({ cx, cy, size }, opts, stops) {
+    const N = Math.round(16 * opts.teethMultiplier);
+    const baseAngle = Math.random() * Math.PI * 2;
+    for (let i = 0; i < N; i++) {
+      if (Math.random() < opts.skipProb) continue;
+      const ang = baseAngle + (i / N) * Math.PI * 2;
+      const angleJit = (Math.random() * 2 - 1) * opts.fanAngleJitter * Math.PI / 180;
+      const finalAng = ang + angleJit;
+      const len = size * rand(0.30, 0.52);
+      const innerR = len * 0.10;
+      const path = [
+        { x: cx + Math.cos(finalAng) * innerR,        y: cy + Math.sin(finalAng) * innerR },
+        { x: cx + Math.cos(finalAng) * len * 0.4,     y: cy + Math.sin(finalAng) * len * 0.4 },
+        { x: cx + Math.cos(finalAng) * len * 0.8,     y: cy + Math.sin(finalAng) * len * 0.8 },
+        { x: cx + Math.cos(finalAng) * len,           y: cy + Math.sin(finalAng) * len },
+      ];
+      const col = sampleGradient(stops, i / N);
+      fatLozenge(ctx, path, {
+        color: col, weight: rand(opts.weightMin, opts.weightMax),
+        opacity: opts.opacity,
+        jitterAngle: opts.jitterAngle,
+        spacing: opts.spacing,
+        blend: opts.blend,
+      });
+    }
   }
 
   function renderPathSamples(opts, cols) {
