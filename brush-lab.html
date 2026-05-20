@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Brush Lab — Enfantines Ribbon (v0)</title>
+
+<!--
+  BRUSH LAB v0  ·  isolated, static, no audio
+  ----------------------------------------------------------------------------
+  Purpose: nail the "multicolour comb riding a spline" look in isolation,
+  BEFORE wiring it into the audio-reactive performance app.
+
+  CORE IDEA (the part the agents kept getting wrong):
+    A ribbon is NOT a brush. It is a GENERATOR. It samples a spline spine,
+    and at each arc-length step places ONE individually-coloured textured
+    stamp ("tooth"), oriented to the path normal. Multicolour = many
+    single-colour stamps, not one brush emitting many colours.
+
+  All p5.brush-specific calls are quarantined in the three helpers marked
+  >>> P5.BRUSH ADAPTER <<< below. If a v2 API name/signature is off in your
+  installed version, fix it THERE — the generator architecture stays correct.
+
+  Run locally (Web Audio etc. later needs this anyway):
+    python3 -m http.server 8080   →   http://localhost:8080/brush-lab.html
+
+  CDN: p5 2.x + p5.brush 2.x UMD bundle. Pin exact versions once confirmed.
+-->
+<script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5.brush@2/dist/p5.brush.js"></script>
+
+<style>
+  :root { --panel: rgba(20,20,24,0.86); --ink:#f4efe7; --muted:#9a948c; --acc:#e9c46a; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#0e0e12; overflow:hidden;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color:var(--ink); }
+  #canvas-holder { position:fixed; inset:0; display:grid; place-items:center; }
+  #panel {
+    position:fixed; top:16px; left:16px; width:288px; max-height:calc(100vh - 32px);
+    overflow-y:auto; background:var(--panel); backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:18px 18px 22px;
+    font-size:12px; z-index:10; }
+  #panel h1 { font-size:13px; letter-spacing:0.14em; text-transform:uppercase;
+    font-weight:600; margin:0 0 2px; }
+  #panel .sub { color:var(--muted); font-size:10.5px; letter-spacing:0.12em;
+    text-transform:uppercase; margin:0 0 16px; }
+  .group { margin-bottom:13px; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+  label { color:var(--muted); letter-spacing:0.04em; }
+  .val { color:var(--acc); font-variant-numeric:tabular-nums; font-size:11px; }
+  input[type=range]{ width:100%; accent-color:var(--acc); height:3px; }
+  select{ width:100%; background:#1b1b20; color:var(--ink); border:1px solid rgba(255,255,255,0.1);
+    border-radius:7px; padding:6px 8px; font-size:12px; }
+  .toggle{ display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .toggle input{ accent-color:var(--acc); }
+  .divider{ height:1px; background:rgba(255,255,255,0.08); margin:15px 0; }
+  .swatches{ display:flex; gap:6px; flex-wrap:wrap; }
+  .swatches input[type=color]{ width:30px; height:30px; border:none; border-radius:7px;
+    background:none; cursor:pointer; padding:0; }
+  .seedrow{ display:flex; gap:6px; align-items:center; }
+  .seedrow .seedval{ flex:1; text-align:center; background:#1b1b20; border-radius:7px;
+    padding:6px 0; font-variant-numeric:tabular-nums; letter-spacing:0.06em; }
+  button{ flex:1; background:#26262d; color:var(--ink); border:1px solid rgba(255,255,255,0.1);
+    border-radius:8px; padding:8px 6px; font-size:11px; letter-spacing:0.04em; cursor:pointer; }
+  button:hover{ background:#32323b; }
+  button.primary{ background:var(--acc); color:#1a1a1a; border-color:transparent; font-weight:600; }
+  .btnrow{ display:flex; gap:6px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div id="canvas-holder"></div>
+
+<div id="panel">
+  <h1>Brush Lab</h1>
+  <p class="sub">Enfantines Ribbon · v0</p>
+
+  <div class="group">
+    <div class="row"><label>Ribbons</label><span class="val" id="v_ribbons">3</span></div>
+    <input type="range" id="ribbons" min="1" max="12" step="1" value="3">
+  </div>
+  <div class="group">
+    <div class="row"><label>Spine control pts</label><span class="val" id="v_ctrl">5</span></div>
+    <input type="range" id="ctrl" min="3" max="10" step="1" value="5">
+  </div>
+  <div class="group">
+    <div class="row"><label>Tooth spacing (px)</label><span class="val" id="v_spacing">11</span></div>
+    <input type="range" id="spacing" min="3" max="40" step="1" value="11">
+  </div>
+  <div class="group">
+    <div class="row"><label>Ribbon width (px)</label><span class="val" id="v_width">120</span></div>
+    <input type="range" id="width" min="20" max="320" step="1" value="120">
+  </div>
+  <div class="group">
+    <div class="row"><label>Stroke weight</label><span class="val" id="v_weight">1.4</span></div>
+    <input type="range" id="weight" min="0.3" max="5" step="0.1" value="1.4">
+  </div>
+  <div class="group">
+    <div class="row"><label>Angle jitter (°)</label><span class="val" id="v_anglej">8</span></div>
+    <input type="range" id="anglej" min="0" max="60" step="1" value="8">
+  </div>
+  <div class="group">
+    <div class="row"><label>Length jitter</label><span class="val" id="v_lenj">0.25</span></div>
+    <input type="range" id="lenj" min="0" max="0.9" step="0.01" value="0.25">
+  </div>
+  <div class="group">
+    <div class="row"><label>Width taper (ends)</label><span class="val" id="v_taper">0.6</span></div>
+    <input type="range" id="taper" min="0" max="1" step="0.01" value="0.6">
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="group">
+    <div class="row"><label>Brush</label></div>
+    <select id="brushsel"></select>
+  </div>
+  <div class="group">
+    <div class="row"><label>Colour order</label></div>
+    <select id="colormode">
+      <option value="random">Random per tooth</option>
+      <option value="sequential">Sequential cycle</option>
+      <option value="runs">Runs (streaks of one)</option>
+    </select>
+  </div>
+  <div class="group">
+    <label style="display:block;margin-bottom:7px;">Palette</label>
+    <div class="swatches" id="swatches"></div>
+  </div>
+  <label class="toggle group"><input type="checkbox" id="drawspine"> Draw spine (faint)</label>
+
+  <div class="divider"></div>
+
+  <label style="display:block;color:var(--muted);margin-bottom:6px;">Seed</label>
+  <div class="seedrow">
+    <button id="seedPrev">‹</button>
+    <div class="seedval" id="seedval">1</div>
+    <button id="seedNext">›</button>
+    <button id="seedRand">⤬</button>
+  </div>
+  <div class="btnrow">
+    <button class="primary" id="regen">Regenerate</button>
+    <button id="reset">Reset</button>
+  </div>
+  <div class="btnrow">
+    <button id="download">Download PNG</button>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+//  PARAMETERS
+// ============================================================================
+const DEFAULTS = {
+  ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
+  anglej:8, lenj:0.25, taper:0.6, colormode:'random', drawspine:false,
+  // a fresh, Satie-ish primary-on-cream test palette; edit freely
+  palette:['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'],
+  bg:'#efe7d8',
+};
+let P = structuredClone(DEFAULTS);
+let seed = 1;
+let availableBrushes = [];
+
+// ============================================================================
+//  >>> P5.BRUSH ADAPTER <<<  (the only library-specific code)
+//  If a v2 signature differs in your installed build, fix it here only.
+// ============================================================================
+
+// 1. discover which brushes exist in this build (version-proof, with fallback)
+function discoverBrushes(){
+  try {
+    if (typeof brush.box === 'function') {
+      const b = brush.box();
+      if (Array.isArray(b) && b.length) return b;
+    }
+  } catch(e){ /* fall through */ }
+  // fallback list — adjust to match your build's brush.box() if needed
+  return ['marker','marker2','pen','rotring','2B','HB','cpencil','charcoal','spray'];
+}
+
+// 2. set the current brush to a given colour + weight
+function useBrush(name, hex, weight){
+  brush.set(name, hex, weight);
+}
+
+// 3. draw one textured stamp (a "tooth") from a→b in SCREEN coords
+function stamp(ax, ay, bx, by){
+  brush.line(ax, ay, bx, by);
+}
+// ============================================================================
+//  END ADAPTER
+// ============================================================================
+
+
+// ---- spline math (Catmull-Rom) : OUR code, not the library's ---------------
+function catmullRom(p0,p1,p2,p3,t){
+  const t2=t*t, t3=t2*t;
+  return {
+    x:0.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+    y:0.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3)
+  };
+}
+// sample a control-point list into a dense polyline
+function samplePolyline(pts, stepsPer=24){
+  const out=[];
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||pts[i+1];
+    for(let s=0;s<stepsPer;s++) out.push(catmullRom(p0,p1,p2,p3,s/stepsPer));
+  }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+// resample a polyline at fixed arc-length spacing, returning {x,y,nx,ny,u}
+function placeTeeth(poly, spacing){
+  const teeth=[]; let acc=0, total=0;
+  const segLen=[];
+  for(let i=1;i<poly.length;i++){ const d=dist(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y); segLen.push(d); total+=d; }
+  let target=0, run=0;
+  for(let i=1;i<poly.length;i++){
+    const a=poly[i-1], b=poly[i], L=segLen[i-1]||0.0001;
+    while(run+L>=target){
+      const f=(target-run)/L;
+      const x=a.x+(b.x-a.x)*f, y=a.y+(b.y-a.y)*f;
+      let tx=b.x-a.x, ty=b.y-a.y; const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m;
+      teeth.push({x,y,nx:-ty,ny:tx,u:total?target/total:0}); // normal = perp to tangent
+      target+=spacing;
+    }
+    run+=L;
+  }
+  return teeth;
+}
+
+// ---- ribbon generation -----------------------------------------------------
+function makeControlPoints(n){
+  // a loose drifting path across the canvas, seeded
+  const pad=120, pts=[];
+  let x=random(pad,width-pad), y=random(pad,height-pad);
+  let ang=random(TWO_PI);
+  for(let i=0;i<n;i++){
+    pts.push({x,y});
+    ang+=random(-0.9,0.9);
+    const step=random(120,260);
+    x=constrain(x+cos(ang)*step,pad,width-pad);
+    y=constrain(y+sin(ang)*step,pad,height-pad);
+  }
+  return pts;
+}
+
+function pickColor(i, ribbonOffset){
+  const pal=P.palette;
+  if(P.colormode==='sequential') return pal[(i+ribbonOffset)%pal.length];
+  if(P.colormode==='runs')      return pal[(floor(i/5)+ribbonOffset)%pal.length];
+  return pal[floor(random(pal.length))]; // random
+}
+
+function drawRibbon(ribbonIndex){
+  const cps=makeControlPoints(P.ctrl);
+  const poly=samplePolyline(cps);
+  const teeth=placeTeeth(poly,P.spacing);
+
+  if(P.drawspine){
+    useBrush(currentBrush(), '#3a3a3a', 0.5);
+    for(let i=1;i<poly.length;i+=2) stamp(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y);
+  }
+
+  for(let i=0;i<teeth.length;i++){
+    const t=teeth[i];
+    // width envelope: taper toward both ends of the ribbon
+    const env=1-P.taper*Math.pow(Math.abs(t.u*2-1),1.6);
+    const halfLen=(P.width*0.5)*env*(1-random(0,P.lenj));
+    // jitter the tooth angle off the exact normal
+    const j=radians(random(-P.anglej,P.anglej));
+    const nx=t.nx*cos(j)-t.ny*sin(j);
+    const ny=t.nx*sin(j)+t.ny*cos(j);
+    const ax=t.x-nx*halfLen, ay=t.y-ny*halfLen;
+    const bx=t.x+nx*halfLen, by=t.y+ny*halfLen;
+    useBrush(currentBrush(), pickColor(i,ribbonIndex*3), P.weight);
+    stamp(ax,ay,bx,by);
+  }
+}
+
+function currentBrush(){
+  const sel=document.getElementById('brushsel');
+  return (sel && sel.value) || availableBrushes[0] || 'marker';
+}
+
+// ---- p5 lifecycle ----------------------------------------------------------
+function setup(){
+  const c=createCanvas(min(windowWidth-340,1100), min(windowHeight-40,900), WEBGL);
+  c.parent('canvas-holder');
+  pixelDensity(2);
+  try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
+  try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
+  availableBrushes = discoverBrushes();
+  populateBrushSelect();
+  buildSwatches();
+  noLoop();
+  regenerate(seed);
+}
+
+function draw(){
+  randomSeed(seed); noiseSeed(seed);          // reproducible per seed
+  background(P.bg);
+  push();
+  translate(-width/2,-height/2);              // WEBGL origin → top-left screen coords
+  for(let r=0;r<P.ribbons;r++) drawRibbon(r);
+  pop();
+}
+
+function regenerate(s){
+  if(s!==undefined) seed=s;
+  document.getElementById('seedval').textContent=seed;
+  redraw();
+}
+
+// ---- UI wiring -------------------------------------------------------------
+function bindSlider(id, key, fmt){
+  const el=document.getElementById(id), out=document.getElementById('v_'+id);
+  const apply=()=>{ P[key]=parseFloat(el.value); if(out) out.textContent=fmt?fmt(P[key]):el.value; redraw(); };
+  el.addEventListener('input', apply); apply();
+}
+function populateBrushSelect(){
+  const sel=document.getElementById('brushsel');
+  sel.innerHTML='';
+  availableBrushes.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  sel.addEventListener('change', redraw);
+}
+function buildSwatches(){
+  const wrap=document.getElementById('swatches'); wrap.innerHTML='';
+  P.palette.forEach((hex,idx)=>{
+    const c=document.createElement('input'); c.type='color'; c.value=hex;
+    c.addEventListener('input',e=>{ P.palette[idx]=e.target.value; redraw(); });
+    wrap.appendChild(c);
+  });
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  bindSlider('ribbons','ribbons'); bindSlider('ctrl','ctrl');
+  bindSlider('spacing','spacing'); bindSlider('width','width');
+  bindSlider('weight','weight',v=>v.toFixed(1)); bindSlider('anglej','anglej');
+  bindSlider('lenj','lenj',v=>v.toFixed(2)); bindSlider('taper','taper',v=>v.toFixed(2));
+  document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
+  document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
+  document.getElementById('regen').addEventListener('click',()=>regenerate());
+  document.getElementById('seedPrev').addEventListener('click',()=>regenerate(Math.max(0,seed-1)));
+  document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
+  document.getElementById('seedRand').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
+  document.getElementById('download').addEventListener('click',()=>saveCanvas('brush-lab_seed'+seed,'png'));
+  document.getElementById('reset').addEventListener('click',()=>{
+    P=structuredClone(DEFAULTS);
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper'].forEach(id=>{
+      document.getElementById(id).value=P[id];
+      document.getElementById(id).dispatchEvent(new Event('input'));
+    });
+    document.getElementById('colormode').value=P.colormode;
+    document.getElementById('drawspine').checked=P.drawspine;
+    buildSwatches(); redraw();
+  });
+});
+
+function windowResized(){
+  resizeCanvas(min(windowWidth-340,1100), min(windowHeight-40,900));
+  redraw();
+}
+</script>
+</body>
+</html>
