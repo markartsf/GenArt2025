@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>aRtsy Sketchbook — p5.js port</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+        .container { display: flex; min-height: 100vh; padding: 20px; gap: 20px; }
+        .sidebar {
+            width: 340px; flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto; max-height: calc(100vh - 40px);
+        }
+        .sidebar h1 {
+            font-family: 'Lora', serif;
+            font-size: 24px; font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .sidebar .subtitle {
+            color: var(--anthropic-mid-gray);
+            font-size: 13px; margin-bottom: 24px; line-height: 1.4;
+        }
+        .control-section { margin-bottom: 24px; }
+        .control-section h3 {
+            font-size: 14px; font-weight: 600;
+            margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .control-section h3::before {
+            content: '•'; color: var(--anthropic-orange); font-weight: bold;
+        }
+        .seed-input, .sketch-select, .palette-select {
+            width: 100%;
+            background: var(--anthropic-light);
+            padding: 10px; border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            border: 1px solid var(--anthropic-light-gray);
+            text-align: center;
+        }
+        .sketch-select, .palette-select {
+            font-family: 'Poppins', sans-serif;
+            text-align: left; cursor: pointer;
+        }
+        .seed-input:focus, .sketch-select:focus, .palette-select:focus {
+            outline: none; border-color: var(--anthropic-orange);
+            background: white;
+        }
+        .seed-controls {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 8px; margin-top: 8px;
+        }
+        .control-group { margin-bottom: 16px; }
+        .control-group label {
+            display: block; font-size: 13px; font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .slider-container {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .slider-container input[type="range"] {
+            flex: 1; height: 4px;
+            background: var(--anthropic-light-gray);
+            border-radius: 2px; outline: none;
+            -webkit-appearance: none;
+        }
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            background: var(--anthropic-orange);
+            border-radius: 50%; cursor: pointer;
+        }
+        .slider-container input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px;
+            background: var(--anthropic-orange);
+            border-radius: 50%; border: none; cursor: pointer;
+        }
+        .value-display {
+            font-family: 'Courier New', monospace;
+            font-size: 11px; color: var(--anthropic-mid-gray);
+            min-width: 50px; text-align: right;
+        }
+        .palette-swatches {
+            display: flex; gap: 4px; margin-top: 8px;
+            height: 24px; border-radius: 4px; overflow: hidden;
+        }
+        .palette-swatches div { flex: 1; }
+        .button {
+            background: var(--anthropic-orange); color: white;
+            border: none; padding: 10px 14px;
+            border-radius: 6px; font-size: 13px; font-weight: 500;
+            cursor: pointer; transition: all 0.2s ease; width: 100%;
+        }
+        .button:hover { background: #c86641; transform: translateY(-1px); }
+        .button.secondary { background: var(--anthropic-blue); }
+        .button.secondary:hover { background: #5a8bb8; }
+        .button.tertiary { background: var(--anthropic-green); }
+        .button.tertiary:hover { background: #6b7b52; }
+        .button-row { display: flex; gap: 8px; }
+        .button-row .button { flex: 1; }
+        .canvas-area {
+            flex: 1; display: flex; align-items: center;
+            justify-content: center; min-width: 0;
+        }
+        #canvas-container {
+            width: 100%; max-width: 900px;
+            border-radius: 12px; overflow: hidden;
+            box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1);
+            background: white;
+        }
+        #canvas-container canvas {
+            display: block; width: 100% !important; height: auto !important;
+        }
+        .status {
+            font-size: 11px; color: var(--anthropic-mid-gray);
+            font-family: 'Courier New', monospace;
+            margin-top: 8px; text-align: center;
+        }
+        @media (max-width: 800px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; max-height: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>aRtsy Sketchbook</h1>
+            <div class="subtitle">p5.js ports of five aRtsy algorithms, with the original palettes.</div>
+
+            <div class="control-section">
+                <h3>Sketch</h3>
+                <select class="sketch-select" id="sketch-select" onchange="switchSketch(this.value)">
+                    <option value="flow">Flow Field (Tyler Hobbs)</option>
+                    <option value="strokes">Paint Strokes</option>
+                    <option value="swirls">Swirls</option>
+                    <option value="flame">Fractal Flame</option>
+                    <option value="polylines">Polylines</option>
+                </select>
+            </div>
+
+            <div class="control-section">
+                <h3>Palette</h3>
+                <select class="palette-select" id="palette-select" onchange="switchPalette(this.value)">
+                    <!-- populated by JS -->
+                </select>
+                <div class="palette-swatches" id="palette-swatches"></div>
+            </div>
+
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="1" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next →</button>
+                </div>
+                <button class="button tertiary" onclick="randomSeedAndUpdate()" style="margin-top: 8px;">↻ Random</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Parameters</h3>
+                <div id="param-container"></div>
+            </div>
+
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row">
+                    <button class="button" onclick="regenerate()">Regenerate</button>
+                    <button class="button secondary" onclick="downloadPNG()">Save PNG</button>
+                </div>
+                <div class="status" id="status">ready</div>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <div id="canvas-container"></div>
+        </div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════════════════
+    // aRtsy PALETTES — extracted verbatim from koenderks/aRtsy
+    // R named colors converted to hex: firebrick=#B22222, goldenrod=#DAA520,
+    // forestgreen=#228B22, navyblue=#000080, dodgerblue=#1E90FF, brown=#A52A2A
+    // ═══════════════════════════════════════════════════════════════════════
+    const PALETTES = {
+        azul:       ["#ffffff","#142ea5","#3b74e4","#a8d4f7","#f1da52"],
+        bell:       ["#000000","#ff0000","#ffcc00"],
+        blackwhite: ["#000000","#ffffff"],
+        blossom:    ["#b89a9d","#fcf9ee","#f1acec","#e0b8c0","#e95bb1","#c03962"],
+        boogy1:     ["#a2a07a","#c49700","#b4b9cc","#c0c1b1"],
+        boogy2:     ["#204b9a","#f1e60e","#ffffff","#e5181d","#1d1d1b"],
+        boogy3:     ["#e9e489","#995c25","#5eb9f0","#68b95d","#69241f"],
+        dark1:      ["#161616","#346751","#C84B31","#ECDBBA"],
+        dark2:      ["#1B262C","#0F4C75","#3282B8","#BBE1FA"],
+        dark3:      ["#222831","#393E46","#00ADB5","#EEEEEE"],
+        flag:       ["#002F6C","#0067B9","#A7C6ED","#CFCDC9","#BA0C2F","#651D32"],
+        flora:      ["#000000","#f2f2eb","#ccb77c","#523402"],
+        gogh:       ["#8699b5","#161918","#9d8018","#232d8a","#b4ad5a","#c2ccd5"],
+        house:      ["#191919","#ffffff","#ab3920","#cca222","#036440"],
+        jasp:       ["#14a1e3","#ffffff","#f7971c","#8cc63e","#000000"],
+        jfa:        ["#2a94d1","#e89643","#233e4a"],
+        jungle:     ["#4e6349","#614128","#171812","#698144","#917861"],
+        klimt:      ["#847049","#ba9d3e","#29241f","#a787b0","#cd5627","#7ea36e"],
+        kpd:        ["#c42f32","#315b99","#354741"],
+        lava:       ["#f59907","#a42300","#482a22","#050000","#6b0800"],
+        nature:     ["#228B22","#1E90FF","#A52A2A","#ffffff","#808080"],
+        neo1:       ["#de3070","#89fb68","#84e7fa","#6b9cc4","#090F22"],
+        neo2:       ["#7dfa6a","#dafd6a","#eeb556","#e93d54","#ad2456"],
+        neo3:       ["#de4a27","#ed7a30","#f7cf46","#1735e4","#0c259c"],
+        mixer1:     ["#fa9f29","#15cab1","#0a633d","#2f3030"],
+        mixer2:     ["#a3a948","#edb92e","#f85931","#ce1836","#009989"],
+        mixer3:     ["#aacad5","#c9e0e6","#e0e9ee","#dccda4","#99886e"],
+        mixer4:     ["#20663F","#259959","#ABD406","#FFD412","#FF821C"],
+        neon1:      ["#F7FD04","#F9B208","#F98404","#FC5404"],
+        neon2:      ["#F5F7B2","#1CC5DC","#890596","#CF0000"],
+        origami:    ["#01364f","#84231e","#247c86","#e8674d","#dfdbbe","#fdf4b4"],
+        retro1:     ["#0A1931","#185ADB","#FFC947","#EFEFEF"],
+        retro2:     ["#DDDDDD","#222831","#30475E","#F05454"],
+        retro3:     ["#111D5E","#C70039","#F37121","#C0E218"],
+        retro4:     ["#80A8A8","#909D9E","#A88C8C","#FF0D51"],
+        shell1:     ["#D6D0C0","#1C2328","#A1ABC4","#8A847A"],
+        shell2:     ["#2B1E1E","#6E3623","#292D2F","#E4F3F5","#D8BBA2"],
+        shell3:     ["#B9CDDD","#D4D5CE","#44596F","#495152","#7CADD6"],
+        sooph:      ["#d6c398","#cbabdb","#139485","#9e1710","#414952"],
+        sky:        ["#CFF09E","#A8DBA8","#79BD9A","#3B8686","#0B486B"],
+        tuscany1:   ["#B22222","#DAA520","#228B22","#000080"],
+        tuscany2:   ["#500342","#023b59","#f9efdd","#deaa70","#711308"],
+        tuscany3:   ["#b08653","#f5daba","#c9673c","#f2ab4e","#a1863b"],
+        vrolik1:    ["#4ca787","#183867","#ea8857","#442a37","#ffb747"],
+        vrolik2:    ["#d8c888","#f4edf3","#fa428c","#1900b4","#ecd07d"],
+        vrolik3:    ["#774f38","#e08e79","#f1d4af","#ece5ce","#c5e0dc"],
+        vrolik4:    ["#16E0F2","#080E10","#E69E02","#CB1BA3","#BA097F"],
+        vrolik5:    ["#FBCE03","#03F7EC","#4D0E98","#3A3838","#150326"]
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════════════════
+    let currentSketch = 'flow';
+    let currentPalette = 'tuscany1';
+    let seed = 1;
+
+    // per-sketch parameters
+    const PARAMS = {
+        flow:      { particles: 2500, steps: 200, noiseScale: 0.003, strokeW: 1.2, alpha: 40 },
+        strokes:   { strokes: 400, length: 180, width: 12, noiseScale: 0.002, alpha: 60 },
+        swirls:    { particles: 800, steps: 300, swirlStrength: 0.04, strokeW: 1.5, alpha: 50 },
+        flame:     { iterations: 120000, variations: 3, zoom: 1.2, alpha: 30 },
+        polylines: { lines: 60, points: 40, smoothness: 0.5, strokeW: 2.0, alpha: 150 }
+    };
+
+    // parameter UI definitions (min, max, step, label)
+    const PARAM_META = {
+        flow: {
+            particles:  [500, 8000, 100, 'Particle Count'],
+            steps:      [50, 600, 10, 'Trail Steps'],
+            noiseScale: [0.0005, 0.01, 0.0005, 'Noise Scale'],
+            strokeW:    [0.2, 4, 0.1, 'Stroke Weight'],
+            alpha:      [5, 200, 5, 'Stroke Alpha']
+        },
+        strokes: {
+            strokes:    [50, 1500, 25, 'Stroke Count'],
+            length:     [20, 400, 10, 'Stroke Length'],
+            width:      [1, 40, 1, 'Stroke Width'],
+            noiseScale: [0.0005, 0.01, 0.0005, 'Noise Scale'],
+            alpha:      [10, 255, 5, 'Stroke Alpha']
+        },
+        swirls: {
+            particles:     [100, 3000, 50, 'Particle Count'],
+            steps:         [50, 800, 25, 'Trail Steps'],
+            swirlStrength: [0.005, 0.15, 0.005, 'Swirl Strength'],
+            strokeW:       [0.2, 5, 0.1, 'Stroke Weight'],
+            alpha:         [5, 200, 5, 'Stroke Alpha']
+        },
+        flame: {
+            iterations: [20000, 400000, 10000, 'Iterations'],
+            variations: [1, 6, 1, 'Variation Count'],
+            zoom:       [0.3, 3, 0.1, 'Zoom'],
+            alpha:      [5, 100, 5, 'Point Alpha']
+        },
+        polylines: {
+            lines:      [10, 300, 5, 'Line Count'],
+            points:     [10, 150, 5, 'Points per Line'],
+            smoothness: [0, 1, 0.05, 'Smoothness'],
+            strokeW:    [0.5, 8, 0.1, 'Stroke Weight'],
+            alpha:      [30, 255, 5, 'Stroke Alpha']
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // UI SETUP
+    // ═══════════════════════════════════════════════════════════════════════
+    function populatePalettes() {
+        const sel = document.getElementById('palette-select');
+        Object.keys(PALETTES).sort().forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === currentPalette) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        renderSwatches();
+    }
+
+    function renderSwatches() {
+        const container = document.getElementById('palette-swatches');
+        container.innerHTML = '';
+        PALETTES[currentPalette].forEach(c => {
+            const d = document.createElement('div');
+            d.style.background = c;
+            container.appendChild(d);
+        });
+    }
+
+    function buildParamUI() {
+        const container = document.getElementById('param-container');
+        container.innerHTML = '';
+        const meta = PARAM_META[currentSketch];
+        const params = PARAMS[currentSketch];
+        Object.keys(meta).forEach(key => {
+            const [min, max, step, label] = meta[key];
+            const group = document.createElement('div');
+            group.className = 'control-group';
+            group.innerHTML = `
+                <label>${label}</label>
+                <div class="slider-container">
+                    <input type="range" id="p-${key}" min="${min}" max="${max}" step="${step}" value="${params[key]}">
+                    <span class="value-display" id="pv-${key}">${params[key]}</span>
+                </div>`;
+            container.appendChild(group);
+            const input = document.getElementById(`p-${key}`);
+            const display = document.getElementById(`pv-${key}`);
+            input.addEventListener('input', () => {
+                const v = parseFloat(input.value);
+                params[key] = v;
+                display.textContent = (step < 1) ? v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : v;
+            });
+            input.addEventListener('change', () => regenerate());
+        });
+    }
+
+    function switchSketch(name) {
+        currentSketch = name;
+        buildParamUI();
+        regenerate();
+    }
+
+    function switchPalette(name) {
+        currentPalette = name;
+        renderSwatches();
+        regenerate();
+    }
+
+    function updateSeed() {
+        const v = parseInt(document.getElementById('seed-input').value);
+        if (v >= 1) { seed = v; regenerate(); }
+    }
+    function previousSeed() { seed = Math.max(1, seed - 1); document.getElementById('seed-input').value = seed; regenerate(); }
+    function nextSeed() { seed += 1; document.getElementById('seed-input').value = seed; regenerate(); }
+    function randomSeedAndUpdate() {
+        seed = Math.floor(Math.random() * 99999) + 1;
+        document.getElementById('seed-input').value = seed;
+        regenerate();
+    }
+
+    function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // P5.JS
+    // ═══════════════════════════════════════════════════════════════════════
+    let p5canvas;
+    const CANVAS_SIZE = 900;
+
+    function setup() {
+        p5canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+        p5canvas.parent('canvas-container');
+        pixelDensity(1);
+        noLoop();
+        regenerate();
+    }
+
+    function regenerate() {
+        randomSeed(seed);
+        noiseSeed(seed);
+        const palette = PALETTES[currentPalette];
+        const bg = pickBackground(palette);
+        background(bg);
+        setStatus(`rendering ${currentSketch}…`);
+        // defer so status updates paint
+        setTimeout(() => {
+            const t0 = performance.now();
+            switch (currentSketch) {
+                case 'flow':      drawFlowField(palette); break;
+                case 'strokes':   drawStrokes(palette); break;
+                case 'swirls':    drawSwirls(palette); break;
+                case 'flame':     drawFlame(palette); break;
+                case 'polylines': drawPolylines(palette); break;
+            }
+            const ms = (performance.now() - t0).toFixed(0);
+            setStatus(`seed ${seed} · ${ms}ms`);
+        }, 10);
+    }
+
+    // pick a background from palette — prefer the lightest or darkest extreme
+    function pickBackground(palette) {
+        // find darkest and lightest by luminance
+        let darkest = palette[0], lightest = palette[0];
+        let dL = 999, lL = -1;
+        palette.forEach(c => {
+            const rgb = hexToRgb(c);
+            const lum = 0.299*rgb.r + 0.587*rgb.g + 0.114*rgb.b;
+            if (lum < dL) { dL = lum; darkest = c; }
+            if (lum > lL) { lL = lum; lightest = c; }
+        });
+        // Flame looks best on near-black. Others lean light.
+        if (currentSketch === 'flame') return darkest;
+        // if palette has a very light color, use it
+        if (lL > 200) return lightest;
+        return '#faf9f5';
+    }
+
+    function hexToRgb(hex) {
+        hex = hex.replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        return {
+            r: parseInt(hex.substr(0, 2), 16),
+            g: parseInt(hex.substr(2, 2), 16),
+            b: parseInt(hex.substr(4, 2), 16)
+        };
+    }
+
+    function pickColor(palette, bg) {
+        // avoid picking the background color
+        let c;
+        let tries = 0;
+        do {
+            c = palette[Math.floor(random(palette.length))];
+            tries++;
+        } while (c === bg && tries < 10);
+        return c;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 1. FLOW FIELD (Tyler Hobbs style)
+    // Particles seeded randomly, step along a Perlin-noise vector field.
+    // ═══════════════════════════════════════════════════════════════════════
+    function drawFlowField(palette) {
+        const p = PARAMS.flow;
+        const bg = pickBackground(palette);
+        strokeWeight(p.strokeW);
+        noFill();
+        for (let i = 0; i < p.particles; i++) {
+            let x = random(width);
+            let y = random(height);
+            const col = pickColor(palette, bg);
+            stroke(red(color(col)), green(color(col)), blue(color(col)), p.alpha);
+            beginShape();
+            for (let s = 0; s < p.steps; s++) {
+                const a = noise(x * p.noiseScale, y * p.noiseScale) * TWO_PI * 2;
+                vertex(x, y);
+                x += cos(a);
+                y += sin(a);
+                if (x < 0 || x > width || y < 0 || y > height) break;
+            }
+            endShape();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 2. PAINT STROKES — tapered, textured flow-field strokes
+    // Variable width along each stroke, with subtle jitter for texture.
+    // ═══════════════════════════════════════════════════════════════════════
+    function drawStrokes(palette) {
+        const p = PARAMS.strokes;
+        const bg = pickBackground(palette);
+        noStroke();
+        for (let i = 0; i < p.strokes; i++) {
+            let x = random(width);
+            let y = random(height);
+            const colHex = pickColor(palette, bg);
+            const c = color(colHex);
+            const baseW = p.width * random(0.5, 1.2);
+            for (let s = 0; s < p.length; s++) {
+                const a = noise(x * p.noiseScale, y * p.noiseScale, i * 0.1) * TWO_PI * 2;
+                // taper: full width in middle, thin at ends
+                const t = s / p.length;
+                const taper = sin(t * PI);
+                const w = baseW * taper;
+                // texture jitter
+                const jx = randomGaussian(0, 0.8);
+                const jy = randomGaussian(0, 0.8);
+                fill(red(c), green(c), blue(c), p.alpha);
+                ellipse(x + jx, y + jy, w, w);
+                x += cos(a) * 1.5;
+                y += sin(a) * 1.5;
+                if (x < -20 || x > width + 20 || y < -20 || y > height + 20) break;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 3. SWIRLS — vector field driven by rotation around attractors
+    // Inspired by Matt DesLauriers' approach referenced in aRtsy docs.
+    // Field angle = atan2 around center + radial tangent + noise.
+    // ═══════════════════════════════════════════════════════════════════════
+    function drawSwirls(palette) {
+        const p = PARAMS.swirls;
+        const bg = pickBackground(palette);
+        // pick 2-4 swirl centers
+        const nCenters = Math.floor(random(2, 5));
+        const centers = [];
+        for (let i = 0; i < nCenters; i++) {
+            centers.push({
+                x: random(width * 0.2, width * 0.8),
+                y: random(height * 0.2, height * 0.8),
+                dir: random() > 0.5 ? 1 : -1
+            });
+        }
+        strokeWeight(p.strokeW);
+        noFill();
+        for (let i = 0; i < p.particles; i++) {
+            let x = random(width);
+            let y = random(height);
+            const c = color(pickColor(palette, bg));
+            stroke(red(c), green(c), blue(c), p.alpha);
+            // Velocity with inertia — gives the "painterly" swirl look
+            let vx = 0, vy = 0;
+            for (let s = 0; s < p.steps; s++) {
+                // sum rotation from all centers
+                let fx = 0, fy = 0;
+                centers.forEach(ctr => {
+                    const dx = x - ctr.x;
+                    const dy = y - ctr.y;
+                    const r = sqrt(dx*dx + dy*dy) + 1;
+                    // tangent direction, falls off with distance
+                    const strength = ctr.dir * p.swirlStrength * 200 / r;
+                    fx += -dy / r * strength;
+                    fy += dx / r * strength;
+                });
+                // add noise for organic variation
+                const n = noise(x * 0.004, y * 0.004) * TWO_PI;
+                fx += cos(n) * 0.3;
+                fy += sin(n) * 0.3;
+                vx = vx * 0.92 + fx;
+                vy = vy * 0.92 + fy;
+                line(x, y, x + vx, y + vy);
+                x += vx;
+                y += vy;
+                if (x < 0 || x > width || y < 0 || y > height) break;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 4. FRACTAL FLAME (Draves & Reckase, 2003)
+    // IFS with nonlinear variations, chaos-game style accumulation.
+    // ═══════════════════════════════════════════════════════════════════════
+    function drawFlame(palette) {
+        const p = PARAMS.flame;
+        const bg = pickBackground(palette);
+
+        // Build N affine + variation functions
+        const N = Math.floor(p.variations);
+        const fns = [];
+        for (let i = 0; i < N; i++) {
+            fns.push({
+                // affine
+                a: random(-1, 1), b: random(-1, 1), c: random(-0.5, 0.5),
+                d: random(-1, 1), e: random(-1, 1), f: random(-0.5, 0.5),
+                // variation type 0-4
+                v: Math.floor(random(5)),
+                // color index 0..1
+                ci: random(),
+                weight: random(0.3, 1)
+            });
+        }
+        // normalize weights
+        const totalW = fns.reduce((s, f) => s + f.weight, 0);
+        fns.forEach(f => f.weight /= totalW);
+
+        // chaos game
+        let x = random(-1, 1), y = random(-1, 1);
+        let ci = 0; // color index, smoothed over iterations
+        const cx = width / 2, cy = height / 2;
+        const scale = (width / 4) * p.zoom;
+        noStroke();
+
+        // Pre-resolve palette colors to rgb
+        const pRgb = palette.map(c => {
+            const col = color(c);
+            return { r: red(col), g: green(col), b: blue(col) };
+        });
+
+        for (let i = 0; i < p.iterations; i++) {
+            // pick function by weight
+            let r = random();
+            let chosen = fns[0];
+            for (const f of fns) {
+                r -= f.weight;
+                if (r <= 0) { chosen = f; break; }
+            }
+            // affine transform
+            let nx = chosen.a * x + chosen.b * y + chosen.c;
+            let ny = chosen.d * x + chosen.e * y + chosen.f;
+            // nonlinear variation
+            const rr = nx * nx + ny * ny;
+            const r_ = sqrt(rr) + 1e-9;
+            const theta = Math.atan2(nx, ny);
+            switch (chosen.v) {
+                case 0: break; // linear
+                case 1: nx = sin(nx); ny = sin(ny); break; // sinusoidal
+                case 2: nx = nx / rr; ny = ny / rr; break; // spherical
+                case 3: { // swirl
+                    const sx = sin(rr), co = cos(rr);
+                    const px = nx * sx - ny * co;
+                    const py = nx * co + ny * sx;
+                    nx = px; ny = py; break;
+                }
+                case 4: { // horseshoe
+                    const px = (nx - ny) * (nx + ny) / r_;
+                    const py = 2 * nx * ny / r_;
+                    nx = px; ny = py; break;
+                }
+            }
+            x = nx; y = ny;
+            ci = (ci + chosen.ci) * 0.5;
+
+            if (i < 20) continue; // skip initial points
+
+            const sx = cx + x * scale;
+            const sy = cy + y * scale;
+            if (sx < 0 || sx >= width || sy < 0 || sy >= height) continue;
+
+            const idx = Math.min(pRgb.length - 1, Math.floor(ci * pRgb.length));
+            const c = pRgb[idx];
+            fill(c.r, c.g, c.b, p.alpha);
+            rect(sx, sy, 1, 1);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 5. POLYLINES — connected points drawn per color, with noise perturbation
+    // Mirrors aRtsy's approach: for each color, generate a path and draw it
+    // as a smoothed polygon with colored fill + dark outline.
+    // ═══════════════════════════════════════════════════════════════════════
+    function drawPolylines(palette) {
+        const p = PARAMS.polylines;
+        const bg = pickBackground(palette);
+        // darkest palette color for outlines
+        let darkest = palette[0]; let dL = 999;
+        palette.forEach(c => {
+            const rgb = hexToRgb(c);
+            const L = 0.299*rgb.r + 0.587*rgb.g + 0.114*rgb.b;
+            if (L < dL) { dL = L; darkest = c; }
+        });
+
+        for (let i = 0; i < p.lines; i++) {
+            const colHex = pickColor(palette, bg);
+            const c = color(colHex);
+            // Build a path of points that wanders with noise
+            const pts = [];
+            let x = random(width);
+            let y = random(height);
+            const seedX = random(1000), seedY = random(1000);
+            for (let j = 0; j < p.points; j++) {
+                const t = j / p.points;
+                const nx = noise(seedX + t * 3) * width;
+                const ny = noise(seedY + t * 3) * height;
+                // blend between pure noise and the wandering walk
+                x = lerp(x, nx, p.smoothness);
+                y = lerp(y, ny, p.smoothness);
+                pts.push({ x, y });
+                x += randomGaussian(0, 30);
+                y += randomGaussian(0, 30);
+            }
+            // Fill as polygon
+            fill(red(c), green(c), blue(c), p.alpha);
+            stroke(red(color(darkest)), green(color(darkest)), blue(color(darkest)), 200);
+            strokeWeight(p.strokeW);
+            beginShape();
+            pts.forEach(pt => curveVertex(pt.x, pt.y));
+            // close smoothly
+            if (pts.length > 2) {
+                curveVertex(pts[0].x, pts[0].y);
+                curveVertex(pts[1].x, pts[1].y);
+            }
+            endShape(CLOSE);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SAVE
+    // ═══════════════════════════════════════════════════════════════════════
+    function downloadPNG() {
+        saveCanvas(p5canvas, `artsy_${currentSketch}_${currentPalette}_seed${seed}`, 'png');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════════════════
+    window.addEventListener('load', () => {
+        populatePalettes();
+        buildParamUI();
+    });
+    </script>
+</body>
+</html>

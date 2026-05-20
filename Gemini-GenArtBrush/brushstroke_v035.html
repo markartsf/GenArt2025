@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Brushstroke: Thick Enfantines Ribbons</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- STRICT VERSION LOCKING -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background-color: #f4f1ea; }
+        canvas { display: block; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        input[type="file"] { display: none; }
+        .custom-file-upload {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="antialiased font-sans">
+
+    <!-- === SAFARI-SAFE NATIVE AUDIO ELEMENT === -->
+    <audio id="nativeAudio" style="display:none;"></audio>
+
+    <!-- === UI OVERLAY === -->
+    <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4 z-10 glass-panel px-6 py-3 rounded-full shadow-lg items-center">
+        <label class="custom-file-upload px-4 py-2 rounded-full font-medium text-gray-800 text-sm hover:bg-white/60">
+            <input type="file" id="audioUpload" accept="audio/*" />
+            <span id="uploadLabel">1. Load Ambient Track</span>
+        </label>
+        <div class="w-px h-6 bg-gray-400 opacity-50"></div>
+        <button id="playBtn" class="px-4 py-2 rounded-full font-medium text-gray-800 text-sm hidden hover:bg-white/60 transition-colors">2. Play</button>
+        <button id="clearBtn" class="px-4 py-2 rounded-full font-medium text-gray-800 text-sm hover:bg-white/60 transition-colors">Clear Canvas</button>
+    </div>
+
+    <script>
+        let fft, isPlaying = false, isLoaded = false;
+        
+        // Native HTML5 Audio Element for Safari compatibility
+        const nativeAudio = document.getElementById('nativeAudio');
+        let audioSourceNode; // Used to pipe audio to p5.FFT
+        
+        const palette = ["#1b3a5c", "#3a5f70", "#668c81", "#c9a653", "#825d7b", "#4a2c52", "#d98c52"];
+        
+        let ribbons = [];
+        const NUM_RIBBONS = 3; 
+        
+        // VISUAL RECOVERY: Increased to 12 strands for a dense, thick bundle
+        const STRANDS_PER_RIBBON = 12; 
+
+        document.getElementById('audioUpload').addEventListener('change', handleFileUpload);
+        document.getElementById('playBtn').addEventListener('click', togglePlay);
+        document.getElementById('clearBtn').addEventListener('click', clearCanvas);
+
+        function clearCanvas() {
+            blendMode(BLEND); 
+            background('#f4f1ea');
+            blendMode(MULTIPLY); 
+        }
+
+        // === SAFARI AUDIO ENGINE ===
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('uploadLabel').innerText = "Loading...";
+            
+            const objectURL = URL.createObjectURL(file);
+            nativeAudio.src = objectURL;
+            nativeAudio.load();
+            
+            nativeAudio.oncanplaythrough = () => {
+                isLoaded = true;
+                document.getElementById('uploadLabel').innerText = "Track Loaded";
+                document.getElementById('playBtn').classList.remove('hidden');
+            };
+        }
+
+        function togglePlay() {
+            if (!isLoaded) return;
+            
+            const btn = document.getElementById('playBtn');
+
+            if (nativeAudio.paused) {
+                if (getAudioContext().state !== 'running') {
+                    getAudioContext().resume();
+                }
+
+                if (!audioSourceNode) {
+                    let audioCtx = getAudioContext();
+                    audioSourceNode = audioCtx.createMediaElementSource(nativeAudio);
+                    audioSourceNode.connect(p5.soundOut); 
+                }
+
+                nativeAudio.play().then(() => {
+                    isPlaying = true;
+                    btn.innerText = "Pause Track";
+                }).catch(e => console.error("Safari blocked playback:", e));
+                
+            } else {
+                nativeAudio.pause();
+                isPlaying = false;
+                btn.innerText = "Play Track";
+            }
+        }
+
+        nativeAudio.addEventListener('ended', () => {
+            isPlaying = false;
+            document.getElementById('playBtn').innerText = "Play Track";
+        });
+
+        // === P5.JS LIFECYCLE ===
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            angleMode(RADIANS);
+            fft = new p5.FFT(0.85, 128); 
+            for(let i = 0; i < NUM_RIBBONS; i++) initRibbon(i);
+            clearCanvas();
+        }
+
+        function initRibbon(index) {
+            let ribbon = {
+                x: random(width), y: random(height),
+                seed: random(10000),
+                flowSpeed: random(0.001, 0.0025),
+                strands: []
+            };
+            for (let j = 0; j < STRANDS_PER_RIBBON; j++) {
+                ribbon.strands.push({
+                    offset: map(j, 0, STRANDS_PER_RIBBON - 1, -1, 1),
+                    color: color(random(palette)),
+                    wiggleSeed: random(1000),
+                    lastX: ribbon.x, lastY: ribbon.y
+                });
+            }
+            ribbons[index] = ribbon;
+        }
+
+        // --- STABLE GRAIN ENGINE ---
+        function drawTexturedStrand(lx, ly, nx, ny, weight, c, type) {
+            let d = dist(lx, ly, nx, ny);
+            let steps = d * 2; 
+            
+            let opacity = type === 'charcoal' ? 25 : 12;
+            c.setAlpha(opacity);
+            stroke(c);
+            
+            for(let i = 0; i <= steps; i++) {
+                let t = i / steps;
+                let px = lerp(lx, nx, t);
+                let py = lerp(ly, ny, t);
+                
+                let numGrains = Math.floor(weight * 0.5);
+                for(let g = 0; numGrains > 0 && g < numGrains; g++) {
+                    let angle = random(TWO_PI);
+                    let r = pow(random(), 2) * (weight * 0.5); 
+                    
+                    let gx = px + cos(angle) * r;
+                    let gy = py + sin(angle) * r;
+                    
+                    strokeWeight(random(0.5, 1.5));
+                    point(gx, gy);
+                }
+            }
+        }
+
+        function draw() {
+            if (!isPlaying) return;
+            fft.analyze(); 
+            let bass = fft.getEnergy("bass"), lowMid = fft.getEnergy("lowMid"), treble = fft.getEnergy("treble");
+            let activeEnergy = Math.max(bass, lowMid);
+
+            ribbons.forEach((r) => {
+                let angle = noise(r.seed + frameCount * r.flowSpeed) * TWO_PI * 4;
+                let speed = 1.5 + map(treble, 0, 255, 0, 3);
+                
+                r.x += cos(angle) * speed;
+                r.y += sin(angle) * speed;
+
+                let wrapped = false;
+                if (r.x > width + 100) { r.x = -100; wrapped = true; }
+                if (r.x < -100) { r.x = width + 100; wrapped = true; }
+                if (r.y > height + 100) { r.y = -100; wrapped = true; }
+                if (r.y < -100) { r.y = height + 100; wrapped = true; }
+
+                let perpAngle = angle + HALF_PI;
+                
+                // VISUAL RECOVERY: Tightly packed spread, intensely thick strands
+                let ribbonSpread = map(activeEnergy, 60, 255, 10, 45); 
+                let strandWeight = map(activeEnergy, 60, 255, 15, 70); 
+
+                r.strands.forEach((s) => {
+                    // VISUAL RECOVERY: Reduced wiggle to keep the strands unified as one brush
+                    let wiggle = (noise(s.wiggleSeed + frameCount * 0.02) - 0.5) * 5;
+                    
+                    let targetX = r.x + cos(perpAngle) * (s.offset * ribbonSpread + wiggle);
+                    let targetY = r.y + sin(perpAngle) * (s.offset * ribbonSpread + wiggle);
+
+                    let curX = lerp(s.lastX || targetX, targetX, 0.2);
+                    let curY = lerp(s.lastY || targetY, targetY, 0.2);
+
+                    if (activeEnergy > 75 && !wrapped) {
+                        drawTexturedStrand(s.lastX, s.lastY, curX, curY, strandWeight, s.color, 'fibrous');
+                    }
+
+                    s.lastX = curX;
+                    s.lastY = curY;
+                    if (wrapped) { s.lastX = targetX; s.lastY = targetY; }
+                });
+            });
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+            clearCanvas();
+        }
+    </script>
+</body>
+</html>

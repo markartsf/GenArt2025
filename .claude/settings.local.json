@@ -60,7 +60,20 @@
       "Bash(\"/Applications/Houdini/Houdini21.0.631/Frameworks/Houdini.framework/Versions/21.0/Resources/bin/hython\" /Users/markgould/Documents/GenArt2025/houdini-particles/bake_particles.py)",
       "Bash(open /Users/markgould/Documents/GenArt2025/houdini-particles/music_particles_v2.hip)",
       "Bash(\"/Applications/Blender.app/Contents/MacOS/Blender\" -b ~/Documents/GenArt2025/generative_art.blend -o ~/Documents/GenArt2025/gyroid_cycles_render -F PNG -f 1)",
-      "Bash(ls -la ~/Documents/GenArt2025/gyroid_cycles_render*)"
+      "Bash(ls -la ~/Documents/GenArt2025/gyroid_cycles_render*)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(curl -s \"https://api.anthropic.com/v1/design/h/D1AesofoPe1gsvpOS-60hg?open_file=Ember.html\")",
+      "Bash(gunzip)",
+      "Bash(curl -sL --compressed \"https://api.anthropic.com/v1/design/h/D1AesofoPe1gsvpOS-60hg?open_file=Ember.html\" -o /tmp/ember_design.html)",
+      "Read(//tmp/**)",
+      "Read(//private/tmp/**)",
+      "Bash(cp \"/Users/markgould/.claude/projects/-Users-markgould-Documents-GenArt2025/104bc746-bffb-4ec8-9e62-091e13db6cad/tool-results/webfetch-1776484123449-sxajoo.bin\" /tmp/ember_raw.gz)",
+      "Bash(gunzip -c /tmp/ember_raw.gz)",
+      "Bash(sips -s format jpeg \"/Users/markgould/Pictures/Photos Library.photoslibrary/originals/D/D7EEFA03-0525-4195-A887-E2D6612510DB.heic\" --out /tmp/photo1.jpg)",
+      "Bash(sips -s format jpeg \"/Users/markgould/Pictures/Photos Library.photoslibrary/originals/B/BE4C58B3-A4C9-4BC8-929A-2A39FF71BE21.heic\" --out /tmp/photo2.jpg)",
+      "Bash(magick \"/Users/markgould/Pictures/Photos Library.photoslibrary/originals/D/D7EEFA03-0525-4195-A887-E2D6612510DB.heic\" /tmp/photo1.jpg)",
+      "Bash(magick \"/Users/markgould/Pictures/Photos Library.photoslibrary/originals/B/BE4C58B3-A4C9-4BC8-929A-2A39FF71BE21.heic\" /tmp/photo2.jpg)",
+      "Bash(ffmpeg -i \"/Users/markgould/Pictures/Photos Library.photoslibrary/originals/D/D7EEFA03-0525-4195-A887-E2D6612510DB.heic\" /tmp/photo1.jpg)"
     ],
     "deny": [],
     "ask": []
