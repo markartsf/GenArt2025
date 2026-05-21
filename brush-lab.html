@@ -3,31 +3,44 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Brush Lab — Enfantines Ribbon (v0)</title>
+<title>Brush Lab — Enfantines Ribbon (v1)</title>
 
 <!--
-  BRUSH LAB v0  ·  isolated, static, no audio
+  BRUSH LAB v1  ·  isolated, static, no audio
   ----------------------------------------------------------------------------
   Purpose: nail the "multicolour comb riding a spline" look in isolation,
   BEFORE wiring it into the audio-reactive performance app.
 
-  CORE IDEA (the part the agents kept getting wrong):
-    A ribbon is NOT a brush. It is a GENERATOR. It samples a spline spine,
-    and at each arc-length step places ONE individually-coloured textured
-    stamp ("tooth"), oriented to the path normal. Multicolour = many
-    single-colour stamps, not one brush emitting many colours.
+  ARCHITECTURE (per SPEC.md) — station-based generator:
+    A ribbon is a GENERATOR, not a brush.
+      - Spine     : a Catmull-Rom spline through a few control points.
+      - Stations  : points resampled along the spine at fixed ARC LENGTH
+                    (= Spacing). One tooth per station.
+      - Tooth     : ONE short textured stroke drawn PERPENDICULAR to the spine
+                    (along the path normal), in ONE palette colour.
+      - Comb      : the emergent look of many perpendicular teeth packed along
+                    the spine.
+      - Envelope  : tooth length tapers toward the spine's ends.
 
-  All p5.brush-specific calls are quarantined in the three helpers marked
-  >>> P5.BRUSH ADAPTER <<< below. If a v2 API name/signature is off in your
-  installed version, fix it THERE — the generator architecture stays correct.
+    WHY station placement is OUR job, not the library's: p5.brush's stamp
+    engine drags a tip ALONG a path, so brush.spline() can only make strokes
+    PARALLEL to the spine. Teeth that CROSS the spine at a right angle must be
+    placed by the generator and drawn as individual strokes. p5.brush still
+    owns each tooth's texture/pressure via brush.line() with a chosen brush.
 
-  Run locally (Web Audio etc. later needs this anyway):
-    python3 -m http.server 8080   →   http://localhost:8080/brush-lab.html
+    Colour respects SPEC §0: each brush.set() call is ONE colour. Multicolour
+    = consecutive stations cycle through the palette. Never one brush, many
+    colours.
 
-  CDN: p5 2.x + p5.brush 2.x UMD bundle. Pin exact versions once confirmed.
+  All p5.brush-specific calls are quarantined in the >>> P5.BRUSH ADAPTER <<<
+  block. If a v2 API name/signature is off, fix it THERE only.
+
+  Run:  served on :8080  ->  http://localhost:8080/brush-lab.html
+
+  CDN: p5 2.x + p5.brush 2.1.9-beta (p5 build, needs WEBGL canvas).
 -->
 <script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/p5.brush@2/dist/p5.brush.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5.brush@2.1.9-beta/dist/p5.brush.min.js"></script>
 
 <style>
   :root { --panel: rgba(20,20,24,0.86); --ink:#f4efe7; --muted:#9a948c; --acc:#e9c46a; }
@@ -72,7 +85,7 @@
 
 <div id="panel">
   <h1>Brush Lab</h1>
-  <p class="sub">Enfantines Ribbon · v0</p>
+  <p class="sub">Enfantines Ribbon · v1</p>
 
   <div class="group">
     <div class="row"><label>Ribbons</label><span class="val" id="v_ribbons">3</span></div>
@@ -92,7 +105,7 @@
   </div>
   <div class="group">
     <div class="row"><label>Stroke weight</label><span class="val" id="v_weight">1.4</span></div>
-    <input type="range" id="weight" min="0.3" max="5" step="0.1" value="1.4">
+    <input type="range" id="weight" min="0.3" max="15" step="0.1" value="1.4">
   </div>
   <div class="group">
     <div class="row"><label>Angle jitter (°)</label><span class="val" id="v_anglej">8</span></div>
@@ -173,8 +186,7 @@ function discoverBrushes(){
       if (Array.isArray(b) && b.length) return b;
     }
   } catch(e){ /* fall through */ }
-  // fallback list — adjust to match your build's brush.box() if needed
-  return ['marker','marker2','pen','rotring','2B','HB','cpencil','charcoal','spray'];
+  return ['marker','pen','rotring','2B','HB','2H','cpencil','pastel','crayon','charcoal','spray'];
 }
 
 // 2. set the current brush to a given colour + weight
@@ -182,7 +194,8 @@ function useBrush(name, hex, weight){
   brush.set(name, hex, weight);
 }
 
-// 3. draw one textured stamp (a "tooth") from a→b in SCREEN coords
+// 3. draw ONE textured tooth: a short stroke from a→b in SCREEN coords.
+//    The generator passes endpoints already oriented along the path normal.
 function stamp(ax, ay, bx, by){
   brush.line(ax, ay, bx, by);
 }
@@ -191,7 +204,7 @@ function stamp(ax, ay, bx, by){
 // ============================================================================
 
 
-// ---- spline math (Catmull-Rom) : OUR code, not the library's ---------------
+// ---- spline math (Catmull-Rom) : OUR code — the spine geometry -------------
 function catmullRom(p0,p1,p2,p3,t){
   const t2=t*t, t3=t2*t;
   return {
@@ -209,11 +222,16 @@ function samplePolyline(pts, stepsPer=24){
   out.push(pts[pts.length-1]);
   return out;
 }
-// resample a polyline at fixed arc-length spacing, returning {x,y,nx,ny,u}
-function placeTeeth(poly, spacing){
-  const teeth=[]; let acc=0, total=0;
+// resample a polyline at fixed ARC-LENGTH spacing → Stations {x,y,nx,ny,u}
+//   nx,ny = unit NORMAL (perpendicular to the spine tangent)
+//   u     = 0..1 position along the whole spine (for the width envelope)
+function placeStations(poly, spacing){
+  const stations=[]; let total=0;
   const segLen=[];
-  for(let i=1;i<poly.length;i++){ const d=dist(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y); segLen.push(d); total+=d; }
+  for(let i=1;i<poly.length;i++){
+    const d=dist(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y);
+    segLen.push(d); total+=d;
+  }
   let target=0, run=0;
   for(let i=1;i<poly.length;i++){
     const a=poly[i-1], b=poly[i], L=segLen[i-1]||0.0001;
@@ -221,12 +239,12 @@ function placeTeeth(poly, spacing){
       const f=(target-run)/L;
       const x=a.x+(b.x-a.x)*f, y=a.y+(b.y-a.y)*f;
       let tx=b.x-a.x, ty=b.y-a.y; const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m;
-      teeth.push({x,y,nx:-ty,ny:tx,u:total?target/total:0}); // normal = perp to tangent
+      stations.push({x,y,nx:-ty,ny:tx,u:total?target/total:0}); // normal = perp to tangent
       target+=spacing;
     }
     run+=L;
   }
-  return teeth;
+  return stations;
 }
 
 // ---- ribbon generation -----------------------------------------------------
@@ -253,26 +271,27 @@ function pickColor(i, ribbonOffset){
 }
 
 function drawRibbon(ribbonIndex){
-  const cps=makeControlPoints(P.ctrl);
-  const poly=samplePolyline(cps);
-  const teeth=placeTeeth(poly,P.spacing);
+  const cps  = makeControlPoints(P.ctrl);
+  const poly = samplePolyline(cps);
+  const stations = placeStations(poly, P.spacing);
 
   if(P.drawspine){
-    useBrush(currentBrush(), '#3a3a3a', 0.5);
+    useBrush(currentBrush(), '#7a7a72', 0.5);
     for(let i=1;i<poly.length;i+=2) stamp(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y);
   }
 
-  for(let i=0;i<teeth.length;i++){
-    const t=teeth[i];
-    // width envelope: taper toward both ends of the ribbon
-    const env=1-P.taper*Math.pow(Math.abs(t.u*2-1),1.6);
+  // ONE tooth per station — a short stroke crossing the spine at the normal
+  for(let i=0;i<stations.length;i++){
+    const s=stations[i];
+    // width envelope: taper tooth length toward both ends of the ribbon
+    const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
     const halfLen=(P.width*0.5)*env*(1-random(0,P.lenj));
-    // jitter the tooth angle off the exact normal
+    // jitter the tooth angle off the exact normal (0 = exact right angle)
     const j=radians(random(-P.anglej,P.anglej));
-    const nx=t.nx*cos(j)-t.ny*sin(j);
-    const ny=t.nx*sin(j)+t.ny*cos(j);
-    const ax=t.x-nx*halfLen, ay=t.y-ny*halfLen;
-    const bx=t.x+nx*halfLen, by=t.y+ny*halfLen;
+    const nx=s.nx*cos(j)-s.ny*sin(j);
+    const ny=s.nx*sin(j)+s.ny*cos(j);
+    const ax=s.x-nx*halfLen, ay=s.y-ny*halfLen;
+    const bx=s.x+nx*halfLen, by=s.y+ny*halfLen;
     useBrush(currentBrush(), pickColor(i,ribbonIndex*3), P.weight);
     stamp(ax,ay,bx,by);
   }
@@ -288,17 +307,20 @@ function setup(){
   const c=createCanvas(min(windowWidth-340,1100), min(windowHeight-40,900), WEBGL);
   c.parent('canvas-holder');
   pixelDensity(2);
+  try { if (typeof brush.load==='function') brush.load(); } catch(e){}
   try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
   try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
   availableBrushes = discoverBrushes();
   populateBrushSelect();
   buildSwatches();
   noLoop();
+  wireUI();          // wire controls here — p5 is ready, so redraw() is safe
   regenerate(seed);
 }
 
 function draw(){
   randomSeed(seed); noiseSeed(seed);          // reproducible per seed
+  try { if (typeof brush.seed==='function') brush.seed(seed); } catch(e){}
   background(P.bg);
   push();
   translate(-width/2,-height/2);              // WEBGL origin → top-left screen coords
@@ -333,7 +355,7 @@ function buildSwatches(){
   });
 }
 
-window.addEventListener('DOMContentLoaded',()=>{
+function wireUI(){
   bindSlider('ribbons','ribbons'); bindSlider('ctrl','ctrl');
   bindSlider('spacing','spacing'); bindSlider('width','width');
   bindSlider('weight','weight',v=>v.toFixed(1)); bindSlider('anglej','anglej');
@@ -355,7 +377,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('drawspine').checked=P.drawspine;
     buildSwatches(); redraw();
   });
-});
+}
 
 function windowResized(){
   resizeCanvas(min(windowWidth-340,1100), min(windowHeight-40,900));
