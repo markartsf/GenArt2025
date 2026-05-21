@@ -24,12 +24,14 @@ Three layers, kept deliberately separate so we never debug all three at once:
 
 | Layer | Question it answers | Owned by | Status |
 |---|---|---|---|
-| **Form** | Where do marks go and which way do they point? | our generator code | v0 lab — *active* |
+| **Form** | Where do marks go and which way do they point? | Generators (our code) | v0 lab — *active* |
 | **Pigment** | What happens where marks overlap in colour? | p5.blender / Spectral.js | milestone 2 |
-| **Performance** | How does sound move the parameters over time? | audio analyser | milestone 3 |
+| **Performance** | How does sound move parameters over time? | audio analyser → Composition | milestone 3 |
 
 Build and tune each in isolation, then port. Never wire two unfinished layers
-together.
+together. (For the *object* model — Brush / Generator / Preset / Composition —
+see §1.5; the three layers above are about *what we build when*, the four tiers
+are about *how the app is structured*.)
 
 ---
 
@@ -37,12 +39,12 @@ together.
 
 Read top-to-bottom; each term builds on the one above.
 
-- **Sketch** — a finished piece. Composes one or more Generators over a Ground.
 - **Ground** — the background field: a flat colour, a Wash, or Field Marks.
 - **Generator** — a system that places many Brush marks into one composite form.
   (The Ribbon is one type; see §3 for the family.)
-- **Spine** — the invisible guiding path of a Generator. A spline. *Not drawn*
-  unless debugging (the "Draw spine" toggle).
+- **Spine** — the guiding path of a Generator. A spline. Optionally rendered as
+  a **Drawn Spine**: a solid stroke along the path with its own weight control
+  (default ~5–8pt black), independent of the active Brush. See §1.5 decision 3.
 - **Control Point** — one of the handful of anchors the Spine curves through.
   Few points = lazy open curve; many = busier, more folded path.
 - **Station** — a point placed at a fixed interval (Spacing) *along* the Spine.
@@ -69,6 +71,66 @@ Read top-to-bottom; each term builds on the one above.
   (blue + yellow → green), via p5.blender. *Not* RGB alpha layering.
 - **Mask Buffer** — the off-screen shape the blend shader paints into. (See
   Alejandro's notes; we adopt his approach rather than reinvent it.)
+  > **Open question (defer to m2):** v1 noted a possible p5.brush clipping/
+  > masking limitation. Verify whether it affects pigment-blend fills before
+  > committing to p5.blender. If real, alternatives: Spectral.js direct, or a
+  > custom shader. The frozen `archive/brushstroke-v1` branch holds the v1 code
+  > if we need to reproduce the bug.
+
+---
+
+## 1.5 The object model — the four tiers (READ THIS)
+
+The single most important structure in the app. Every screen, save file, and
+audio mapping inherits from it. The word **"style"** is retired — it was
+overloaded across two of these tiers and caused the spray-on-the-ribbon bug.
+
+| Tier | Name | What it is | Lives where |
+|---|---|---|---|
+| 1 | **Brush** | Material of *one* mark: pen, rotring, marker, spray | inside a Generator |
+| 2 | **Generator** | A system placing many Brush marks into one composite form (Ribbon, Burst, Bloom, Fan, Field Marks) | the engine |
+| 3 | **Preset** | A tuned, *named, saved* instance of one Generator (params + palette + allowed Brush) | Brush Editor produces these |
+| 4 | **Composition** | Multiple Presets staged together with audio mappings + behaviours — the finished audio-driven piece | Performance page builds these |
+
+**The golden rule that fixes the bug:**
+> A **Generator declares which Brushes it is allowed to use.** Brush choice is a
+> *property of the Generator*, never a global menu applied to everything.
+
+So the Ribbon Generator declares `allowedBrushes: [pen, marker]` — and spray is
+simply never offered for it. Other Generators declare their own (a Burst might
+allow spray; Field Marks might use rotring). This is why "apply spray as a style
+to the multicolour ribbon" was nonsense: it tried to override a Generator's
+material constraint from outside.
+
+**The handoff that connects the two pages:**
+> The **Preset is the handoff object.** Brush Editor *produces* Presets;
+> the Composition page *consumes* them.
+
+This is the tier that was missing in v1, which is why the editor and performance
+felt disconnected. You tune a Generator → name and save it as a Preset → the
+Composition page stages Presets together. Editor → Preset → Composition.
+
+### Decisions locked this session
+1. **Brush constraints are per-Generator** (the golden rule above). The Ribbon
+   allows pen + marker only.
+2. **Stroke-weight variability applies to all Brushes, one shared control,
+   range 0–15.** It is a general feature, not per-Brush. The range runs up to 15
+   specifically so pen and rotring read well (they didn't show variability at
+   ~10); every Brush sharing that same range is fine and simplest. *Spray:* left
+   in for now under the same control — exclude it later only if it looks bad by
+   eye. Don't pre-emptively special-case anything.
+3. **The Spine is a solid Drawn line with its own weight, independent of the
+   active Brush. No dotted/dashed option.**
+   - Default: solid ~5–8pt black, with a thickness control.
+   - Dropping dotted keeps this trivial to build — it's just "a stroke along the
+     path with a weight slider."
+   - *Possible extension (parked):* let the Drawn Spine use any Brush. Not now.
+   - (v1 bug being fixed: spine inherited the active Brush, so it only showed
+     under spray. It must NOT inherit the active Brush.)
+4. **Presets save as JSON, not browser localStorage.** localStorage is
+   non-portable and can vanish; JSON files are portable, version-controllable,
+   and can live in the repo + travel between machines. Build the Brush Editor's
+   save/load on JSON from the start.
 
 ---
 
@@ -119,7 +181,7 @@ The Ribbon is built first; the rest are variations on "Stations along a path."
 - **Registration Marks** — the small `+` crosses and dotted frame border;
   compositional scaffolding, drawn last.
 
-A finished Sketch usually = Ground + Wash + one or two hero Generators
+A finished Composition usually = Ground + Wash + one or two hero Generators
 (Ribbon / Bloom) + scattered Field Marks + Registration Marks on top.
 
 ---
@@ -160,8 +222,9 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
 ## 6. Glossary (quick reference)
 
 Spine · Control Point · Station · Tangent · Normal · Tooth (Stamp) · Comb ·
-Width Envelope · Generator · Sketch · Ground · Wash · Field Marks · Flow Field ·
-Brush · Brush Weight · Palette · Pigment Blend · Mask Buffer · Registration Marks.
+Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field ·
+Brush · Brush Weight · Palette · Preset · Composition · Pigment Blend ·
+Mask Buffer · Registration Marks.
 
 *If a term isn't here and we find ourselves needing it, add it — the value of
 this file is that one word always means one thing.*
