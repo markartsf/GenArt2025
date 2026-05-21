@@ -113,6 +113,16 @@ Composition page stages Presets together. Editor → Preset → Composition.
 ### Decisions locked this session
 1. **Brush constraints are per-Generator** (the golden rule above). The Ribbon
    allows pen + marker only.
+
+   *Addendum:* A Generator's `allowedBrushes` narrows that Generator's view of
+   the material set; it never removes a Brush from the system. The full set of
+   Brushes discovered from p5.brush always exists in the build and remains
+   reachable. A Generator may declare `allowedBrushes` as an array (a
+   whitelist) or omit it / set it to `null` (no constraint — full discovered
+   set). Ribbon declares `['pen','marker']` per decision 1; Burst is
+   unconstrained. Rationale: Brush is tier 1 (material), Generator is tier 2
+   (form) — a tier-2 object may constrain its own material choices but must
+   not delete a tier-1 material from the system.
 2. **Stroke-weight variability applies to all Brushes, one shared control,
    range 0–15.** It is a general feature, not per-Brush. The range runs up to 15
    specifically so pen and rotring read well (they didn't show variability at

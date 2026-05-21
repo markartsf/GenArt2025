@@ -88,7 +88,11 @@
   <p class="sub">Enfantines Ribbon · v1</p>
 
   <div class="group">
-    <div class="row"><label>Ribbons</label><span class="val" id="v_ribbons">3</span></div>
+    <div class="row"><label>Generator</label></div>
+    <select id="gensel"></select>
+  </div>
+  <div class="group">
+    <div class="row"><label>Count</label><span class="val" id="v_ribbons">3</span></div>
     <input type="range" id="ribbons" min="1" max="12" step="1" value="3">
   </div>
   <div class="group">
@@ -115,7 +119,7 @@
     <div class="row"><label>Length jitter</label><span class="val" id="v_lenj">0.25</span></div>
     <input type="range" id="lenj" min="0" max="0.9" step="0.01" value="0.25">
   </div>
-  <div class="group">
+  <div class="group" id="taperGroup">
     <div class="row"><label>Width taper (ends)</label><span class="val" id="v_taper">0.6</span></div>
     <input type="range" id="taper" min="0" max="1" step="0.01" value="0.6">
   </div>
@@ -138,7 +142,11 @@
     <label style="display:block;margin-bottom:7px;">Palette</label>
     <div class="swatches" id="swatches"></div>
   </div>
-  <label class="toggle group"><input type="checkbox" id="drawspine"> Draw spine (faint)</label>
+  <label class="toggle group"><input type="checkbox" id="drawspine"> Draw spine</label>
+  <div class="group">
+    <div class="row"><label>Spine weight (pt)</label><span class="val" id="v_spineweight">6</span></div>
+    <input type="range" id="spineweight" min="1" max="20" step="0.5" value="6">
+  </div>
 
   <div class="divider"></div>
 
@@ -165,6 +173,8 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, colormode:'random', drawspine:false,
+  spineweight:6,
+  generator:'ribbon',
   // a fresh, Satie-ish primary-on-cream test palette; edit freely
   palette:['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'],
   bg:'#efe7d8',
@@ -270,20 +280,12 @@ function pickColor(i, ribbonOffset){
   return pal[floor(random(pal.length))]; // random
 }
 
-function drawRibbon(ribbonIndex){
-  const cps  = makeControlPoints(P.ctrl);
-  const poly = samplePolyline(cps);
-  const stations = placeStations(poly, P.spacing);
-
-  if(P.drawspine){
-    useBrush(currentBrush(), '#7a7a72', 0.5);
-    for(let i=1;i<poly.length;i+=2) stamp(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y);
-  }
-
-  // ONE tooth per station — a short stroke crossing the spine at the normal
+// Shared tooth renderer — used by every Generator. Takes Stations
+// {x,y,nx,ny,u}; draws one textured tooth per Station along its (nx,ny).
+function drawTeeth(stations, colorOffset){
   for(let i=0;i<stations.length;i++){
     const s=stations[i];
-    // width envelope: taper tooth length toward both ends of the ribbon
+    // width envelope: taper tooth length toward both ends (u→0/1)
     const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
     const halfLen=(P.width*0.5)*env*(1-random(0,P.lenj));
     // jitter the tooth angle off the exact normal (0 = exact right angle)
@@ -292,14 +294,99 @@ function drawRibbon(ribbonIndex){
     const ny=s.nx*sin(j)+s.ny*cos(j);
     const ax=s.x-nx*halfLen, ay=s.y-ny*halfLen;
     const bx=s.x+nx*halfLen, by=s.y+ny*halfLen;
-    useBrush(currentBrush(), pickColor(i,ribbonIndex*3), P.weight);
+    useBrush(currentBrush(), pickColor(i,colorOffset), P.weight);
     stamp(ax,ay,bx,by);
   }
+}
+
+// RIBBON Generator — teeth along an open spine, crossing it at the normal.
+function drawRibbon(ribbonIndex){
+  const cps  = makeControlPoints(P.ctrl);
+  const poly = samplePolyline(cps);
+  const stations = placeStations(poly, P.spacing);
+  if(P.drawspine) drawSpineLine(poly);
+  drawTeeth(stations, ribbonIndex*3);
+}
+
+// BURST Generator — Stations spread by ANGLE around a centre point; each tooth
+// radiates outward. The "spine" collapses to a point (SPEC §3).
+function makeBurstStations(cx, cy){
+  const R0 = P.width * 0.55;                              // mid-radius teeth centre on
+  const count = max(3, round(TWO_PI * R0 / P.spacing));   // arc-spacing → angle
+  const out = [];
+  for(let i=0;i<count;i++){
+    const a = (i / count) * TWO_PI;
+    const dx = cos(a), dy = sin(a);                       // radial direction = tooth normal
+    out.push({ x:cx+dx*R0, y:cy+dy*R0, nx:dx, ny:dy, u:0.5 });
+  }
+  return out;
+}
+function drawBurst(burstIndex){
+  const pad = 170;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const stations = makeBurstStations(cx, cy);
+  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  drawTeeth(stations, burstIndex*3);
+}
+
+// Generator registry — each entry declares its allowed Brushes (SPEC §1.5
+// decision 1) and its draw fn. Adding a generator = one entry here, no
+// switch statements anywhere.
+const GENERATORS = {
+  ribbon: { label:'Ribbon', allowedBrushes:['pen','marker'], draw:drawRibbon },
+  burst:  { label:'Burst',  allowedBrushes:null,             draw:drawBurst  },
+};
+
+// Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
+// p5 (not the p5.brush adapter) so it NEVER inherits the active Brush.
+// SPEC §1.5 decision 3.
+function drawSpineLine(poly){
+  push();
+  noFill();
+  stroke(0);                       // black, independent of Brush + Palette
+  strokeWeight(P.spineweight);
+  beginShape();
+  for(const pt of poly) vertex(pt.x, pt.y);
+  endShape();
+  pop();
 }
 
 function currentBrush(){
   const sel=document.getElementById('brushsel');
   return (sel && sel.value) || availableBrushes[0] || 'marker';
+}
+
+// ---- generator UI sync -----------------------------------------------------
+// brushes the active generator permits, intersected with what the build has
+function activeAllowedBrushes(){
+  const allowed = GENERATORS[P.generator].allowedBrushes;
+  if(!allowed) return availableBrushes.slice();   // null/undefined = no constraint
+  const have = allowed.filter(b => availableBrushes.includes(b));
+  return have.length ? have : availableBrushes.slice(0,1);
+}
+// rebuild the Brush <select> to the allowed set; fall back to first allowed
+// if the current pick isn't permitted by the active generator
+function refreshBrushOptions(){
+  const sel=document.getElementById('brushsel');
+  const allowed=activeAllowedBrushes(), prev=sel.value;
+  sel.innerHTML='';
+  allowed.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  sel.value = allowed.includes(prev) ? prev : allowed[0];
+}
+// populate the Generator <select> from the registry (data-driven)
+function populateGenSelect(){
+  const sel=document.getElementById('gensel');
+  sel.innerHTML='';
+  Object.keys(GENERATORS).forEach(k=>{
+    const o=document.createElement('option'); o.value=k; o.textContent=GENERATORS[k].label; sel.appendChild(o);
+  });
+  sel.value=P.generator;
+}
+// sync UI to the active generator: filter brushes + hide taper on Burst
+function updateGeneratorUI(){
+  refreshBrushOptions();
+  const tg=document.getElementById('taperGroup');
+  if(tg) tg.style.display = (P.generator==='burst') ? 'none' : '';   // taper neutral on Burst
 }
 
 // ---- p5 lifecycle ----------------------------------------------------------
@@ -311,10 +398,10 @@ function setup(){
   try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
   try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
   availableBrushes = discoverBrushes();
-  populateBrushSelect();
   buildSwatches();
   noLoop();
-  wireUI();          // wire controls here — p5 is ready, so redraw() is safe
+  wireUI();              // wire controls here — p5 is ready, so redraw() is safe
+  updateGeneratorUI();   // filter brushes + taper visibility for current generator
   regenerate(seed);
 }
 
@@ -324,7 +411,7 @@ function draw(){
   background(P.bg);
   push();
   translate(-width/2,-height/2);              // WEBGL origin → top-left screen coords
-  for(let r=0;r<P.ribbons;r++) drawRibbon(r);
+  for(let i=0;i<P.ribbons;i++) GENERATORS[P.generator].draw(i);
   pop();
 }
 
@@ -340,12 +427,6 @@ function bindSlider(id, key, fmt){
   const apply=()=>{ P[key]=parseFloat(el.value); if(out) out.textContent=fmt?fmt(P[key]):el.value; redraw(); };
   el.addEventListener('input', apply); apply();
 }
-function populateBrushSelect(){
-  const sel=document.getElementById('brushsel');
-  sel.innerHTML='';
-  availableBrushes.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
-  sel.addEventListener('change', redraw);
-}
 function buildSwatches(){
   const wrap=document.getElementById('swatches'); wrap.innerHTML='';
   P.palette.forEach((hex,idx)=>{
@@ -360,6 +441,12 @@ function wireUI(){
   bindSlider('spacing','spacing'); bindSlider('width','width');
   bindSlider('weight','weight',v=>v.toFixed(1)); bindSlider('anglej','anglej');
   bindSlider('lenj','lenj',v=>v.toFixed(2)); bindSlider('taper','taper',v=>v.toFixed(2));
+  bindSlider('spineweight','spineweight',v=>v.toFixed(1));
+  populateGenSelect();
+  document.getElementById('brushsel').addEventListener('change', redraw);
+  document.getElementById('gensel').addEventListener('change',e=>{
+    P.generator=e.target.value; updateGeneratorUI(); redraw();
+  });
   document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
   document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
   document.getElementById('regen').addEventListener('click',()=>regenerate());
@@ -369,13 +456,14 @@ function wireUI(){
   document.getElementById('download').addEventListener('click',()=>saveCanvas('brush-lab_seed'+seed,'png'));
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','spineweight'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
     document.getElementById('colormode').value=P.colormode;
+    document.getElementById('gensel').value=P.generator;
     document.getElementById('drawspine').checked=P.drawspine;
-    buildSwatches(); redraw();
+    buildSwatches(); updateGeneratorUI(); redraw();
   });
 }
 
