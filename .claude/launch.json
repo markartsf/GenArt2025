@@ -13,6 +13,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5174,
       "cwd": ".claude/worktrees/crazy-volhard-e59f43"
+    },
+    {
+      "name": "brush-lab (static)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "8080", "--strictPort"],
+      "port": 8080
     }
   ]
 }

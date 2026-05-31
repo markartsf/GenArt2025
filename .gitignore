@@ -19,3 +19,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Claude Code — user-local config (per-machine, not for sharing).
+# Note: .claude/settings.json (project hooks/policy) IS tracked;
+# only the *.local.json variants are user-local.
+.claude/settings.local.json
+.claude/*.local.json
