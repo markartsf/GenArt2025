@@ -123,12 +123,24 @@
     <div class="row"><label>Width taper (ends)</label><span class="val" id="v_taper">0.6</span></div>
     <input type="range" id="taper" min="0" max="1" step="0.01" value="0.6">
   </div>
+  <div class="group" id="swirlGroup" style="display:none;">
+    <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
+    <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
+  </div>
 
   <div class="divider"></div>
 
   <div class="group">
     <div class="row"><label>Brush</label></div>
     <select id="brushsel"></select>
+  </div>
+  <div class="group">
+    <div class="row"><label>Base Weight</label><span class="val" id="v_mat_weight"></span></div>
+    <input type="range" id="mat_weight" min="0.1" max="10.0" step="0.1" value="1.0">
+  </div>
+  <div class="group">
+    <div class="row"><label>Vibration</label><span class="val" id="v_mat_vib"></span></div>
+    <input type="range" id="mat_vib" min="0.0" max="2.0" step="0.05" value="0.1">
   </div>
   <div class="group">
     <div class="row"><label>Colour order</label></div>
@@ -172,7 +184,7 @@
 // ============================================================================
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
-  anglej:8, lenj:0.25, taper:0.6, colormode:'random', drawspine:false,
+  anglej:8, lenj:0.25, taper:0.6, swirl:60, colormode:'random', drawspine:false,
   spineweight:6,
   generator:'ribbon',
   // a fresh, Satie-ish primary-on-cream test palette; edit freely
@@ -182,6 +194,17 @@ const DEFAULTS = {
 let P = structuredClone(DEFAULTS);
 let seed = 1;
 let availableBrushes = [];
+
+const BRUSH_REGISTRY = {
+  'pen':      { baseWeight: 1.0,  vibration: 0.1 },
+  'marker':   { baseWeight: 2.5,  vibration: 0.2 },
+  'rotring':  { baseWeight: 0.8,  vibration: 0.05 },
+  'charcoal': { baseWeight: 4.0,  vibration: 0.8 },
+  'spray':    { baseWeight: 8.0,  vibration: 1.0 },
+  'custom':   { baseWeight: 5.0,  vibration: 0.5 },
+  // Fallback for any discovered brush not explicitly tuned yet
+  'default':  { baseWeight: 2.0,  vibration: 0.3 }
+};
 
 // ============================================================================
 //  >>> P5.BRUSH ADAPTER <<<  (the only library-specific code)
@@ -208,6 +231,34 @@ function useBrush(name, hex, weight){
 //    The generator passes endpoints already oriented along the path normal.
 function stamp(ax, ay, bx, by){
   brush.line(ax, ay, bx, by);
+}
+
+function rebuildCustomBrush() {
+  const cfg = BRUSH_REGISTRY['custom'];
+  if (!cfg) return;
+  
+  try {
+    brush.add('custom', {
+      type: 'custom',
+      weight: cfg.baseWeight,
+      vibration: cfg.vibration,
+      opacity: 60,
+      spacing: 0.2,
+      blend: true,
+      pressure: { 
+        type: 'standard', 
+        curve: [0.2, 0.8], // The missing DNA
+        min_max: [0.8, 1.2] 
+      },
+      tip: function() {
+        fill(0);
+        noStroke();
+        circle(0, 0, 1.5);
+      }
+    });
+  } catch(e) {
+    console.error("Brush Engine Error:", e);
+  }
 }
 // ============================================================================
 //  END ADAPTER
@@ -283,6 +334,10 @@ function pickColor(i, ribbonOffset){
 // Shared tooth renderer — used by every Generator. Takes Stations
 // {x,y,nx,ny,u}; draws one textured tooth per Station along its (nx,ny).
 function drawTeeth(stations, colorOffset){
+  const activeBrushName = currentBrush();
+  const brushConfig = BRUSH_REGISTRY[activeBrushName] || BRUSH_REGISTRY['default'];
+  const finalWeight = P.weight * brushConfig.baseWeight;
+
   for(let i=0;i<stations.length;i++){
     const s=stations[i];
     // width envelope: taper tooth length toward both ends (u→0/1)
@@ -294,7 +349,7 @@ function drawTeeth(stations, colorOffset){
     const ny=s.nx*sin(j)+s.ny*cos(j);
     const ax=s.x-nx*halfLen, ay=s.y-ny*halfLen;
     const bx=s.x+nx*halfLen, by=s.y+ny*halfLen;
-    useBrush(currentBrush(), pickColor(i,colorOffset), P.weight);
+    useBrush(activeBrushName, pickColor(i,colorOffset), finalWeight);
     stamp(ax,ay,bx,by);
   }
 }
@@ -329,12 +384,59 @@ function drawBurst(burstIndex){
   drawTeeth(stations, burstIndex*3);
 }
 
+// BLOOM Generator — Stations spread by ANGLE but modulated by 2D Perlin noise
+function makeBloomStations(cx, cy){
+  const R0 = P.width * 0.55;
+  const count = max(3, round(TWO_PI * R0 / P.spacing));
+  const out = [];
+  
+  // Use a noise offset so each bloom gets a different organic shape
+  const nOffX = random(1000);
+  const nOffY = random(1000);
+  const noiseScale = 1.5; // Increased for more distinct lobes
+  
+  for(let i=0;i<count;i++){
+    const a = (i / count) * TWO_PI;
+    const dx = cos(a), dy = sin(a);
+    
+    // Sample 2D noise in a circle for a seamless continuous loop
+    const noiseX = nOffX + cos(a) * noiseScale;
+    const noiseY = nOffY + sin(a) * noiseScale;
+    const n = noise(noiseX, noiseY);
+    
+    // Exaggerate the noise mapping to push the peaks and valleys much further
+    // p5 noise typically yields values between ~0.25 and 0.75
+    const r = R0 * map(n, 0.25, 0.75, 0.2, 2.5);
+    
+    // Swirl: rotate normal vector (which defines tooth orientation)
+    const swirlAngle = radians(P.swirl);
+    const toothNx = cos(a + swirlAngle);
+    const toothNy = sin(a + swirlAngle);
+    
+    // Map radius to U so teeth get longer (thicker ribbon) at petal ends (u=0.5 -> max envelope)
+    // and shorter at the center (u=0 -> min envelope)
+    const uVal = map(n, 0.25, 0.75, 0, 0.5);
+    
+    out.push({ x:cx+dx*r, y:cy+dy*r, nx:toothNx, ny:toothNy, u:uVal });
+  }
+  return out;
+}
+
+function drawBloom(bloomIndex){
+  const pad = 170;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const stations = makeBloomStations(cx, cy);
+  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  drawTeeth(stations, bloomIndex*3);
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
 const GENERATORS = {
   ribbon: { label:'Ribbon', allowedBrushes:['pen','marker'], draw:drawRibbon },
   burst:  { label:'Burst',  allowedBrushes:null,             draw:drawBurst  },
+  bloom:  { label:'Bloom',  allowedBrushes:null,             draw:drawBloom  }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -376,17 +478,31 @@ function refreshBrushOptions(){
 // populate the Generator <select> from the registry (data-driven)
 function populateGenSelect(){
   const sel=document.getElementById('gensel');
+  const currentVal=sel.value || P.generator;
   sel.innerHTML='';
   Object.keys(GENERATORS).forEach(k=>{
     const o=document.createElement('option'); o.value=k; o.textContent=GENERATORS[k].label; sel.appendChild(o);
   });
-  sel.value=P.generator;
+  sel.value=currentVal;
 }
+function syncMaterialSliders() {
+  const bName = document.getElementById('brushsel').value;
+  const cfg = BRUSH_REGISTRY[bName] || BRUSH_REGISTRY['default'];
+  if (!cfg) return;
+  document.getElementById('mat_weight').value = cfg.baseWeight;
+  document.getElementById('v_mat_weight').textContent = parseFloat(cfg.baseWeight).toFixed(1);
+  document.getElementById('mat_vib').value = cfg.vibration;
+  document.getElementById('v_mat_vib').textContent = parseFloat(cfg.vibration).toFixed(2);
+}
+
 // sync UI to the active generator: filter brushes + hide taper on Burst
 function updateGeneratorUI(){
   refreshBrushOptions();
+  syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst') ? 'none' : '';   // taper neutral on Burst
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom') ? 'none' : '';   // taper neutral on Burst/Bloom
+  const sg=document.getElementById('swirlGroup');
+  if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
 }
 
 // ---- p5 lifecycle ----------------------------------------------------------
@@ -398,6 +514,7 @@ function setup(){
   try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
   try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
   availableBrushes = discoverBrushes();
+  availableBrushes.push('custom'); rebuildCustomBrush();
   buildSwatches();
   noLoop();
   wireUI();              // wire controls here — p5 is ready, so redraw() is safe
@@ -441,9 +558,29 @@ function wireUI(){
   bindSlider('spacing','spacing'); bindSlider('width','width');
   bindSlider('weight','weight',v=>v.toFixed(1)); bindSlider('anglej','anglej');
   bindSlider('lenj','lenj',v=>v.toFixed(2)); bindSlider('taper','taper',v=>v.toFixed(2));
+  bindSlider('swirl','swirl');
   bindSlider('spineweight','spineweight',v=>v.toFixed(1));
   populateGenSelect();
-  document.getElementById('brushsel').addEventListener('change', redraw);
+  
+  document.getElementById('mat_weight').addEventListener('input', e => {
+    const bName = document.getElementById('brushsel').value;
+    if(BRUSH_REGISTRY[bName]) BRUSH_REGISTRY[bName].baseWeight = parseFloat(e.target.value);
+    document.getElementById('v_mat_weight').textContent = parseFloat(e.target.value).toFixed(1);
+    if (document.getElementById('brushsel').value === 'custom') { rebuildCustomBrush(); }
+    redraw();
+  });
+  document.getElementById('mat_vib').addEventListener('input', e => {
+    const bName = document.getElementById('brushsel').value;
+    if(BRUSH_REGISTRY[bName]) BRUSH_REGISTRY[bName].vibration = parseFloat(e.target.value);
+    document.getElementById('v_mat_vib').textContent = parseFloat(e.target.value).toFixed(2);
+    if (document.getElementById('brushsel').value === 'custom') { rebuildCustomBrush(); }
+    redraw();
+  });
+
+  document.getElementById('brushsel').addEventListener('change', () => {
+    syncMaterialSliders();
+    redraw();
+  });
   document.getElementById('gensel').addEventListener('change',e=>{
     P.generator=e.target.value; updateGeneratorUI(); redraw();
   });
@@ -456,7 +593,7 @@ function wireUI(){
   document.getElementById('download').addEventListener('click',()=>saveCanvas('brush-lab_seed'+seed,'png'));
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','swirl','spineweight'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
