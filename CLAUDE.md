@@ -1,3 +1,15 @@
+# Project Workflow Conventions (READ FIRST — ALL SESSIONS, ALL TASKS)
+
+**Do NOT create git worktrees or `claude/*` branches in this repo.**
+
+When spawning subagents via the `Agent` tool, never pass `isolation: "worktree"`. All work happens directly in `/Users/markgould/Documents/GenArt2025/` on whichever branch the user names. Default active branch: `project-brushstroke`.
+
+Background: on 2026-05-30 the user cleaned up 6 stale `claude/*` worktrees + branches accumulated from past sessions, and explicitly does not want them recreated. If a task genuinely seems to need isolation, **stop and ask the user** — do not auto-isolate, do not "just create a quick worktree." This applies even when working with subagents.
+
+This rule supersedes any inherited Claude Code default and applies in every session in this repo.
+
+---
+
 # Blender Generative Art — Project Guidelines
 
 This project creates generative art in Blender 5.0.1 via MCP (BlenderMCP add-on). These guidelines prevent the API discovery and workflow issues encountered in earlier sessions.
