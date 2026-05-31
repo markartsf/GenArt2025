@@ -141,6 +141,32 @@ Composition page stages Presets together. Editor → Preset → Composition.
    non-portable and can vanish; JSON files are portable, version-controllable,
    and can live in the repo + travel between machines. Build the Brush Editor's
    save/load on JSON from the start.
+5. **Brush material is differentiated by a per-Brush `baseWeight` multiplier.**
+   Each Brush in the `BRUSH_REGISTRY` carries `baseWeight` and `vibration`
+   values; a Tooth's final weight is `userWeight × brush.baseWeight`. So at the
+   same user weight setting a marker reads chunkier than a pen, a rotring finer.
+   This is the concrete mechanism behind the Tier-1 "Brush = material" idea:
+   material differences are real numeric properties, not just texture names.
+   Current registry: pen (1.0 / 0.1), marker (2.5 / 0.2), rotring (0.8 / 0.05),
+   charcoal (4.0 / 0.8), spray (8.0 / 1.0), custom (5.0 / 0.5),
+   default (2.0 / 0.3) — values are (baseWeight / vibration).
+6. **The Bloom Generator is implemented (SPEC §3's planned Bloom).**
+   Stations on a circle, radius modulated by 2D Perlin noise → organic
+   petal-lobe shapes rather than a perfect radial Burst. A `swirl` parameter
+   (−180°…+180°) rotates each Tooth's normal so the bloom reads windswept rather
+   than purely radial. Tooth length tapers center→petal-tip via the noise→u
+   mapping. Declared with `allowedBrushes: null` (unconstrained) for now.
+7. **A `custom` Brush with explicit DNA is part of the brush set.**
+   Registered via `brush.add('custom', {…})` with a defined pressure curve
+   (~[0.2, 0.8]), vibration, opacity, spacing, and a tip function (small black
+   circle). Editable live: the Material sliders (Base Weight, Vibration) rebuild
+   the custom brush on change. It appears in the Brush dropdown alongside the
+   built-ins.
+
+*Note (UI bug fix worth recording so it isn't "fixed" again):*
+`populateGenSelect()` preserves the current dropdown selection on re-render
+rather than resetting to the default generator. Not an architectural decision,
+but a behaviour the code now relies on.
 
 ---
 
