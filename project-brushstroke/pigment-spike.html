@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pigment Spike — does p5.blender compose with p5.brush?</title>
+
+<!--
+  PIGMENT SPIKE  ·  throwaway diagnostic, NOT a feature
+  ----------------------------------------------------------------------------
+  Question this file answers:
+    Does p5.blender (subtractive Spectral.js mixing — blue+yellow → green)
+    actually intercept p5.brush stroke output, or does the brush engine
+    bypass the blender's shader?
+    (SPEC.md §1 "Pigment-layer nouns" — the parked open question for m2.)
+
+  Setup matches brush-lab.html: p5 2.x + p5.brush 2.1.9-beta, WEBGL canvas.
+  p5.blender vendored locally — no CDN release exists.
+
+  >>> VERSION COMPATIBILITY RISK (read this before reading the result) <<<
+  p5.blender v1.0 (2023) was written against p5 1.x. It bundles its own
+  p5.min.js in the repo, and the source reaches directly into private
+  p5 1.x renderer internals:
+      _r._renderer.uMVMatrix.mat4[12]
+      _r._renderer._doStroke / _doFill / _strokeWeight / ...
+  p5 2.x restructured these (the renderer was rewritten). So even if the
+  library loads cleanly, the most likely failure mode for Variant B is the
+  library erroring or no-oping inside our p5 2.x build — NOT a fundamental
+  brush/blender incompatibility. Keep that in mind when reading results.
+
+  >>> VERDICT (2026-05-31) — outcome: neither A nor B rendered <<<
+  p5.blender is NOT viable as-shipped against our p5 2.x + p5.brush 2.x stack,
+  for TWO independent reasons (one was masking the other):
+
+    Wall 1 — Initialization. Module-load line 95 calls
+        p5.prototype.registerMethod('post', () => _noBlend());
+      That extension API was removed in p5 2.x (replaced by
+      `p5.registerAddon`). The factory throws here BEFORE the
+      `exports.load = …` lines, leaving `window.blender = {}` empty —
+      "blender.load is not a function" downstream.
+      A 1-line no-op shim (below, before the p5.blend.js script) gets past
+      this — but only enough to reveal Wall 2.
+
+    Wall 2 — Renderer internals. With Wall 1 shimmed, the first call into
+      `blender.load()` then throws on `_r._renderer._doStroke`. p5.blender
+      reaches into p5 1.x's private renderer fields throughout
+      (`_doStroke`, `_doFill`, `_strokeWeight`, `uMVMatrix.mat4[12]`, …).
+      p5 2.x rewrote the renderer; those fields are gone or renamed.
+      This is NOT shimmable in a line — every call site is affected.
+
+  Implication for milestone 2 (SPEC §1 Pigment-layer):
+    - The brief's three outcomes (mixing / opaque top / no render) are not
+      reachable for Variant B against our stack with p5.blender as-shipped.
+      That's itself the answer: p5.blender, as a library, is not the path.
+    - Three paths forward, in rough order of cost:
+        a. Use Spectral.js directly (the math beneath p5.blender) and write
+           our own minimal mask-buffer + shader pipeline that targets p5 2.x.
+           Most flexible; carries the work p5.blender used to do for us.
+        b. Port p5.blender to p5 2.x's addon API + new renderer surface.
+           Smaller scope than (a) but requires understanding p5 2.x renderer
+           internals well enough to recreate every private-field access.
+        c. Downgrade the whole stack to p5 1.x — but p5.brush 2.x requires
+           p5 2.x, so this also means downgrading or replacing p5.brush.
+           Reverses prior decisions; not recommended.
+    - Recommendation: (a). Spectral.js is the actual color-math layer; the
+      p5.blender wrapper is thin and not maintained against modern p5.
+
+  Decision NOT made by this spike: whether p5.brush's stamp engine (its
+  internal offscreen buffer) can be sampled by a downstream blend shader.
+  That's the next question to answer — but it's a question about path (a),
+  not about p5.blender, so it belongs in the m2 design pass, not here.
+-->
+
+<script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5.brush@2.1.9-beta/dist/p5.brush.min.js"></script>
+<!--
+  COMPATIBILITY SHIM — diagnostic only, NOT a ship path.
+  p5.blend.js (2023, written for p5 1.x) calls `p5.prototype.registerMethod`
+  at module-load time. That extension API was removed in p5 2.x and replaced
+  with `p5.registerAddon`. Without this stub the factory throws on line 95
+  and never runs `exports.load = ...`, leaving `window.blender = {}` empty.
+  The stub is a no-op: the registered hook is a post-draw `_noBlend()` reset,
+  which isn't needed for a single-frame `noLoop()` diagnostic.
+  Decision for milestone 2 should NOT depend on this shim — it's here only
+  so we can answer the actual brush-vs-blender composition question.
+-->
+<script>
+  if (typeof p5 !== 'undefined' && p5.prototype && !p5.prototype.registerMethod) {
+    p5.prototype.registerMethod = function(){ /* shim — see comment above */ };
+  }
+</script>
+<script src="./p5.blend.js"></script>
+
+<style>
+  html,body { margin:0; background:#1a1a1a; color:#f4efe7; font-family: ui-sans-serif, system-ui, sans-serif; }
+  #wrap { display:flex; flex-direction:column; align-items:center; padding:14px; gap:10px; }
+  h1 { font-size:14px; letter-spacing:0.14em; text-transform:uppercase; margin:0; color:#e9c46a; }
+  #info { font-size:12px; color:#aaa; max-width:820px; line-height:1.5; }
+  #info code { background:#222; padding:1px 5px; border-radius:3px; color:#e9c46a; }
+  #log { background:#111; border:1px solid #333; border-radius:6px; padding:10px 14px;
+         font-family: ui-monospace, monospace; font-size:11px; color:#cfc;
+         max-width:820px; width:100%; min-height:60px; white-space:pre-wrap; box-sizing:border-box; }
+  .err { color:#ff6c6c; }
+  .ok  { color:#9ee69e; }
+  .warn{ color:#e9c46a; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Pigment Spike · p5.blender × p5.brush</h1>
+  <div id="info">
+    Top half = <b>Variant A</b> (plain p5 rects via <code>blender.color()</code>). Confirms p5.blender works at all.<br>
+    Bottom half = <b>Variant B</b> (p5.brush teeth via <code>brush.line()</code> under blender). The actual question.<br>
+    Overlap of blue + yellow should read <b>green</b> if subtractive mixing is reaching the marks.
+  </div>
+  <div id="canvas-holder"></div>
+  <div id="log">running…</div>
+</div>
+
+<script>
+const BLUE   = '#002185';   // canonical Alejandro test colors from p5.blender's own example sketch
+const YELLOW = '#fcd300';
+const W = 800, H = 600;
+
+const log = (msg, cls='') => {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  if(el.textContent === 'running…') el.textContent = '';
+  el.appendChild(line);
+  console.log('[spike]', msg);
+};
+
+// Probe the library surface before we depend on it
+function probeBlender(){
+  if(typeof blender === 'undefined'){ log('FATAL: blender global not defined — p5.blend.js did not load.', 'err'); return false; }
+  const fns = ['load','color','noBlend'];
+  const missing = fns.filter(f => typeof blender[f] !== 'function');
+  if(missing.length){ log('FATAL: blender API missing: ' + missing.join(', '), 'err'); return false; }
+  log('blender API present: ' + fns.join(', '), 'ok');
+  return true;
+}
+
+function setup(){
+  const c = createCanvas(W, H, WEBGL);
+  c.parent('canvas-holder');
+  pixelDensity(2);
+  background('#efe7d8');
+
+  // p5.brush init (same calls as brush-lab.html)
+  try { if (typeof brush.load==='function') brush.load(); } catch(e){ log('brush.load() threw: '+e.message, 'warn'); }
+  try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
+  try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
+
+  push();
+  translate(-W/2, -H/2);                                       // WEBGL origin → top-left screen coords
+  noLoop();
+  noStroke();
+
+  // -------- Variant A: plain p5 rects through blender --------
+  log('─── Variant A: plain rects via blender ───');
+  let aOK = false;
+  if(probeBlender()){
+    try {
+      blender.load();
+      blender.color(BLUE, 100);
+      rect(80, 60, 260, 200);
+      blender.color(YELLOW, 100);
+      rect(200, 130, 260, 200);
+      blender.noBlend();
+      aOK = true;
+      log('Variant A drew without throwing.', 'ok');
+    } catch(e){
+      log('Variant A threw: ' + e.message, 'err');
+      console.error(e);
+    }
+  }
+
+  // Label A (plain p5, no blender)
+  fill(20); noStroke();
+  textSize(13); textFont('monospace');
+  text('A — plain p5 rects via blender.color()', 80, 50);
+
+  // -------- Variant B: p5.brush teeth through blender --------
+  log('─── Variant B: brush.line() teeth via blender ───');
+  let bOK = false;
+  try {
+    blender.load();
+    // BLUE tooth — angled stripe in lower half
+    blender.color(BLUE, 100);
+    brush.set('marker', BLUE, 8);                              // brush API for material
+    brush.line(80, 400, 360, 540);
+
+    blender.color(YELLOW, 100);
+    brush.set('marker', YELLOW, 8);
+    brush.line(80, 540, 360, 400);                             // crosses the blue tooth → overlap region
+
+    // also draw two simple overlapping ellipses on the right side under blender,
+    // to give p5.blender a chance with non-brush primitives in the lower half too
+    blender.color(BLUE, 100);
+    ellipse(560, 460, 180, 180);
+    blender.color(YELLOW, 100);
+    ellipse(640, 480, 180, 180);
+
+    blender.noBlend();
+    bOK = true;
+    log('Variant B drew without throwing.', 'ok');
+  } catch(e){
+    log('Variant B threw: ' + e.message, 'err');
+    console.error(e);
+  }
+
+  fill(20); noStroke();
+  text('B — brush.line() teeth + ellipses via blender.color()', 80, 380);
+
+  // Divider line
+  stroke(120); strokeWeight(1);
+  line(40, 350, W-40, 350);
+  noStroke();
+
+  pop();
+
+  // ---- Verdict heuristic — sample pixel colors at known overlap points ----
+  // Use p5's get() to inspect the overlap region. If true mixing happened,
+  // the overlap pixel will be greenish (G channel >> R, B). If it's just
+  // top-color overwrite, the overlap pixel matches YELLOW (~252,211,0).
+  // If nothing rendered, pixel matches background (~239,231,216).
+  setTimeout(() => {
+    try {
+      const sampleA = get(W/2 - 70, 200);                       // A overlap area
+      const sampleB_line = get(220, 470);                       // B brush overlap area
+      const sampleB_ellipse = get(600, 470);                    // B ellipse overlap area
+      const bg = get(20, 20);
+      const fmt = (n, p) => `${n.padEnd(18)} rgba=${p.slice(0,3).join(',')}  α=${p[3]}`;
+      log('background sample:    ' + 'rgba=' + bg.slice(0,3).join(',') + '  α=' + bg[3]);
+      log(fmt('A overlap:',          sampleA));
+      log(fmt('B line overlap:',     sampleB_line));
+      log(fmt('B ellipse overlap:',  sampleB_ellipse));
+
+      const greenish = p => p[1] > p[0] + 30 && p[1] > p[2] + 30;
+      log('');
+      log('VERDICT — Variant A overlap mixes to green: ' + (greenish(sampleA) ? 'YES ✓ (Spectral.js working)' : 'no'),
+          greenish(sampleA) ? 'ok' : 'warn');
+      log('VERDICT — Variant B brush-line overlap mixes to green: ' + (greenish(sampleB_line) ? 'YES ✓' : 'no'),
+          greenish(sampleB_line) ? 'ok' : 'warn');
+      log('VERDICT — Variant B ellipse overlap mixes to green: ' + (greenish(sampleB_ellipse) ? 'YES ✓' : 'no'),
+          greenish(sampleB_ellipse) ? 'ok' : 'warn');
+    } catch(e){
+      log('pixel sampling threw: ' + e.message, 'err');
+    }
+  }, 250);
+}
+</script>
+</body>
+</html>
