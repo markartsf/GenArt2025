@@ -127,6 +127,18 @@
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
   </div>
+  <div class="group" id="fieldcountGroup" style="display:none;">
+    <div class="row"><label>Field count</label><span class="val" id="v_fieldcount">200</span></div>
+    <input type="range" id="fieldcount" min="50" max="800" step="10" value="200">
+  </div>
+  <div class="group" id="fieldscaleGroup" style="display:none;">
+    <div class="row"><label>Field scale</label><span class="val" id="v_fieldscale">0.0030</span></div>
+    <input type="range" id="fieldscale" min="0.0005" max="0.012" step="0.0005" value="0.003">
+  </div>
+  <div class="group" id="fanspreadGroup" style="display:none;">
+    <div class="row"><label>Fan spread (°)</label><span class="val" id="v_fanspread">110</span></div>
+    <input type="range" id="fanspread" min="30" max="270" step="1" value="110">
+  </div>
 
   <div class="divider"></div>
 
@@ -176,6 +188,11 @@
   <div class="btnrow">
     <button id="download">Download PNG</button>
   </div>
+  <div class="btnrow">
+    <button id="presetSave">Save Preset</button>
+    <button id="presetLoadBtn">Load Preset</button>
+    <input type="file" id="presetLoad" accept=".json,application/json" style="display:none">
+  </div>
 </div>
 
 <script>
@@ -186,6 +203,8 @@ const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, swirl:60, colormode:'random', drawspine:false,
   spineweight:6,
+  fieldcount:200, fieldscale:0.003,
+  fanspread:110,
   generator:'ribbon',
   // a fresh, Satie-ish primary-on-cream test palette; edit freely
   palette:['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'],
@@ -430,13 +449,74 @@ function drawBloom(bloomIndex){
   drawTeeth(stations, bloomIndex*3);
 }
 
+// FIELD MARKS Generator — Stations scattered across the whole canvas; each
+// tooth's normal is sampled from a 2D Perlin flow field so the marks read as
+// a coherent hatch rather than random scatter (SPEC §3 "Ground texture",
+// Enfantines' faint diagonal hatch). Singleton: one field per render,
+// regardless of the top-level count loop. u=0.5 makes drawTeeth's end-taper
+// envelope neutral (there are no ends — it's a field).
+function makeFieldMarksStations(count, scale){
+  const out = [];
+  for(let i=0;i<count;i++){
+    const x = random(width);
+    const y = random(height);
+    const a = noise(x*scale, y*scale) * TWO_PI;
+    // tangent (cos a, sin a) → tooth lies along the flow line, like a stitch
+    const tx = cos(a), ty = sin(a);
+    out.push({ x, y, nx:tx, ny:ty, u:0.5 });
+  }
+  return out;
+}
+function drawFieldMarks(idx){
+  if(idx > 0) return;                                          // singleton field
+  const stations = makeFieldMarksStations(P.fieldcount, P.fieldscale);
+  drawTeeth(stations, 0);
+}
+
+// FAN Generator — constrained cousin of Burst (SPEC §3 — "Teeth fanning along
+// a short arc with fingers spreading at the tips; the orange corals and
+// purple sea-fans in the references"). Stations span fanspread° centered on a
+// random base orientation, each tooth radiating outward. u=0.5 → drawTeeth's
+// end-taper envelope is neutral, like Burst/Bloom (no "ends" on an arc).
+// Placed form, not singleton: top-level count loop runs P.ribbons instances,
+// each with its own center + base angle (mirrors Burst/Bloom).
+function makeFanStations(cx, cy, baseRad, spreadRad){
+  const R0 = P.width * 0.55;
+  const arc = spreadRad * R0;
+  const count = max(3, round(arc / P.spacing));
+  const out = [];
+  const a0 = baseRad - spreadRad * 0.5;
+  for(let i=0;i<count;i++){
+    // sample inclusive endpoints (i/(count-1)) so the fan fills its full arc
+    const a = a0 + spreadRad * (i / (count - 1));
+    const dx = cos(a), dy = sin(a);
+    out.push({ x:cx+dx*R0, y:cy+dy*R0, nx:dx, ny:dy, u:0.5 });
+  }
+  return out;
+}
+function drawFan(fanIndex){
+  const pad = 170;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const baseRad   = random(TWO_PI);                            // each fan points its own way
+  const spreadRad = radians(P.fanspread);
+  const stations = makeFanStations(cx, cy, baseRad, spreadRad);
+  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  drawTeeth(stations, fanIndex*3);
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
+// Fan allowedBrushes rationale: §3 sea-fans / corals are sturdy organic
+// radiating forms — marker gives the chunky fan-rib weight, charcoal the
+// organic coral texture. Pen/rotring read too thin to register as a fan
+// against the Ground; spray loses the radiating-line geometry.
 const GENERATORS = {
-  ribbon: { label:'Ribbon', allowedBrushes:['pen','marker'], draw:drawRibbon },
-  burst:  { label:'Burst',  allowedBrushes:null,             draw:drawBurst  },
-  bloom:  { label:'Bloom',  allowedBrushes:null,             draw:drawBloom  }
+  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker'],     draw:drawRibbon     },
+  burst:      { label:'Burst',       allowedBrushes:null,                 draw:drawBurst      },
+  bloom:      { label:'Bloom',       allowedBrushes:null,                 draw:drawBloom      },
+  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], draw:drawFan       },
+  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],    draw:drawFieldMarks }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -500,9 +580,15 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom') ? 'none' : '';   // taper neutral on Burst/Bloom
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan') ? 'none' : '';   // taper neutral on Burst/Bloom/FieldMarks/Fan
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
+  const fcg=document.getElementById('fieldcountGroup');
+  if(fcg) fcg.style.display = (P.generator==='fieldmarks') ? '' : 'none';
+  const fsg=document.getElementById('fieldscaleGroup');
+  if(fsg) fsg.style.display = (P.generator==='fieldmarks') ? '' : 'none';
+  const fang=document.getElementById('fanspreadGroup');
+  if(fang) fang.style.display = (P.generator==='fan') ? '' : 'none';
 }
 
 // ---- p5 lifecycle ----------------------------------------------------------
@@ -538,6 +624,86 @@ function regenerate(s){
   redraw();
 }
 
+// ---- Preset save / load — tier-3 handoff object (SPEC §1.5 dec. 4) ---------
+// Canonical shape: { schema, name, generator, brush, seed, params, palette, bg }.
+// `schema` starts with "brushstroke.preset/" — version suffix is forward-compat.
+function savePreset(){
+  const defaultName = `${P.generator}-seed${seed}`;
+  const name = (prompt('Preset name:', defaultName) || '').trim();
+  if(!name) return;
+  const preset = {
+    schema: 'brushstroke.preset/1',
+    name,
+    generator: P.generator,
+    brush: currentBrush(),
+    seed,
+    params: { ...P },
+    palette: [...P.palette],
+    bg: P.bg
+  };
+  const blob = new Blob([JSON.stringify(preset, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name.replace(/[^\w.-]+/g, '_') + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function loadPreset(j){
+  if(!j || typeof j.schema !== 'string' || !j.schema.startsWith('brushstroke.preset/')){
+    throw new Error('Not a brushstroke preset (missing/invalid schema field).');
+  }
+  // Stub redraw() during the cascade. Each slider 'input' dispatch otherwise
+  // triggers bindSlider's apply → redraw(), so loading a preset would fire
+  // ~13 rapid redraws with intermediate params. Empirically p5.brush 2.x
+  // leaves the canvas mid-state in that case (the FINAL redraw paints only a
+  // handful of strokes instead of the full set). One clean redraw after the
+  // whole state is settled renders correctly.
+  const realRedraw = window.redraw;
+  window.redraw = () => {};
+  try {
+    // 1. generator first — drives allowedBrushes + UI visibility downstream
+    P.generator = j.generator;
+    document.getElementById('gensel').value = P.generator;
+    // 2. params → P, then push to sliders (reset-handler pattern: setting the
+    //    slider + dispatching 'input' triggers bindSlider's apply, which writes
+    //    parseFloat(el.value) back into P — keeps slider DOM and P in sync)
+    Object.assign(P, j.params || {});
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el && P[id] !== undefined){
+        el.value = P[id];
+        el.dispatchEvent(new Event('input'));
+      }
+    });
+    // 3. non-slider controls
+    const cm = document.getElementById('colormode');
+    if(P.colormode !== undefined){ cm.value = P.colormode; cm.dispatchEvent(new Event('change')); }
+    const ds = document.getElementById('drawspine');
+    if(P.drawspine !== undefined){ ds.checked = !!P.drawspine; ds.dispatchEvent(new Event('change')); }
+    // 4. palette + bg (top-level fields are canonical; params copies are redundant)
+    if(Array.isArray(j.palette)) P.palette = [...j.palette];
+    if(j.bg) P.bg = j.bg;
+    buildSwatches();
+    // 5. seed
+    if(j.seed !== undefined){
+      seed = j.seed;
+      document.getElementById('seedval').textContent = seed;
+    }
+    // 6. refresh generator-specific UI — rebuilds brush <select> to allowed set
+    updateGeneratorUI();
+    // 7. apply brush AFTER allowed list is current; ignore silently if not allowed
+    const bsel = document.getElementById('brushsel');
+    const allowed = activeAllowedBrushes();
+    if(j.brush && allowed.includes(j.brush)) bsel.value = j.brush;
+    syncMaterialSliders();
+  } finally {
+    window.redraw = realRedraw;
+  }
+  redraw();                                                    // one clean paint
+}
+
 // ---- UI wiring -------------------------------------------------------------
 function bindSlider(id, key, fmt){
   const el=document.getElementById(id), out=document.getElementById('v_'+id);
@@ -559,6 +725,9 @@ function wireUI(){
   bindSlider('weight','weight',v=>v.toFixed(1)); bindSlider('anglej','anglej');
   bindSlider('lenj','lenj',v=>v.toFixed(2)); bindSlider('taper','taper',v=>v.toFixed(2));
   bindSlider('swirl','swirl');
+  bindSlider('fieldcount','fieldcount');
+  bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
+  bindSlider('fanspread','fanspread');
   bindSlider('spineweight','spineweight',v=>v.toFixed(1));
   populateGenSelect();
   
@@ -591,9 +760,34 @@ function wireUI(){
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
   document.getElementById('seedRand').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('download').addEventListener('click',()=>saveCanvas('brush-lab_seed'+seed,'png'));
+  document.getElementById('presetSave').addEventListener('click', savePreset);
+  document.getElementById('presetLoadBtn').addEventListener('click', () => document.getElementById('presetLoad').click());
+  document.getElementById('presetLoad').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try { loadPreset(JSON.parse(ev.target.result)); }
+      catch(err){ console.error(err); alert('Load failed: ' + err.message); }
+    };
+    r.readAsText(f);
+    e.target.value = '';                                       // allow reloading same file
+  });
+  document.getElementById('presetSave').addEventListener('click', savePreset);
+  document.getElementById('presetLoadBtn').addEventListener('click', () => document.getElementById('presetLoad').click());
+  document.getElementById('presetLoad').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try { loadPreset(JSON.parse(ev.target.result)); }
+      catch(err){ alert('Preset load failed: ' + err.message); }
+    };
+    r.readAsText(f);
+    e.target.value = '';                       // allow reloading the same file
+  });
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','swirl','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });

@@ -1,0 +1,28 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "fieldmarks-rotring-default",
+  "generator": "fieldmarks",
+  "brush": "rotring",
+  "seed": 1,
+  "params": {
+    "ribbons": 3,
+    "ctrl": 5,
+    "spacing": 11,
+    "width": 22,
+    "weight": 1.2,
+    "anglej": 4,
+    "lenj": 0.4,
+    "taper": 0.6,
+    "swirl": 60,
+    "colormode": "random",
+    "drawspine": false,
+    "spineweight": 6,
+    "fieldcount": 220,
+    "fieldscale": 0.003,
+    "generator": "fieldmarks",
+    "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
+    "bg": "#efe7d8"
+  },
+  "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
+  "bg": "#efe7d8"
+}
