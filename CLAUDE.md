@@ -1,3 +1,19 @@
+# Session-start protocol (READ FIRST, EVERY SESSION)
+
+At the start of every session in this repo, BEFORE responding to the user's first request:
+
+1. Confirm `pwd` is `/Users/markgould/Documents/GenArt2025` — the main repo, NOT a `.claude/worktrees/...` path.
+2. Run `git branch --show-current`, `git log -5 --oneline`, `git status -s` — to know which branch you're on, what shipped recently, and whether anything is uncommitted.
+3. Read these — they may have changed since the last session:
+   - `PATTERNS.md` (project-wide technical patterns)
+   - `DESIGN.md` (visual / aesthetic doctrine)
+   - `project-brushstroke/SPEC.md` (only when work might touch Project Brushstroke)
+4. Briefly tell the user you're oriented — current branch, last commit, anything uncommitted. Do NOT dump full file contents back; the user knows what's in them.
+
+For a deeper, on-demand re-orientation (e.g., starting cold, or context feels stale mid-session), the user can type `/orient` — see `.claude/commands/orient.md` for what that does. The baseline above runs every session whether the user invokes `/orient` or not.
+
+---
+
 # Project Workflow Conventions (READ FIRST — ALL SESSIONS, ALL TASKS)
 
 **Do NOT create git worktrees or `claude/*` branches in this repo.**
