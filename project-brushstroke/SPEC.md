@@ -1,8 +1,8 @@
 # Project Brushstroke — SPEC
 
-*A shared vocabulary and architecture reference. Keep this in the repo root.
-Reference it at the start of every Claude Code / agent session so we all use
-the same words for the same things.*
+*A shared vocabulary and architecture reference. Lives at
+`project-brushstroke/SPEC.md`. Reference it at the start of every Claude Code
+/ agent session so we all use the same words for the same things.*
 
 Part of GenArt2025. Target context: audio-reactive generative performance set
 to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe's
