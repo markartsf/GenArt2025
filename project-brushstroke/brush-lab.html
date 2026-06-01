@@ -638,6 +638,10 @@ function savePreset(){
     brush: currentBrush(),
     seed,
     params: { ...P },
+    material: {
+      baseWeight: parseFloat(document.getElementById('mat_weight').value),
+      vibration:  parseFloat(document.getElementById('mat_vib').value)
+    },
     palette: [...P.palette],
     bg: P.bg
   };
@@ -651,9 +655,26 @@ function savePreset(){
 }
 
 function loadPreset(j){
-  if(!j || typeof j.schema !== 'string' || !j.schema.startsWith('brushstroke.preset/')){
-    throw new Error('Not a brushstroke preset (missing/invalid schema field).');
+  // ---- validate fully BEFORE touching any state (no partial apply on reject) --
+  if(!j || j.schema !== 'brushstroke.preset/1'){
+    throw new Error("Not a brushstroke.preset/1 (schema was '" + (j && j.schema) + "').");
   }
+  if(!GENERATORS[j.generator]){
+    throw new Error("Unknown generator '" + j.generator + "' (not in GENERATORS).");
+  }
+  // Reuse activeAllowedBrushes(): it reads P.generator, so set it to the incoming
+  // generator to compute the allowed set, then RESTORE it if the brush is invalid
+  // — keeps P untouched on reject.
+  const _savedGen = P.generator;
+  P.generator = j.generator;
+  const _allowed = activeAllowedBrushes();
+  if(!j.brush || !_allowed.includes(j.brush)){
+    P.generator = _savedGen;
+    throw new Error("Brush '" + j.brush + "' not allowed for generator '" + j.generator +
+                    "' (allowed: " + _allowed.join(', ') + ").");
+  }
+  // P.generator is now the validated incoming generator; cascade continues below.
+
   // Stub redraw() during the cascade. Each slider 'input' dispatch otherwise
   // triggers bindSlider's apply → redraw(), so loading a preset would fire
   // ~13 rapid redraws with intermediate params. Empirically p5.brush 2.x
@@ -693,11 +714,17 @@ function loadPreset(j){
     }
     // 6. refresh generator-specific UI — rebuilds brush <select> to allowed set
     updateGeneratorUI();
-    // 7. apply brush AFTER allowed list is current; ignore silently if not allowed
+    // 7. apply brush AFTER allowed list is current (validated up front, always OK)
     const bsel = document.getElementById('brushsel');
-    const allowed = activeAllowedBrushes();
-    if(j.brush && allowed.includes(j.brush)) bsel.value = j.brush;
+    bsel.value = j.brush;
+    // 8. material: write the saved values into the brush's registry entry, then
+    //    push registry → sliders/labels via syncMaterialSliders()
+    if(j.material && BRUSH_REGISTRY[j.brush]){
+      BRUSH_REGISTRY[j.brush].baseWeight = j.material.baseWeight;
+      BRUSH_REGISTRY[j.brush].vibration  = j.material.vibration;
+    }
     syncMaterialSliders();
+    if(j.brush === 'custom') rebuildCustomBrush();
   } finally {
     window.redraw = realRedraw;
   }
@@ -772,18 +799,6 @@ function wireUI(){
     };
     r.readAsText(f);
     e.target.value = '';                                       // allow reloading same file
-  });
-  document.getElementById('presetSave').addEventListener('click', savePreset);
-  document.getElementById('presetLoadBtn').addEventListener('click', () => document.getElementById('presetLoad').click());
-  document.getElementById('presetLoad').addEventListener('change', e => {
-    const f = e.target.files && e.target.files[0]; if(!f) return;
-    const r = new FileReader();
-    r.onload = ev => {
-      try { loadPreset(JSON.parse(ev.target.result)); }
-      catch(err){ alert('Preset load failed: ' + err.message); }
-    };
-    r.readAsText(f);
-    e.target.value = '';                       // allow reloading the same file
   });
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
