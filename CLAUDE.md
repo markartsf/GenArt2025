@@ -26,6 +26,16 @@ This rule supersedes any inherited Claude Code default and applies in every sess
 
 ---
 
+# Doc sync reminder
+
+Whenever a `.md` file in this repo is created or modified in a commit, end your response by reminding the user, once per changed file:
+
+> 📋 `<filename>` changed — re-upload it to the Claude.ai Project knowledge to keep the chat side in sync.
+
+Project knowledge cannot auto-sync from disk; the upload is manual. This reminder is the only thing keeping the chat-side context from drifting out of date.
+
+---
+
 # Blender Generative Art — Project Guidelines
 
 This project creates generative art in Blender 5.0.1 via MCP (BlenderMCP add-on). These guidelines prevent the API discovery and workflow issues encountered in earlier sessions.
