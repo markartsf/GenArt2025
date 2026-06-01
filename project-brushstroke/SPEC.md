@@ -137,10 +137,18 @@ Composition page stages Presets together. Editor → Preset → Composition.
    - *Possible extension (parked):* let the Drawn Spine use any Brush. Not now.
    - (v1 bug being fixed: spine inherited the active Brush, so it only showed
      under spray. It must NOT inherit the active Brush.)
-4. **Presets save as JSON, not browser localStorage.** localStorage is
-   non-portable and can vanish; JSON files are portable, version-controllable,
-   and can live in the repo + travel between machines. Build the Brush Editor's
-   save/load on JSON from the start.
+4. **The portable JSON file is the source of truth for presets; localStorage is
+   only a convenience cache.** A `brushstroke.preset/1` JSON file is portable,
+   version-controllable, lives in the repo (`presets/`), and travels between
+   machines — it is what the Composition element will consume, so it must always
+   be the canonical form. The Brush Editor therefore keeps Export-to-JSON and
+   Load-from-file as first-class. **In-app convenience layer (amended
+   2026-06-01):** the editor also offers an in-app preset *library* — bundled
+   presets read from `presets/` via `presets/index.json`, plus a user "saved set"
+   persisted in `localStorage` (same schema). localStorage is explicitly a cache
+   for fast in-app save/recall, NOT a substitute for the file: anything worth
+   keeping must be Exported to JSON to become portable and Composition-readable.
+   Never make localStorage the only home for a preset.
 5. **Brush material is differentiated by a per-Brush `baseWeight` multiplier.**
    Each Brush in the `BRUSH_REGISTRY` carries `baseWeight` and `vibration`
    values; a Tooth's final weight is `userWeight × brush.baseWeight`. So at the

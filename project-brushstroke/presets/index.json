@@ -1,0 +1,7 @@
+{
+  "schema": "brushstroke.presetindex/1",
+  "presets": [
+    "fan-default.json",
+    "fieldmarks-rotring-default.json"
+  ]
+}
