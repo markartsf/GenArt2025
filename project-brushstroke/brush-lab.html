@@ -746,11 +746,18 @@ function loadPreset(j){
   redraw();                                                    // one clean paint
 }
 
-// ---- Preset library — bundled (presets/) + saved (localStorage) ------------
-// SPEC §1.5 dec.4 (amended): the JSON file is the source of truth; localStorage
-// is only a convenience cache. Export-to-JSON remains the portable handoff.
+// ---- Preset library — folder-backed (dev server) or localStorage fallback --
+// SPEC §1.5 dec.4 (amended): JSON files in presets/ are canonical. When the Vite
+// dev server's /__presets endpoint answers (folder mode), the library reads and
+// writes those files directly, so saved presets persist on disk across sessions.
+// With no server (static host / file://) it falls back to localStorage + the
+// bundled presets/index.json manifest, so nothing breaks.
 const PRESET_LS_KEY = 'brushstroke.presets/1';
-let bundledPresets = {};   // name -> preset object (read-only, from presets/)
+const PRESET_API    = '/__presets';
+const PRESET_NAME_RE = /^[A-Za-z0-9_-]+$/;        // becomes a filename — keep it safe
+let folderMode = false;
+let folderPresets  = {};   // name -> preset (folder mode, from the dev endpoint)
+let bundledPresets = {};   // name -> preset (fallback, read-only from index.json)
 
 function lsLoad(){
   try { return JSON.parse(localStorage.getItem(PRESET_LS_KEY)) || {}; }
@@ -761,9 +768,21 @@ function lsSave(store){
   catch(e){ console.warn('preset localStorage write failed:', e); alert('Could not save to browser storage: ' + e.message); }
 }
 
-// Fetch the bundled manifest + each preset file, then (re)build the dropdown.
+// Probe the dev-server folder API; fall back to the static bundled manifest.
 async function loadPresetLibrary(){
-  bundledPresets = {};
+  folderPresets = {}; bundledPresets = {};
+  try {
+    const res = await fetch(PRESET_API, { method: 'GET' });
+    if(res.ok){
+      const data = await res.json();
+      (data.presets || []).forEach(p => { if(p && p.preset && p.name) folderPresets[p.name] = p.preset; });
+      folderMode = true;
+      refreshPresetSelect();
+      return;
+    }
+  } catch(e){ /* no dev endpoint — use static fallback below */ }
+
+  folderMode = false;
   try {
     const idx = await fetch('presets/index.json').then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status));
     const files = Array.isArray(idx) ? idx : (idx.presets || []);
@@ -796,8 +815,12 @@ function refreshPresetSelect(){
     });
     sel.appendChild(og);
   };
-  mkGroup('Bundled', Object.keys(bundledPresets), 'bundled');
-  mkGroup('Saved (this browser)', Object.keys(lsLoad()), 'saved');
+  if(folderMode){
+    mkGroup('Presets (presets/ folder)', Object.keys(folderPresets), 'folder');
+  } else {
+    mkGroup('Bundled', Object.keys(bundledPresets), 'bundled');
+    mkGroup('Saved (this browser)', Object.keys(lsLoad()), 'saved');
+  }
 
   // restore prior selection if it still exists
   if(prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
@@ -808,8 +831,9 @@ function resolvePreset(value){
   if(!value) return null;
   const i = value.indexOf(':');
   const src = value.slice(0, i), name = value.slice(i + 1);
+  if(src === 'folder')  return folderPresets[name]  || null;
   if(src === 'bundled') return bundledPresets[name] || null;
-  if(src === 'saved')   return lsLoad()[name] || null;
+  if(src === 'saved')   return lsLoad()[name]       || null;
   return null;
 }
 
@@ -821,29 +845,59 @@ function loadFromLibrary(){
   catch(e){ console.error(e); alert('Load failed: ' + e.message); }
 }
 
-function saveToLibrary(){
-  const name = (prompt('Save preset to browser library as:', `${P.generator}-seed${seed}`) || '').trim();
+async function saveToLibrary(){
+  const name = (prompt('Save preset as:', `${P.generator}-seed${seed}`) || '').trim();
   if(!name) return;
-  const store = lsLoad();
-  if(store[name] && !confirm(`A saved preset named "${name}" exists. Overwrite it?`)) return;
-  store[name] = buildPresetObject(name);
-  lsSave(store);
-  refreshPresetSelect();
-  document.getElementById('presetLib').value = 'saved:' + name;
+  if(!PRESET_NAME_RE.test(name)){
+    alert('Use letters, numbers, dashes or underscores only — the name becomes a filename.');
+    return;
+  }
+  const preset = buildPresetObject(name);
+
+  if(folderMode){
+    if(folderPresets[name] && !confirm(`A preset named "${name}" exists. Overwrite the file?`)) return;
+    try {
+      const res = await fetch(`${PRESET_API}/${encodeURIComponent(name)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preset)
+      });
+      if(!res.ok){ const e = await res.json().catch(()=>({})); throw new Error(e.error || ('HTTP ' + res.status)); }
+      folderPresets[name] = preset;
+      refreshPresetSelect();
+      document.getElementById('presetLib').value = 'folder:' + name;
+    } catch(e){ console.error(e); alert('Save to folder failed: ' + e.message); }
+  } else {
+    const store = lsLoad();
+    if(store[name] && !confirm(`A saved preset named "${name}" exists. Overwrite it?`)) return;
+    store[name] = preset; lsSave(store);
+    refreshPresetSelect();
+    document.getElementById('presetLib').value = 'saved:' + name;
+  }
 }
 
-function deleteFromLibrary(){
+async function deleteFromLibrary(){
   const sel = document.getElementById('presetLib');
   const value = sel.value;
   if(!value){ alert('Pick a preset to delete.'); return; }
   const src = value.slice(0, value.indexOf(':')), name = value.slice(value.indexOf(':') + 1);
-  if(src !== 'saved'){
-    alert('Only presets saved in this browser can be deleted. Bundled presets live in presets/ in the repo.');
-    return;
+
+  if(folderMode){
+    if(src !== 'folder') return;
+    if(!confirm(`Delete preset file "${name}.json" from presets/? (Removes it from disk — commit when ready.)`)) return;
+    try {
+      const res = await fetch(`${PRESET_API}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if(!res.ok){ const e = await res.json().catch(()=>({})); throw new Error(e.error || ('HTTP ' + res.status)); }
+      delete folderPresets[name];
+      refreshPresetSelect();
+    } catch(e){ console.error(e); alert('Delete failed: ' + e.message); }
+  } else {
+    if(src !== 'saved'){
+      alert('Only presets saved in this browser can be deleted. Bundled presets live in presets/ in the repo.');
+      return;
+    }
+    if(!confirm(`Delete saved preset "${name}"? (This only removes the browser copy — any exported JSON file is untouched.)`)) return;
+    const store = lsLoad(); delete store[name]; lsSave(store);
+    refreshPresetSelect();
   }
-  if(!confirm(`Delete saved preset "${name}"? (This only removes the browser copy — any exported JSON file is untouched.)`)) return;
-  const store = lsLoad(); delete store[name]; lsSave(store);
-  refreshPresetSelect();
 }
 
 // ---- UI wiring -------------------------------------------------------------

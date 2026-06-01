@@ -142,13 +142,22 @@ Composition page stages Presets together. Editor → Preset → Composition.
    version-controllable, lives in the repo (`presets/`), and travels between
    machines — it is what the Composition element will consume, so it must always
    be the canonical form. The Brush Editor therefore keeps Export-to-JSON and
-   Load-from-file as first-class. **In-app convenience layer (amended
-   2026-06-01):** the editor also offers an in-app preset *library* — bundled
-   presets read from `presets/` via `presets/index.json`, plus a user "saved set"
-   persisted in `localStorage` (same schema). localStorage is explicitly a cache
-   for fast in-app save/recall, NOT a substitute for the file: anything worth
-   keeping must be Exported to JSON to become portable and Composition-readable.
-   Never make localStorage the only home for a preset.
+   Load-from-file as first-class. **In-app library (amended 2026-06-01):** the
+   editor offers an in-app preset *library* with two backends, chosen at runtime:
+   - **Folder mode (preferred, dev server):** the root `vite.config.mjs` exposes
+     a `/__presets` endpoint (`GET` list, `PUT <name>` write, `DELETE <name>`)
+     scoped to `presets/`. The lab probes it on load; when present, Save/Delete
+     read and write the JSON files **directly on disk**, so saved presets persist
+     across sessions, are version-controllable, and are Composition-readable with
+     no manual step. Every write/delete regenerates `presets/index.json`. The
+     endpoint validates the `brushstroke.preset/1` schema and refuses any name
+     outside `[A-Za-z0-9_-]` / any path traversal. Writes land uncommitted in the
+     working tree — the user commits when ready.
+   - **Fallback (static host / `file://`):** no endpoint, so the lab reads bundled
+     presets from `presets/index.json` and persists a user "saved set" in
+     `localStorage` (same schema). localStorage is explicitly a cache, NOT a
+     substitute for the file — anything worth keeping must be Exported to JSON to
+     become portable. Never make localStorage the only home for a preset.
 5. **Brush material is differentiated by a per-Brush `baseWeight` multiplier.**
    Each Brush in the `BRUSH_REGISTRY` carries `baseWeight` and `vibration`
    values; a Tooth's final weight is `userWeight × brush.baseWeight`. So at the
