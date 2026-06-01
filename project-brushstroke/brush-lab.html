@@ -182,7 +182,7 @@
     <button id="seedRand">⤬</button>
   </div>
   <div class="btnrow">
-    <button class="primary" id="regen">Regenerate</button>
+    <button class="primary" id="regen">Regenerate (random seed)</button>
     <button id="reset">Reset</button>
   </div>
   <div class="btnrow">
@@ -782,7 +782,7 @@ function wireUI(){
   });
   document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
   document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
-  document.getElementById('regen').addEventListener('click',()=>regenerate());
+  document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('seedPrev').addEventListener('click',()=>regenerate(Math.max(0,seed-1)));
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
   document.getElementById('seedRand').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
