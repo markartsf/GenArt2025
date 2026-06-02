@@ -119,7 +119,7 @@ Always smooth with `lerp(prev, current, 0.1–0.2)` — raw FFT values are jitte
 ### Failed approaches (don't re-investigate)
 
 - **BlenderMCP specifically** — API incompatibilities with Blender 5.0 for audio-reactive work. Note: this is a bridge failing, not Blender failing. The `bpy` scripting path is open (see Under Evaluation).
-- **p5.blender with p5 2.x / p5.brush 2.x** — does not initialize. Removed `registerMethod` extension API + pervasive p5 1.x private-renderer field access (rewritten in p5 2.x); not shimmable. Note: this is the library failing against modern p5, not the subtractive-mixing idea failing. Sanctioned path is Spectral.js called directly in a blend stage we own — proven in `project-brushstroke/pigment-spike-2.html`.
+- **p5.blender with p5 2.x / p5.brush 2.x** — does not initialize. Removed `registerMethod` extension API + pervasive p5 1.x private-renderer field access (rewritten in p5 2.x); not shimmable. Note: this is the library failing against modern p5, not the subtractive-mixing idea failing. Sanctioned path for m2 is p5.brush's own native subtractive blend (it mixes overlapping colours as pigment automatically in 2.1.9-beta — confirmed in `pigment-m2.html`). An owned Spectral.js blend stage was explored and parked; revisit only if audio-driven blend control (m4) demands it.
 - **ISF audio-reactive hosting in Apple Motion** — Motion has no native audio reactivity for ISF shaders. Use VDMX as the ISF host. (Motion itself remains useful for other purposes — see "Capable but out of scope.")
 - **Curly quotation marks in canvas text rendering** — unresolved. Workaround: pre-render as SVG or use straight quotes.
 - **CPU-side particle updates above ~10k** — always use GPU/shaders.
