@@ -36,6 +36,12 @@ Project knowledge cannot auto-sync from disk; the upload is manual. This reminde
 
 ---
 
+# Project Brushstroke — known issues
+
+- **Vibration slider shows little/no visible effect**, at least on thin brushes. Confirm whether it's wired from slider → active brush's vibration → stamp path, or display-only. Vibration is a brush-character property (`BRUSH_REGISTRY` has per-brush vibration values); likely revisited with Pigment-layer/brush work at milestone 2. Not blocking.
+
+---
+
 # Blender Generative Art — Project Guidelines
 
 This project creates generative art in Blender 5.0.1 via MCP (BlenderMCP add-on). These guidelines prevent the API discovery and workflow issues encountered in earlier sessions.
