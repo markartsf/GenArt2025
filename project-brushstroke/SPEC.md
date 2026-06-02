@@ -230,6 +230,14 @@ The Ribbon is built first; the rest are variations on "Stations along a path."
   tips; the orange corals and purple sea-fans in the references.
 - **Field Marks / Stitches** — tiny dashes covering the Ground, all aligned to a
   shared **Flow Field** (the faint diagonal hatch behind everything).
+- **Tuft** — a *singleton* scatter (like Field Marks): one draw call places MANY
+  small radial clusters across the canvas, sized + jittered + placed with plain
+  `random()` so they deliberately **overlap**. The dominant Enfantines motif
+  (piles of small combed bursts), and the overlap substrate the Pigment layer
+  (m2) will blend. Params: `tuftcount`, `tuftradius`, `tuftspread` (0–1 fraction
+  of full circle, <1 = partial fan-like arc), `tuftjitter` (per-tuft radius
+  variety). Combs fully outward via `biasDefault: 1.0`; inherits Tooth bias +
+  Radial offset from the shared renderer.
 - **Wash** — soft translucent colour fields underneath (p5.brush fill / `mass`).
 - **Registration Marks** — the small `+` crosses and dotted frame border;
   compositional scaffolding, drawn last.

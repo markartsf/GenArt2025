@@ -153,6 +153,22 @@
     <div class="row"><label>Fan spread (°)</label><span class="val" id="v_fanspread">110</span></div>
     <input type="range" id="fanspread" min="30" max="270" step="1" value="110">
   </div>
+  <div class="group" id="tuftcountGroup" style="display:none;">
+    <div class="row"><label>Tuft count</label><span class="val" id="v_tuftcount">24</span></div>
+    <input type="range" id="tuftcount" min="1" max="80" step="1" value="24">
+  </div>
+  <div class="group" id="tuftradiusGroup" style="display:none;">
+    <div class="row"><label>Tuft radius</label><span class="val" id="v_tuftradius">60</span></div>
+    <input type="range" id="tuftradius" min="20" max="160" step="1" value="60">
+  </div>
+  <div class="group" id="tuftspreadGroup" style="display:none;">
+    <div class="row"><label>Tuft spread</label><span class="val" id="v_tuftspread">1.00</span></div>
+    <input type="range" id="tuftspread" min="0.2" max="1.0" step="0.05" value="1.0">
+  </div>
+  <div class="group" id="tuftjitterGroup" style="display:none;">
+    <div class="row"><label>Tuft jitter</label><span class="val" id="v_tuftjitter">0.40</span></div>
+    <input type="range" id="tuftjitter" min="0" max="0.9" step="0.05" value="0.4">
+  </div>
 
   <div class="divider"></div>
 
@@ -228,6 +244,7 @@ const DEFAULTS = {
   spineweight:6,
   fieldcount:200, fieldscale:0.003,
   fanspread:110,
+  tuftcount:24, tuftradius:60, tuftspread:1.0, tuftjitter:0.4,
   generator:'ribbon',
   // a fresh, Satie-ish primary-on-cream test palette; edit freely
   palette:['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'],
@@ -535,6 +552,40 @@ function drawFan(fanIndex){
   drawTeeth(stations, fanIndex*3);
 }
 
+// TUFT Generator — a SINGLETON (like Field Marks) that scatters MANY small
+// radial clusters across the canvas in one draw call. Placed with plain random()
+// so tufts deliberately OVERLAP — the dense piles-of-combed-bursts motif of the
+// Enfantines plates, and the substrate the Pigment layer (m2) will blend.
+// Inherits Tooth Bias + Radial offset for free via the shared drawTeeth.
+function makeTuftStations(cx, cy, radius, spreadFrac){
+  const R0 = radius;
+  const fullArc = TWO_PI * spreadFrac;
+  const count = max(3, round(fullArc * R0 / P.spacing));
+  const out = [];
+  const a0 = random(TWO_PI);                 // each tuft points its own way
+  for(let i=0;i<count;i++){
+    const a = a0 + (spreadFrac >= 1
+      ? (i / count) * fullArc                // closed ring: don't double the seam
+      : (i / (count - 1)) * fullArc);        // open arc: inclusive endpoints
+    const dx = cos(a), dy = sin(a);
+    out.push({ x:cx+dx*R0, y:cy+dy*R0, nx:dx, ny:dy, u:0.5 });
+  }
+  return out;
+}
+function drawTuft(idx){
+  if(idx > 0) return;                        // singleton: one call = whole scatter
+  const pad = 120;
+  for(let t=0; t<P.tuftcount; t++){
+    const cx = random(pad, width-pad);
+    const cy = random(pad, height-pad);
+    // per-tuft radius variety → some big, some small → organic piles
+    const r  = P.tuftradius * (1 - random(0, P.tuftjitter));
+    const stations = makeTuftStations(cx, cy, r, P.tuftspread);
+    // colorOffset varies per tuft so adjacent tufts aren't identical palettes
+    drawTeeth(stations, t * 3);
+  }
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -547,7 +598,8 @@ const GENERATORS = {
   burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBurst      },
   bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBloom      },
   fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, draw:drawFan        },
-  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawFieldMarks }
+  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawFieldMarks },
+  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, draw:drawTuft }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -611,7 +663,7 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan') ? 'none' : '';   // taper neutral on Burst/Bloom/FieldMarks/Fan
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft') ? 'none' : '';   // taper neutral on radial/scatter forms
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
   const fcg=document.getElementById('fieldcountGroup');
@@ -620,6 +672,11 @@ function updateGeneratorUI(){
   if(fsg) fsg.style.display = (P.generator==='fieldmarks') ? '' : 'none';
   const fang=document.getElementById('fanspreadGroup');
   if(fang) fang.style.display = (P.generator==='fan') ? '' : 'none';
+  const isTuft = (P.generator==='tuft');
+  ['tuftcountGroup','tuftradiusGroup','tuftspreadGroup','tuftjitterGroup'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = isTuft ? '' : 'none';
+  });
 }
 
 // ---- p5 lifecycle ----------------------------------------------------------
@@ -732,7 +789,7 @@ function loadPreset(j){
     // load as 0 (symmetric) rather than inheriting the previous editor value.
     if(!j.params || j.params.bias === undefined) P.bias = 0;
     if(!j.params || j.params.radialoffset === undefined) P.radialoffset = 0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','spineweight'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -952,6 +1009,10 @@ function wireUI(){
   bindSlider('fieldcount','fieldcount');
   bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
   bindSlider('fanspread','fanspread');
+  bindSlider('tuftcount','tuftcount');
+  bindSlider('tuftradius','tuftradius');
+  bindSlider('tuftspread','tuftspread',v=>v.toFixed(2));
+  bindSlider('tuftjitter','tuftjitter',v=>v.toFixed(2));
   bindSlider('spineweight','spineweight',v=>v.toFixed(1));
   populateGenSelect();
   
@@ -1013,7 +1074,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','spineweight'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
