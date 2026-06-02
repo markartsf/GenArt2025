@@ -1,0 +1,50 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "toothbias001",
+  "generator": "ribbon",
+  "brush": "pen",
+  "seed": 6,
+  "params": {
+    "ribbons": 10,
+    "ctrl": 6,
+    "spacing": 26,
+    "width": 96,
+    "weight": 7.9,
+    "anglej": 27,
+    "lenj": 0.25,
+    "taper": 0.6,
+    "bias": 1,
+    "swirl": 60,
+    "colormode": "random",
+    "drawspine": false,
+    "spineweight": 6,
+    "fieldcount": 200,
+    "fieldscale": 0.003,
+    "fanspread": 110,
+    "generator": "ribbon",
+    "palette": [
+      "#e63946",
+      "#1d3557",
+      "#e9c46a",
+      "#2a9d8f",
+      "#c97fa8",
+      "#7d4f2a",
+      "#f1faee"
+    ],
+    "bg": "#efe7d8"
+  },
+  "material": {
+    "baseWeight": 1,
+    "vibration": 0.1
+  },
+  "palette": [
+    "#e63946",
+    "#1d3557",
+    "#e9c46a",
+    "#2a9d8f",
+    "#c97fa8",
+    "#7d4f2a",
+    "#f1faee"
+  ],
+  "bg": "#efe7d8"
+}

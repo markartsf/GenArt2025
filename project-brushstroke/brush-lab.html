@@ -119,6 +119,20 @@
     <div class="row"><label>Length jitter</label><span class="val" id="v_lenj">0.25</span></div>
     <input type="range" id="lenj" min="0" max="0.9" step="0.01" value="0.25">
   </div>
+  <div class="group">
+    <div class="row">
+      <label>Tooth bias <span style="color:var(--muted);font-size:10px;">inside ← 0 → outside</span></label>
+      <span class="val" id="v_bias">0.00</span>
+    </div>
+    <input type="range" id="bias" min="-1" max="1" step="0.05" value="0">
+  </div>
+  <div class="group">
+    <div class="row">
+      <label>Radial offset <span style="color:var(--muted);font-size:10px;">hub → spread</span></label>
+      <span class="val" id="v_radialoffset">0.00</span>
+    </div>
+    <input type="range" id="radialoffset" min="0" max="1" step="0.05" value="0">
+  </div>
   <div class="group" id="taperGroup">
     <div class="row"><label>Width taper (ends)</label><span class="val" id="v_taper">0.6</span></div>
     <input type="range" id="taper" min="0" max="1" step="0.01" value="0.6">
@@ -210,7 +224,7 @@
 // ============================================================================
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
-  anglej:8, lenj:0.25, taper:0.6, swirl:60, colormode:'random', drawspine:false,
+  anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
   spineweight:6,
   fieldcount:200, fieldscale:0.003,
   fanspread:110,
@@ -375,8 +389,16 @@ function drawTeeth(stations, colorOffset){
     const j=radians(random(-P.anglej,P.anglej));
     const nx=s.nx*cos(j)-s.ny*sin(j);
     const ny=s.nx*sin(j)+s.ny*cos(j);
-    const ax=s.x-nx*halfLen, ay=s.y-ny*halfLen;
-    const bx=s.x+nx*halfLen, by=s.y+ny*halfLen;
+    // Tooth bias: shift both endpoints along the (jittered) normal by bias*halfLen.
+    // b=0 → symmetric (today's behavior); b=±1 → entirely on one flank. Length preserved.
+    // Radial offset: per-tooth random outward push along the SAME normal, on top of
+    // bias — varies each tooth's START distance from the hub (loose spray, not a
+    // uniform ring). offset=0 → unchanged. Length still 2*halfLen; only start moves.
+    const shift  = P.bias * halfLen;
+    const offset = random(0, P.radialoffset) * halfLen;
+    const push   = shift + offset;
+    const ax = s.x - nx*halfLen + nx*push, ay = s.y - ny*halfLen + ny*push;
+    const bx = s.x + nx*halfLen + nx*push, by = s.y + ny*halfLen + ny*push;
     useBrush(activeBrushName, pickColor(i,colorOffset), finalWeight);
     stamp(ax,ay,bx,by);
   }
@@ -521,11 +543,11 @@ function drawFan(fanIndex){
 // organic coral texture. Pen/rotring read too thin to register as a fan
 // against the Ground; spray loses the radiating-line geometry.
 const GENERATORS = {
-  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker'],     draw:drawRibbon     },
-  burst:      { label:'Burst',       allowedBrushes:null,                 draw:drawBurst      },
-  bloom:      { label:'Bloom',       allowedBrushes:null,                 draw:drawBloom      },
-  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], draw:drawFan       },
-  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],    draw:drawFieldMarks }
+  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker'],      biasDefault:0,   draw:drawRibbon     },
+  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBurst      },
+  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBloom      },
+  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, draw:drawFan        },
+  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawFieldMarks }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -706,7 +728,11 @@ function loadPreset(j){
     //    slider + dispatching 'input' triggers bindSlider's apply, which writes
     //    parseFloat(el.value) back into P — keeps slider DOM and P in sync)
     Object.assign(P, j.params || {});
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
+    // Backward compat: presets predating Tooth Bias have no params.bias →
+    // load as 0 (symmetric) rather than inheriting the previous editor value.
+    if(!j.params || j.params.bias === undefined) P.bias = 0;
+    if(!j.params || j.params.radialoffset === undefined) P.radialoffset = 0;
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -920,6 +946,8 @@ function wireUI(){
   bindSlider('spacing','spacing'); bindSlider('width','width');
   bindSlider('weight','weight',v=>v.toFixed(1)); bindSlider('anglej','anglej');
   bindSlider('lenj','lenj',v=>v.toFixed(2)); bindSlider('taper','taper',v=>v.toFixed(2));
+  bindSlider('bias','bias',v=>v.toFixed(2));
+  bindSlider('radialoffset','radialoffset',v=>v.toFixed(2));
   bindSlider('swirl','swirl');
   bindSlider('fieldcount','fieldcount');
   bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
@@ -947,7 +975,16 @@ function wireUI(){
     redraw();
   });
   document.getElementById('gensel').addEventListener('change',e=>{
-    P.generator=e.target.value; updateGeneratorUI(); redraw();
+    P.generator=e.target.value;
+    // Per-generator bias default — windswept on radial, symmetric on Ribbon/Field Marks.
+    // Only runs on user-initiated change. loadPreset sets gensel.value WITHOUT
+    // dispatching 'change', so a saved preset's bias always wins (see loadPreset).
+    const bd = GENERATORS[P.generator].biasDefault ?? 0;
+    P.bias = bd;
+    const bEl = document.getElementById('bias');
+    bEl.value = bd;
+    document.getElementById('v_bias').textContent = bd.toFixed(2);
+    updateGeneratorUI(); redraw();
   });
   document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
   document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
@@ -976,7 +1013,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','spineweight'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });

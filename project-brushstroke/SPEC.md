@@ -237,6 +237,28 @@ The Ribbon is built first; the rest are variations on "Stations along a path."
 A finished Composition usually = Ground + Wash + one or two hero Generators
 (Ribbon / Bloom) + scattered Field Marks + Registration Marks on top.
 
+### 3.1 Shared tooth-geometry parameters (Form layer)
+
+Applied in the shared `drawTeeth` station-renderer, so **every** Generator
+inherits them and they're brush-agnostic. Both ride the standard
+`buildPresetObject`/`loadPreset` round-trip (saved in `params`; older presets
+without them load at their default).
+
+- **Tooth bias** (`bias`, −1…1, default 0) — shifts each tooth's span along its
+  normal by `bias * halfLen`, preserving total length. `0` = symmetric (straddles
+  the spine); `±1` = entirely on one flank. On radial forms +normal = outward, so
+  this reads as inside↔outside; on the Ribbon it reads as which flank of the path.
+  Per-generator **`biasDefault`** (applied on generator *switch*, never overriding
+  a loaded preset): Burst/Bloom/Fan = **1.0** (fully outward, hollow-center spray
+  like the Enfantines plates); Ribbon/Field Marks = 0.
+- **Radial offset** (`radialoffset`, 0…1, default 0) — a *separate* axis from
+  bias. Adds a per-tooth **random** outward push (`random(0, radialoffset)*halfLen`)
+  along the same normal, on top of the bias shift. Varies each tooth's START
+  distance from the hub → loose organic spray rather than a uniform sunburst.
+  Length is unchanged (still `2*halfLen`); only the start moves. `0` = teeth start
+  at the spine (unchanged). Shown for all generators (harmless on Ribbon/Field
+  Marks). Distinct from `lenj` (which varies length, not start position).
+
 ---
 
 ## 4. Roadmap
