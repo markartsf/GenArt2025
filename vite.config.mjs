@@ -68,6 +68,7 @@ function brushstrokePresetsApi() {
   return {
     name: 'brushstroke-presets-api',
     configureServer(server) {
+      console.log(`[presets] ${PRESET_API_PREFIX} API mounted → ${PRESETS_DIR}`);
       server.middlewares.use(PRESET_API_PREFIX, async (req, res) => {
         const send = (code, obj) => {
           res.statusCode = code;
@@ -75,10 +76,15 @@ function brushstrokePresetsApi() {
           res.end(JSON.stringify(obj));
         };
         try {
-          const sub = (req.url || '/').split('?')[0];
+          // Normalize whether or not connect stripped the mount prefix, so both
+          // "/__presets" and the stripped "/" forms resolve identically.
+          let sub = (req.url || '/').split('?')[0];
+          if (sub.startsWith(PRESET_API_PREFIX)) sub = sub.slice(PRESET_API_PREFIX.length);
+          if (sub === '') sub = '/';
+          console.log(`[presets] ${req.method} ${req.originalUrl || req.url} → "${sub}"`);
 
           // GET /__presets  → list the folder
-          if (req.method === 'GET' && (sub === '/' || sub === '')) {
+          if (req.method === 'GET' && sub === '/') {
             return send(200, { presets: listPresets() });
           }
 
