@@ -169,6 +169,26 @@
     <div class="row"><label>Tuft jitter</label><span class="val" id="v_tuftjitter">0.40</span></div>
     <input type="range" id="tuftjitter" min="0" max="0.9" step="0.05" value="0.4">
   </div>
+  <div class="group" id="linecountGroup" style="display:none;">
+    <div class="row"><label>Line count</label><span class="val" id="v_linecount">14</span></div>
+    <input type="range" id="linecount" min="1" max="60" step="1" value="14">
+  </div>
+  <div class="group" id="linesegmentsGroup" style="display:none;">
+    <div class="row"><label>Line segments</label><span class="val" id="v_linesegments">7</span></div>
+    <input type="range" id="linesegments" min="3" max="20" step="1" value="7">
+  </div>
+  <div class="group" id="linewanderGroup" style="display:none;">
+    <div class="row"><label>Line wander</label><span class="val" id="v_linewander">0.90</span></div>
+    <input type="range" id="linewander" min="0" max="1.5" step="0.05" value="0.9">
+  </div>
+  <div class="group" id="linewidthGroup" style="display:none;">
+    <div class="row"><label>Line width</label><span class="val" id="v_linewidth">1.2</span></div>
+    <input type="range" id="linewidth" min="0.3" max="4" step="0.1" value="1.2">
+  </div>
+  <div class="group" id="linealphaGroup" style="display:none;">
+    <div class="row"><label>Line opacity</label><span class="val" id="v_linealpha">0.50</span></div>
+    <input type="range" id="linealpha" min="0.1" max="1" step="0.05" value="0.5">
+  </div>
 
   <div class="divider"></div>
 
@@ -245,6 +265,7 @@ const DEFAULTS = {
   fieldcount:200, fieldscale:0.003,
   fanspread:110,
   tuftcount:24, tuftradius:60, tuftspread:1.0, tuftjitter:0.4,
+  linecount:14, linesegments:7, linewander:0.9, linewidth:1.2, linealpha:0.5,
   generator:'ribbon',
   // a fresh, Satie-ish primary-on-cream test palette; edit freely
   palette:['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'],
@@ -290,6 +311,15 @@ function useBrush(name, hex, weight){
 //    The generator passes endpoints already oriented along the path normal.
 function stamp(ax, ay, bx, by){
   brush.line(ax, ay, bx, by);
+}
+
+// 3b. draw a CONNECTED path as ONE continuous brush stroke (used by Linework,
+//     the only spine-drawing generator). One stroke → uniform alpha, no
+//     double-darkening at joins. Set the brush (colour+weight) before calling.
+function strokePath(poly){
+  brush.beginShape(0);
+  for(const p of poly) brush.vertex(p.x, p.y);
+  brush.endShape();
 }
 
 function rebuildCustomBrush() {
@@ -381,6 +411,30 @@ function makeControlPoints(n){
     y=constrain(y+sin(ang)*step,pad,height-pad);
   }
   return pts;
+}
+
+// Like makeControlPoints but with a caller-controlled angle-drift (wander) and a
+// shorter step — used by Linework. Kept separate so Ribbon's makeControlPoints
+// (which hardcodes its drift) is untouched.
+function makeWanderingPath(n, wander){
+  const pad=120, pts=[];
+  let x=random(pad,width-pad), y=random(pad,height-pad);
+  let ang=random(TWO_PI);
+  for(let i=0;i<n;i++){
+    pts.push({x,y});
+    ang+=random(-wander, wander);
+    const step=random(80,200);
+    x=constrain(x+cos(ang)*step,pad,width-pad);
+    y=constrain(y+sin(ang)*step,pad,height-pad);
+  }
+  return pts;
+}
+
+// hex "#rrggbb" + alpha 0..1 → "rgba(r,g,b,a)" so brush.set can stroke faintly.
+function hexAlpha(hex, a){
+  const h = hex.replace('#','');
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 function pickColor(i, ribbonOffset){
@@ -586,6 +640,27 @@ function drawTuft(idx){
   }
 }
 
+// LINEWORK Generator — the quiet structural "ground": a sparse scatter of thin,
+// faint, slow-wandering CONTOUR LINES. The ONLY generator that draws its spine
+// path directly (via the active brush, one continuous stroke) rather than teeth
+// — it does NOT route through drawTeeth, so Tooth bias / Radial offset are inert
+// here (fine). Singleton, like Field Marks. NOTE: "ground UNDER the colour" is a
+// Composition concern (staging generators together) and is NOT built here — this
+// is the standalone, tunable generator only.
+function drawLinework(idx){
+  if(idx > 0) return;                                   // singleton: one call = whole scatter
+  const activeBrushName = currentBrush();
+  const brushConfig = BRUSH_REGISTRY[activeBrushName] || BRUSH_REGISTRY['default'];
+  const w = P.linewidth * brushConfig.baseWeight;
+  for(let k=0; k<P.linecount; k++){
+    const cps  = makeWanderingPath(P.linesegments, P.linewander);
+    const poly = samplePolyline(cps);
+    const col  = hexAlpha(pickColor(k, k*7), P.linealpha);  // palette colour, faint
+    useBrush(activeBrushName, col, w);
+    strokePath(poly);                                   // one continuous brush stroke
+  }
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -599,7 +674,8 @@ const GENERATORS = {
   bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBloom      },
   fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, draw:drawFan        },
   fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawFieldMarks },
-  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, draw:drawTuft }
+  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, draw:drawTuft },
+  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawLinework }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -663,7 +739,7 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft') ? 'none' : '';   // taper neutral on radial/scatter forms
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework') ? 'none' : '';   // taper neutral on radial/scatter/contour forms
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
   const fcg=document.getElementById('fieldcountGroup');
@@ -676,6 +752,11 @@ function updateGeneratorUI(){
   ['tuftcountGroup','tuftradiusGroup','tuftspreadGroup','tuftjitterGroup'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display = isTuft ? '' : 'none';
+  });
+  const isLine = (P.generator==='linework');
+  ['linecountGroup','linesegmentsGroup','linewanderGroup','linewidthGroup','linealphaGroup'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = isLine ? '' : 'none';
   });
 }
 
@@ -789,7 +870,7 @@ function loadPreset(j){
     // load as 0 (symmetric) rather than inheriting the previous editor value.
     if(!j.params || j.params.bias === undefined) P.bias = 0;
     if(!j.params || j.params.radialoffset === undefined) P.radialoffset = 0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1013,6 +1094,11 @@ function wireUI(){
   bindSlider('tuftradius','tuftradius');
   bindSlider('tuftspread','tuftspread',v=>v.toFixed(2));
   bindSlider('tuftjitter','tuftjitter',v=>v.toFixed(2));
+  bindSlider('linecount','linecount');
+  bindSlider('linesegments','linesegments');
+  bindSlider('linewander','linewander',v=>v.toFixed(2));
+  bindSlider('linewidth','linewidth',v=>v.toFixed(1));
+  bindSlider('linealpha','linealpha',v=>v.toFixed(2));
   bindSlider('spineweight','spineweight',v=>v.toFixed(1));
   populateGenSelect();
   
@@ -1074,7 +1160,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });

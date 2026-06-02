@@ -238,6 +238,16 @@ The Ribbon is built first; the rest are variations on "Stations along a path."
   of full circle, <1 = partial fan-like arc), `tuftjitter` (per-tuft radius
   variety). Combs fully outward via `biasDefault: 1.0`; inherits Tooth bias +
   Radial offset from the shared renderer.
+- **Linework** — sparse, thin, faint, slow-wandering **contour lines** scattered
+  across the canvas: the quiet structural "ground" under the colour in the plates
+  (the drifting contour scribbles, NOT the registration `+` marks). The ONLY
+  generator that draws its spine path **directly** (one continuous brush stroke
+  via the active thin brush + palette colour + alpha) rather than teeth — it does
+  NOT route through `drawTeeth`, so Tooth bias / Radial offset are inert here.
+  Singleton, like Field Marks. Params: `linecount`, `linesegments`, `linewander`,
+  `linewidth`, `linealpha`. NB: "ground UNDER the colour" is a future
+  **Composition** concern (staging generators together); Linework is built here as
+  a standalone, tunable generator only — no compositing under other forms yet.
 - **Wash** — soft translucent colour fields underneath (p5.brush fill / `mass`).
 - **Registration Marks** — the small `+` crosses and dotted frame border;
   compositional scaffolding, drawn last.

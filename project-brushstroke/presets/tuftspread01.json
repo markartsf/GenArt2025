@@ -1,0 +1,55 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "tuftspread01",
+  "generator": "tuft",
+  "brush": "pen",
+  "seed": 1,
+  "params": {
+    "ribbons": 4,
+    "ctrl": 5,
+    "spacing": 4,
+    "width": 120,
+    "weight": 10.5,
+    "anglej": 8,
+    "lenj": 0.25,
+    "taper": 0.6,
+    "bias": 1,
+    "radialoffset": 1,
+    "swirl": 60,
+    "colormode": "random",
+    "drawspine": false,
+    "spineweight": 6,
+    "fieldcount": 200,
+    "fieldscale": 0.003,
+    "fanspread": 110,
+    "tuftcount": 6,
+    "tuftradius": 36,
+    "tuftspread": 0.8,
+    "tuftjitter": 0,
+    "generator": "tuft",
+    "palette": [
+      "#e63946",
+      "#1d3557",
+      "#e9c46a",
+      "#2a9d8f",
+      "#c97fa8",
+      "#7d4f2a",
+      "#f1faee"
+    ],
+    "bg": "#efe7d8"
+  },
+  "material": {
+    "baseWeight": 1,
+    "vibration": 0.1
+  },
+  "palette": [
+    "#e63946",
+    "#1d3557",
+    "#e9c46a",
+    "#2a9d8f",
+    "#c97fa8",
+    "#7d4f2a",
+    "#f1faee"
+  ],
+  "bg": "#efe7d8"
+}
