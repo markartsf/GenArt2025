@@ -1,0 +1,49 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "bloom-seed1002",
+  "generator": "bloom",
+  "brush": "HB",
+  "seed": 1,
+  "params": {
+    "ribbons": 3,
+    "ctrl": 4,
+    "spacing": 11,
+    "width": 89,
+    "weight": 2.9,
+    "anglej": 4,
+    "lenj": 0.4,
+    "taper": 0.6,
+    "swirl": 60,
+    "colormode": "random",
+    "drawspine": false,
+    "spineweight": 6,
+    "fieldcount": 220,
+    "fieldscale": 0.003,
+    "fanspread": 110,
+    "generator": "bloom",
+    "palette": [
+      "#e63946",
+      "#1d3557",
+      "#e9c46a",
+      "#2a9d8f",
+      "#c97fa8",
+      "#7d4f2a",
+      "#f1faee"
+    ],
+    "bg": "#efe7d8"
+  },
+  "material": {
+    "baseWeight": 7.1,
+    "vibration": 0.3
+  },
+  "palette": [
+    "#e63946",
+    "#1d3557",
+    "#e9c46a",
+    "#2a9d8f",
+    "#c97fa8",
+    "#7d4f2a",
+    "#f1faee"
+  ],
+  "bg": "#efe7d8"
+}

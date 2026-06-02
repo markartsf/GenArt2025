@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pigment Spike 2 — owned blend of p5.brush output</title>
+
+<!--
+  PIGMENT SPIKE 2  ·  throwaway diagnostic, NOT a feature
+  ----------------------------------------------------------------------------
+  Question this answers (the one spike 1 couldn't reach):
+    Can p5.brush stroke output be pigment-blended (blue+yellow → green) by a
+    method WE control, independent of the p5.blender library?
+    (Spike 1 ruled p5.blender out for p5 2.x — it can't even initialize.)
+
+  WHY THIS IS A DIFFERENT QUESTION:
+    p5.brush draws with its own stamp engine, not p5's native fill. So the
+    real uncertainty is whether that output can be (a) captured into a buffer
+    we own and (b) have its overlaps blended subtractively by our code.
+
+  APPROACH (simplest viable, fully owned):
+    1. Render each stroke ALONE over white on the p5 WEBGL canvas, then read
+       it back with loadPixels(). This capture works regardless of how
+       p5.brush draws internally — it reads the actual rendered framebuffer.
+    2. Composite on a plain 2D <canvas> WE own, mixing overlap pixels with
+       Spectral.js's CPU mix() — the exact color math under p5.blender, but
+       called directly by us, no library wrapper, no p5 1.x renderer coupling.
+
+  Three panels, left → right:
+    A — NAIVE     : blue then yellow over-composited normally. Overlap = the
+                    opaque top colour. This is the control / "before".
+    B — COVERAGE  : where each stroke has ink (debug view — confirms capture).
+    C — OWNED MIX : overlap pixels run through spectral.mix(). Should read
+                    GREEN if brush output can feed a blend stage we own.
+
+  Stack matches brush-lab.html: p5 2.x + p5.brush 2.1.9-beta (WEBGL).
+  Spectral.js vendored locally (./spectral.min.js) — there IS a CDN
+  (jsdelivr) but we vendor to keep the spike self-contained and offline-safe,
+  matching how spike 1 vendored p5.blend.js.
+
+  >>> VERDICT (2026-05-31) — OUTCOME 1: milestone 2 is viable <<<
+    - spectral.mix('#002185','#fcd300',0.5) = [4,110,90] → green. The owned
+      colour math works, no p5.blender wrapper needed.
+    - p5.brush output IS captureable: loadPixels() read back ~11k ink pixels
+      per stroke from the WEBGL framebuffer. The stamp engine does NOT hide
+      its output downstream — outcome 3 ruled out.
+    - Overlap blends correctly: of 1023 overlap pixels, 1023 (100%) read green
+      after running the two captured colours through spectral.mix(). Marker
+      grain texture survives the blend (visible in panel C).
+    - Panel A (naive over-composite) confirms the contrast: without our blend
+      stage the overlap is just opaque top-colour (yellow on blue).
+
+  IMPLICATION FOR MILESTONE 2 DESIGN:
+    The proven pipeline is: render each colour's strokes to a layer we own →
+    detect overlap by coverage → mix overlap pixels with Spectral.js. This
+    spike does it on the CPU (loadPixels + per-pixel spectral.mix) which is
+    fine for static frames but too slow for audio-reactive realtime. The
+    realtime version ports the SAME math to a fragment shader (Spectral.js
+    ships GLSL; p5.blender's own shader is a reference) sampling per-colour
+    layer textures — but the capture mechanism (render brush strokes to an
+    offscreen buffer, sample downstream) is now PROVEN to work with p5.brush.
+    The open question from SPEC §1 ("does pigment blending reach our brush
+    strokes?") is answered: YES, via a stage we control.
+-->
+
+<script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5.brush@2.1.9-beta/dist/p5.brush.min.js"></script>
+<script src="./spectral.min.js"></script>
+
+<style>
+  html,body { margin:0; background:#1a1a1a; color:#f4efe7;
+    font-family: ui-sans-serif, system-ui, sans-serif; }
+  #wrap { display:flex; flex-direction:column; align-items:center; padding:14px; gap:12px; }
+  h1 { font-size:14px; letter-spacing:0.14em; text-transform:uppercase; margin:0; color:#e9c46a; }
+  #info { font-size:12px; color:#aaa; max-width:900px; line-height:1.5; }
+  #info code { background:#222; padding:1px 5px; border-radius:3px; color:#e9c46a; }
+  #panels { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .panel { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .panel canvas { border:1px solid #333; border-radius:4px; }
+  .panel .cap { font-size:11px; color:#bbb; font-family:ui-monospace,monospace; }
+  #hidden-holder { position:absolute; left:-9999px; top:-9999px; }   /* p5 canvas = render source only */
+  #log { background:#111; border:1px solid #333; border-radius:6px; padding:10px 14px;
+         font-family: ui-monospace, monospace; font-size:11px; color:#cfc;
+         max-width:900px; width:100%; min-height:50px; white-space:pre-wrap; box-sizing:border-box; }
+  .err { color:#ff6c6c; } .ok { color:#9ee69e; } .warn { color:#e9c46a; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Pigment Spike 2 · owned blend of p5.brush output</h1>
+  <div id="info">
+    <b>A — Naive</b>: brush strokes over-composited normally (overlap = opaque top colour).
+    <b>B — Coverage</b>: where each captured stroke has ink (confirms capture works).
+    <b>C — Owned mix</b>: overlap run through <code>spectral.mix()</code> — should read <b>green</b>.<br>
+    Blue <code>#002185</code> + Yellow <code>#fcd300</code>. The p5/WEBGL render source is offscreen; these panels are 2D canvases we composite onto ourselves.
+  </div>
+  <div id="panels">
+    <div class="panel"><canvas id="cA"></canvas><div class="cap">A — naive over-composite</div></div>
+    <div class="panel"><canvas id="cB"></canvas><div class="cap">B — capture coverage</div></div>
+    <div class="panel"><canvas id="cC"></canvas><div class="cap">C — owned spectral blend</div></div>
+  </div>
+  <div id="log">running…</div>
+</div>
+<div id="hidden-holder"></div>
+
+<script>
+const BLUE   = '#002185';
+const YELLOW = '#fcd300';
+const W = 300, H = 300;
+
+const log = (msg, cls='') => {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  if(el.textContent === 'running…') el.textContent = '';
+  el.appendChild(line);
+  console.log('[spike2]', msg);
+};
+
+// Draw ONE crossing tooth via the same stamp path brush-lab's drawTeeth uses:
+// brush.set(material,color,weight) then brush.line(a→b). Endpoints chosen so
+// the two strokes cross near canvas centre.
+// Cross at 90° (an X through centre) with a chunky weight, so the two
+// strokes share a substantial overlap diamond rather than a thin sliver.
+function strokeBlue(){
+  brush.set('marker', BLUE, 30);
+  brush.line(50, 50, 250, 250);
+}
+function strokeYellow(){
+  brush.set('marker', YELLOW, 30);
+  brush.line(50, 250, 250, 50);
+}
+
+// Render a draw-fn alone over a white background, then read the framebuffer
+// back. Returns a Uint8ClampedArray (W*H*4) at pixelDensity 1.
+function captureOverWhite(drawFn){
+  background(255);
+  push();
+  translate(-W/2, -H/2);                        // WEBGL origin → top-left
+  drawFn();
+  pop();
+  loadPixels();
+  // pixels is a view that p5 reuses; copy it out
+  return Uint8ClampedArray.from(pixels);
+}
+
+// coverage at pixel i: how far from white (0 = white/no ink, 255 ~ full ink)
+function coverageAt(px, i){
+  const d = (255-px[i]) + (255-px[i+1]) + (255-px[i+2]);
+  return Math.min(255, d / 3 * 1.0);            // 0..255-ish
+}
+
+function setup(){
+  const c = createCanvas(W, H, WEBGL);
+  c.parent('hidden-holder');
+  pixelDensity(1);                              // 1:1 pixels → simple readback math
+  try { if (typeof brush.load==='function') brush.load(); } catch(e){ log('brush.load threw: '+e.message,'warn'); }
+  try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
+  try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
+  noLoop();
+
+  // ---- sanity: is Spectral.js present with the API we expect? ----
+  if(typeof spectral === 'undefined' || typeof spectral.mix !== 'function'){
+    log('FATAL: spectral.mix not available — vendored file failed to load.', 'err');
+    return;
+  }
+  // quick self-test of the color math itself (independent of p5.brush)
+  try {
+    const t = spectral.mix(BLUE, YELLOW, 0.5, spectral.RGBA255);
+    const greenish = t[1] > t[0] + 20 && t[1] > t[2] + 20;
+    log(`spectral.mix(blue,yellow,0.5) = [${t.map(n=>Math.round(n)).join(', ')}]  → ${greenish?'green ✓':'NOT green'}`,
+        greenish ? 'ok' : 'warn');
+  } catch(e){ log('spectral.mix self-test threw: '+e.message, 'err'); return; }
+
+  // ---- capture each stroke alone ----
+  let blueLayer, yellowLayer, naiveLayer;
+  try {
+    blueLayer   = captureOverWhite(strokeBlue);
+    yellowLayer = captureOverWhite(strokeYellow);
+    // naive: both strokes, normal compositing, in one pass
+    naiveLayer  = captureOverWhite(() => { strokeBlue(); strokeYellow(); });
+    log('Captured blue, yellow, and naive layers via loadPixels.', 'ok');
+  } catch(e){
+    log('Capture threw: '+e.message, 'err'); console.error(e); return;
+  }
+
+  // Did the brush actually put ink on the canvas? (rules out outcome 3)
+  const inkCount = lyr => { let n=0; for(let i=0;i<lyr.length;i+=4) if(coverageAt(lyr,i) > 18) n++; return n; };
+  const blueInk = inkCount(blueLayer), yellowInk = inkCount(yellowLayer);
+  window.__layers = { blueLayer, yellowLayer, naiveLayer, W, H };   // expose for probing
+  log(`Ink pixels — blue: ${blueInk}, yellow: ${yellowInk}` , (blueInk>500 && yellowInk>500) ? 'ok' : 'err');
+  if(blueInk < 500 || yellowInk < 500){
+    log('OUTCOME 3: brush output not captured into the buffer.', 'err');
+  }
+
+  // ---- build the three display panels on 2D canvases we own ----
+  const ctxA = setup2D('cA'), ctxB = setup2D('cB'), ctxC = setup2D('cC');
+  const imgA = ctxA.createImageData(W, H);
+  const imgB = ctxB.createImageData(W, H);
+  const imgC = ctxC.createImageData(W, H);
+
+  let overlapPx = 0, greenOverlapPx = 0;
+  const COV = 22;                               // ink threshold
+
+  for(let i=0;i<W*H*4;i+=4){
+    const bc = coverageAt(blueLayer, i);
+    const yc = coverageAt(yellowLayer, i);
+    const bInk = bc > COV, yInk = yc > COV;
+
+    // Panel A — naive: just the captured normal composite
+    imgA.data[i]   = naiveLayer[i];
+    imgA.data[i+1] = naiveLayer[i+1];
+    imgA.data[i+2] = naiveLayer[i+2];
+    imgA.data[i+3] = 255;
+
+    // Panel B — coverage debug: blue ink→blue, yellow ink→yellow, both→white
+    if(bInk && yInk){ imgB.data[i]=255; imgB.data[i+1]=255; imgB.data[i+2]=255; }
+    else if(bInk)   { imgB.data[i]=30;  imgB.data[i+1]=60;  imgB.data[i+2]=200; }
+    else if(yInk)   { imgB.data[i]=240; imgB.data[i+1]=200; imgB.data[i+2]=20; }
+    else            { imgB.data[i]=20;  imgB.data[i+1]=20;  imgB.data[i+2]=24; }
+    imgB.data[i+3] = 255;
+
+    // Panel C — owned blend: overlap → spectral mix of the two captured colours
+    let r,g,b;
+    if(bInk && yInk){
+      overlapPx++;
+      // mix the actual captured stroke colours, weighted by relative coverage
+      const t = yc / (bc + yc);                 // 0 → all blue, 1 → all yellow
+      const cBlue   = [blueLayer[i],   blueLayer[i+1],   blueLayer[i+2]];
+      const cYellow = [yellowLayer[i], yellowLayer[i+1], yellowLayer[i+2]];
+      const mixed = spectral.mix(cBlue, cYellow, t, spectral.RGBA255);
+      r = mixed[0]; g = mixed[1]; b = mixed[2];
+      if(g > r + 15 && g > b + 15) greenOverlapPx++;
+    } else if(bInk){
+      r = blueLayer[i]; g = blueLayer[i+1]; b = blueLayer[i+2];
+    } else if(yInk){
+      r = yellowLayer[i]; g = yellowLayer[i+1]; b = yellowLayer[i+2];
+    } else {
+      r = 255; g = 255; b = 255;
+    }
+    imgC.data[i]=r; imgC.data[i+1]=g; imgC.data[i+2]=b; imgC.data[i+3]=255;
+  }
+
+  ctxA.putImageData(imgA, 0, 0);
+  ctxB.putImageData(imgB, 0, 0);
+  ctxC.putImageData(imgC, 0, 0);
+
+  // ---- verdict ----
+  log(`Overlap pixels: ${overlapPx}; of those, green after mix: ${greenOverlapPx} (${overlapPx?Math.round(100*greenOverlapPx/overlapPx):0}%)`);
+  // sample the naive overlap to show it is NOT mixed (top-colour only)
+  if(overlapPx > 0){
+    const frac = greenOverlapPx / overlapPx;
+    if(frac > 0.6){
+      log('VERDICT — OUTCOME 1: brush output CAN feed an owned pigment-blend stage. Overlap mixes to green. Milestone 2 viable. ✓', 'ok');
+    } else if(frac > 0.1){
+      log(`VERDICT — partial: overlap captured & blended, but only ${Math.round(frac*100)}% read green. Inspect mix factor / capture coverage.`, 'warn');
+    } else {
+      log('VERDICT — OUTCOME 2: strokes captured, overlap found, but blend not producing green. Report mix inputs.', 'warn');
+    }
+  } else if(blueInk>500 && yellowInk>500){
+    log('VERDICT — strokes captured but no overlap region detected. Adjust stroke geometry so teeth cross.', 'warn');
+  }
+}
+
+function setup2D(id){
+  const cv = document.getElementById(id);
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,W,H);
+  return ctx;
+}
+</script>
+</body>
+</html>
