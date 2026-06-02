@@ -6,7 +6,7 @@
 
 Part of GenArt2025. Target context: audio-reactive generative performance set
 to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe's
-*Enfantines*, built on **p5.brush** (form) + **p5.blender** (pigment).
+*Enfantines*, built on **p5.brush** (form) + **Spectral.js** (pigment, owned blend stage).
 
 ---
 
@@ -25,7 +25,7 @@ Three layers, kept deliberately separate so we never debug all three at once:
 | Layer | Question it answers | Owned by | Status |
 |---|---|---|---|
 | **Form** | Where do marks go and which way do they point? | Generators (our code) | v0 lab — *active* |
-| **Pigment** | What happens where marks overlap in colour? | p5.blender / Spectral.js | milestone 2 |
+| **Pigment** | What happens where marks overlap in colour? | Spectral.js (owned blend stage) | milestone 2 |
 | **Performance** | How does sound move parameters over time? | audio analyser → Composition | milestone 3 |
 
 Build and tune each in isolation, then port. Never wire two unfinished layers
@@ -68,14 +68,17 @@ Read top-to-bottom; each term builds on the one above.
 
 ### Pigment-layer nouns (milestone 2)
 - **Pigment Blend** — realistic subtractive mixing where Teeth overlap
-  (blue + yellow → green), via p5.blender. *Not* RGB alpha layering.
-- **Mask Buffer** — the off-screen shape the blend shader paints into. (See
-  Alejandro's notes; we adopt his approach rather than reinvent it.)
-  > **Open question (defer to m2):** v1 noted a possible p5.brush clipping/
-  > masking limitation. Verify whether it affects pigment-blend fills before
-  > committing to p5.blender. If real, alternatives: Spectral.js direct, or a
-  > custom shader. The frozen `archive/brushstroke-v1` branch holds the v1 code
-  > if we need to reproduce the bug.
+  (blue + yellow → green), via a Spectral.js blend stage we own
+  (p5.blender ruled out — see below). *Not* RGB alpha layering.
+- **Mask Buffer** — the off-screen per-colour layer(s) the owned blend stage
+  reads from.
+  > **Resolved (2026-06-01):** p5.blender is incompatible with our p5 2.x +
+  > p5.brush 2.x stack (its init API was removed and it reaches into p5 1.x
+  > private renderer internals). The owned pipeline is proven in
+  > `pigment-spike-2.html`: render each colour to a layer we own → coverage-detect
+  > overlap → `spectral.mix`. The static CPU version works; the m2 task is porting
+  > that same Spectral math to a fragment shader for realtime. (Spike 1,
+  > `pigment-spike.html`, ruled out p5.blender.)
 
 ---
 
@@ -283,7 +286,9 @@ without them load at their default).
 
 1. **Form (v0 — active).** `brush-lab.html`. Get the Ribbon's Comb reading right
    in isolation. No audio, no pigment blending. Tune via the translation table.
-2. **Pigment (m2).** Add p5.blender so overlapping Teeth mix subtractively.
+2. **Pigment (m2).** Add an owned Spectral.js blend stage so overlapping Teeth
+   mix subtractively (p5.blender ruled out — see §1). Build in a separate test
+   file (pigment-m2.html) first; port once stable.
    Build in a *separate* test file first; port once stable.
 3. **More Generators (m3).** Add Burst, Bloom, Fan as their own modules, each
    tuned in isolation in the lab harness.
@@ -304,7 +309,7 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
   explicit sign-off before writing it.
 - **One change at a time.** No bundling unrelated edits.
 - **No unrequested changes.** Don't "improve" things that weren't asked about.
-- **Keep the adapter quarantined.** All p5.brush/p5.blender calls live behind a
+- **Keep the adapter quarantined.** All p5.brush/Spectral.js calls live behind a
   few named helper functions, so a library-API fix is a one-line change and the
   Generator logic never moves.
 - **Iterate from real output.** When something looks wrong, describe the actual
