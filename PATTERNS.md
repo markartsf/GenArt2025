@@ -111,6 +111,64 @@ tried, both wrong — see Failed approaches).
   name is actually registered in the installed p5.brush build before assuming a
   param bug.
 
+### Brushstroke — built-in vibration (override semantics)
+
+Changing a built-in brush's vibration at runtime is non-obvious because
+p5.brush gives you no setter for an already-registered brush.
+
+- **`brush.set(name, hex, weight)` has no vibration channel.** It's the only
+  call the draw path makes. So writing `BRUSH_REGISTRY[name].vibration` does
+  nothing for built-ins on its own — the value is never read. (It *did* work for
+  the `custom` brush only because `rebuildCustomBrush` re-registers it.)
+- **`brush.add(name, {...})` overwrites in place.** Internally p5.brush stores
+  brushes in a `Map` and `add` ends in `Map.set(name, …)`, so re-adding an
+  existing name replaces its definition — no throw, no duplicate, no ignore.
+  This is the *only* way to mutate a registered brush. Cost: it also resets that
+  brush's cached colour buffers, so it rebuilds per slider tick (same price
+  `rebuildCustomBrush` already pays).
+- **`vibration:` is the input name; p5.brush aliases it to `scatter`** internally
+  (`vibration && !scatter → scatter = vibration`). Pass `vibration:` to match
+  `rebuildCustomBrush`; don't reach for `scatter:`.
+- **`BUILTIN_DNA` decode caveats.** p5.brush exposes no API to read its own
+  registry, so the built-in params are captured in a frozen `BUILTIN_DNA` table
+  (decoded from `p5.brush.min.js@2.1.9-beta`'s init table) and
+  `rebuildBuiltinBrush(name)` re-adds with `{...BUILTIN_DNA[name], vibration}`.
+  Two things must survive the copy or the brush breaks:
+  - `marker` ships **explicit `sharpness:null, grain:null`** — these are "skip
+    those stages" signals, not omissions; dropping them changes the render.
+  - `spray` and `marker` carry **`type:` strings** (`'spray'`/`'marker'`); without
+    them they fall through to the default renderer and lose their geometry.
+  If p5.brush is ever version-bumped, re-decode the table — the defaults may move.
+
+### Brushstroke — Gestural modifiers vs the other irregularities
+
+Project Brushstroke has several "make it less rigid" knobs that look similar but
+act on different stages. Keeping them straight prevents re-implementing one as
+another (the trap that produced the rejected wiggle attempts).
+
+- **Three distinct mechanisms, three stages:**
+  - **Gestural Tremor** moves the *station position* along its normal (in
+    `drawTeeth`, on the CPU, before the stroke is drawn).
+  - **Bend Field** bends the *stroke itself* as p5.brush renders it (a vector
+    flow field inside the library — see the Bend Field scaffold above). This is
+    the real *Enfantines* wiggle; tremor is a coarser whole-mark wander.
+  - **Angle jitter** *rotates* the tooth off its exact normal; it neither moves
+    the position nor bends the stroke.
+- **Never call the group "Hand".** The collective name is **Gestural modifiers**.
+  `hand` is a Bend Field value (a p5.brush field name), so "Hand tremor" as a
+  group label collides with the field vocabulary. UI labels abbreviate to
+  "Hand · tremor/gate/chaos" but the concept is Gestural modifiers.
+- **Tremor lift (`95f382b`).** Tremor originally lived in `makeStations`, which
+  only builds Ribbon stations, so it was silently Ribbon-only. It now lives in
+  shared `drawTeeth` and rides each station's own normal, making it correct on
+  radial generators (Burst/Bloom/Fan/Tuft) too. Rule of thumb: per-tooth
+  geometry that should apply to every generator goes in `drawTeeth`, never in a
+  per-generator station builder.
+- **Gate uses position-noise, not per-tooth random.** `handGate` thresholds a
+  `noise(s.x, s.y)` field so skipped stations cluster into coherent bare
+  stretches (a hand lifting off), rather than independent random dropout, which
+  would read as salt-and-pepper speckle.
+
 ---
 
 ## Recording & export

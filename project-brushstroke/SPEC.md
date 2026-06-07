@@ -180,6 +180,34 @@ Composition page stages Presets together. Editor → Preset → Composition.
    Current registry: pen (1.0 / 0.1), marker (2.5 / 0.2), rotring (0.8 / 0.05),
    charcoal (4.0 / 0.8), spray (8.0 / 1.0), custom (5.0 / 0.5),
    default (2.0 / 0.3) — values are (baseWeight / vibration).
+
+   *Vibration is live for built-ins (2026-06-07, commit `9dfe5b8`).* Previously
+   `vibration` only did anything on the `custom` brush: `useBrush` calls
+   `brush.set(name, hex, weight)`, and `brush.set` has **no vibration channel**,
+   so for pen/marker/rotring/charcoal/spray the slider wrote
+   `BRUSH_REGISTRY[name].vibration` but nothing consumed it. p5.brush exposes no
+   API to mutate a registered brush in place, so the fix mirrors the `custom`
+   path: a frozen **`BUILTIN_DNA`** table holds each built-in's full library DNA
+   (weight/sharpness/grain/opacity/spacing/pressure/type), and
+   **`rebuildBuiltinBrush(name)`** re-adds the brush via `brush.add` with only
+   `vibration` swapped in from `BRUSH_REGISTRY` — `brush.add` overwrites
+   p5.brush's internal entry in place. Wired into the Vibration slider handler
+   and `loadPreset` (custom → `rebuildCustomBrush`, built-in →
+   `rebuildBuiltinBrush`). Mechanism detail + the decode caveats (explicit
+   `sharpness:null`/`grain:null`, the `type:` strings, `vibration:`→`scatter:`
+   aliasing) are in `PATTERNS.md` → *Brushstroke — built-in vibration*.
+
+   *Deferred (accepted, not shipped) — startup reconciliation ("Edit 5").* On
+   first load before any slider touch, a built-in still renders at p5.brush's
+   **library** default vibration, not `BRUSH_REGISTRY`'s value (e.g. charcoal
+   library 1.5 vs registry 0.8; spray 6 vs 1.0), so the slider position can
+   disagree with the render until first touched. A startup loop calling
+   `rebuildBuiltinBrush` for every built-in would reconcile this, but it's held
+   pending a by-eye review of the resulting render shift (it materially changes
+   the out-of-box charcoal/spray look). Trade-off to remember when revisiting:
+   the modifiers are **regenerate-reverts / preset-persists** — a fresh seed
+   re-runs from `DEFAULTS`, but a saved preset carries the tuned values through
+   the `loadPreset` round-trip.
 6. **The Bloom Generator is implemented (SPEC §3's planned Bloom).**
    Stations on a circle, radius modulated by 2D Perlin noise → organic
    petal-lobe shapes rather than a perfect radial Burst. A `swirl` parameter
@@ -271,9 +299,20 @@ A finished Composition usually = Ground + Wash + one or two hero Generators
 ### 3.1 Shared tooth-geometry parameters (Form layer)
 
 Applied in the shared `drawTeeth` station-renderer, so **every** Generator
-inherits them and they're brush-agnostic. Both ride the standard
+inherits them and they're brush-agnostic. All ride the standard
 `buildPresetObject`/`loadPreset` round-trip (saved in `params`; older presets
 without them load at their default).
+
+> **Where they live (2026-06-07):** Tooth bias, Radial offset, the Gestural
+> modifiers (Tremor / Gate / Chaos), and `strokeLen` are **all** applied in the
+> shared `drawTeeth` renderer — *not* in per-generator `makeStations`. Tremor
+> used to live in `makeStations` (so it only moved Ribbon stations); it was
+> lifted into `drawTeeth` (commit `95f382b`) where it rides each station's own
+> **normal**, making it geometry-correct on radial forms (Burst/Bloom/Fan/Tuft)
+> as well as the Ribbon. **Do not push any of these back down into
+> `makeStations`** — that re-breaks them for every non-Ribbon generator and
+> splits one shared behaviour across two places. New per-tooth geometry knobs
+> belong in `drawTeeth`.
 
 - **Tooth bias** (`bias`, −1…1, default 0) — shifts each tooth's span along its
   normal by `bias * halfLen`, preserving total length. `0` = symmetric (straddles
@@ -289,6 +328,30 @@ without them load at their default).
   Length is unchanged (still `2*halfLen`); only the start moves. `0` = teeth start
   at the spine (unchanged). Shown for all generators (harmless on Ribbon/Field
   Marks). Distinct from `lenj` (which varies length, not start position).
+- **Gestural modifiers** (`handTremor` / `handGate` / `handChaos`, each 0…1,
+  default 0) — the three "loose human hand" axes, all applied in shared
+  `drawTeeth` and inherited by **every generator except Linework** (which draws
+  its spine directly and never routes through `drawTeeth`). Collective name is
+  **"Gestural modifiers"**, NOT "Hand" — `hand` is a **Bend Field** value (a
+  p5.brush field name), and reusing the word for an unrelated axis-group is
+  exactly the kind of overload §1.5 retired "style" for. (The UI labels read
+  "Hand · tremor/gate/chaos" for brevity; the *concept* is Gestural modifiers.)
+  - **Tremor** (`handTremor`) — low-freq wander of each tooth's whole position
+    **along its own normal** (`noise(x,y) → ±amp` on `s.nx/s.ny`); amplitude
+    scales with tooth length so it reads at any size. Distinct from **Bend Field**
+    (which bends the stroke *as p5.brush draws it*, not the station position) and
+    from **angle jitter** (which rotates the tooth, not move it). Lifted from
+    `makeStations` into `drawTeeth` (`95f382b`) so it's geometry-correct on radial
+    forms, not Ribbon-only.
+  - **Gate** (`handGate`) — spatially-coherent **starve**: a position-noise field
+    (`noise(s.x,s.y)`) skips whole stations below the threshold, leaving coherent
+    bare stretches and dense clumps. *Not* per-tooth random dropout (that would be
+    salt-and-pepper); the noise rides position so the gaps cluster like a hand
+    lifting off the page.
+  - **Chaos** (`handChaos`) — blends each tooth's length from the orderly **width
+    envelope** toward **per-tooth noise length** (`envelope → noise` lerp by
+    `handChaos`), with occasional long outliers. Varies length, not position or
+    start — distinct from `lenj` (uniform random shrink) and Radial offset.
 - **Bend Field** (`field` = a vector field name; levers `fieldAmount` 0…1 and
   `strokeLen` 0.5…3) — a p5.brush native **vector flow field** that bends each
   stroke *as it is drawn*, producing the gestural *Enfantines* wiggle. This is
@@ -349,8 +412,8 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
 
 Spine · Control Point · Station · Tangent · Normal · Tooth (Stamp) · Comb ·
 Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field · Bend Field ·
-Brush · Brush Weight · Palette · Preset · Composition · Pigment Blend ·
-Mask Buffer · Registration Marks.
+Gestural modifiers (Tremor / Gate / Chaos) · Brush · Brush Weight · Palette ·
+Preset · Composition · Pigment Blend · Mask Buffer · Registration Marks.
 
 *If a term isn't here and we find ourselves needing it, add it — the value of
 this file is that one word always means one thing.*
