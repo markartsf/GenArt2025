@@ -316,6 +316,23 @@ const BRUSH_REGISTRY = {
   'default':  { baseWeight: 2.0,  vibration: 0.3 }
 };
 
+// p5.brush's built-in DNA at @2.1.9-beta. Captured here (p5.brush exposes no
+// public API to read its internal registry) so rebuildBuiltinBrush can re-add
+// a brush in place with only `vibration` swapped, preserving the rest of the
+// library's per-brush identity. Field name `vibration` matches rebuildCustomBrush
+// (p5.brush aliases it to `scatter` internally). `sharpness: null` /
+// `grain: null` on marker are explicit — they signal "skip those stages" and
+// must not be omitted. `type` on spray/marker must be preserved or they fall
+// through to the default renderer. Source decoded 2026-06-07 from
+// p5.brush.min.js's internal registration table.
+const BUILTIN_DNA = Object.freeze({
+  'pen':      { weight: 0.3,  vibration: 0.15, sharpness: 0.9,  grain: 0.7,  opacity: 150, spacing: 0.1,  pressure: { curve:[0.15,0.2],  min_max:[1.2,1] } },
+  'rotring':  { weight: 0.15, vibration: 0.05, sharpness: 0.7,  grain: 0.9,  opacity: 210, spacing: 0.1,  pressure: { curve:[0.35,0.2],  min_max:[1.3,1] } },
+  'charcoal': { weight: 0.35, vibration: 1.5,  sharpness: 0.68, grain: 2,    opacity: 120, spacing: 0.03, pressure: { curve:[0.15,0.4],  min_max:[1.1,0.95] } },
+  'spray':    { weight: 0.2,  vibration: 6,    sharpness: 15,   grain: 40,   opacity: 90,  spacing: 0.5,  pressure: { curve:[0.2,0.35],  min_max:[0.7,1] },     type: 'spray'  },
+  'marker':   { weight: 2,    vibration: 0.2,  sharpness: null, grain: null, opacity: 1,   spacing: 0.03, pressure: { curve:[0.35,0.25], min_max:[1.2,0.85] }, type: 'marker' },
+});
+
 // ============================================================================
 //  >>> P5.BRUSH ADAPTER <<<  (the only library-specific code)
 //  If a v2 signature differs in your installed build, fix it here only.
@@ -377,6 +394,20 @@ function rebuildCustomBrush() {
     });
   } catch(e) {
     console.error("Brush Engine Error:", e);
+  }
+}
+
+function rebuildBuiltinBrush(name) {
+  const dna = BUILTIN_DNA[name];
+  const cfg = BRUSH_REGISTRY[name];
+  if (!dna || !cfg) return;
+  try {
+    // Re-add overrides the existing built-in entry in p5.brush's internal Map.
+    // BRUSH_REGISTRY[name].vibration becomes the live value; the rest of the
+    // built-in's DNA is preserved from BUILTIN_DNA so we don't clobber its identity.
+    brush.add(name, { ...dna, vibration: cfg.vibration });
+  } catch(e) {
+    console.error("Brush Engine Error (rebuild built-in):", e);
   }
 }
 // ============================================================================
@@ -1004,7 +1035,8 @@ function loadPreset(j){
       BRUSH_REGISTRY[j.brush].vibration  = j.material.vibration;
     }
     syncMaterialSliders();
-    if(j.brush === 'custom') rebuildCustomBrush();
+    if (j.brush === 'custom') rebuildCustomBrush();
+    else if (BUILTIN_DNA[j.brush]) rebuildBuiltinBrush(j.brush);
   } finally {
     window.redraw = realRedraw;
   }
@@ -1218,7 +1250,8 @@ function wireUI(){
     const bName = document.getElementById('brushsel').value;
     if(BRUSH_REGISTRY[bName]) BRUSH_REGISTRY[bName].vibration = parseFloat(e.target.value);
     document.getElementById('v_mat_vib').textContent = parseFloat(e.target.value).toFixed(2);
-    if (document.getElementById('brushsel').value === 'custom') { rebuildCustomBrush(); }
+    if (bName === 'custom') { rebuildCustomBrush(); }
+    else if (BUILTIN_DNA[bName]) { rebuildBuiltinBrush(bName); }
     redraw();
   });
 
