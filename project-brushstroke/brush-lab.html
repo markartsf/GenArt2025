@@ -420,15 +420,8 @@ function placeStations(poly, spacing){
       const x=a.x+(b.x-a.x)*f, y=a.y+(b.y-a.y)*f;
       let tx=b.x-a.x, ty=b.y-a.y; const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m;
       const uPos = total ? target/total : 0;
-      let px = x, py = y;
-      if (P.handTremor > 0) {
-        // low-freq wander ALONG the normal; amplitude scales with ribbon width
-        const amp = P.handTremor * P.width * 0.18;
-        const w = (noise(x*0.012, y*0.012) - 0.5) * 2 * amp;
-        px = x + (-ty) * w;
-        py = y + ( tx) * w;
-      }
-      stations.push({x:px, y:py, nx:-ty, ny:tx, u:uPos}); // normal = perp to original tangent
+      stations.push({x:x, y:y, nx:-ty, ny:tx, u:uPos}); // normal = perp to original tangent
+                                                        // (tremor now applied in shared drawTeeth)
       target+=spacing;
     }
     run+=L;
@@ -499,6 +492,17 @@ function drawTeeth(stations, colorOffset){
       const g = noise(s.x*0.008, s.y*0.008, 17.3);
       if (g < P.handGate) continue;            // starved — leave bare canvas
     }
+    // Hand: tremor. Low-freq wander of the whole tooth ALONG its own normal,
+    // so it's correct for every generator's geometry (radial, flow, ribbon).
+    // Amplitude scales with tooth length so it reads at any size. Shared with
+    // gate + chaos — all three Hand axes now live here, not in makeStations.
+    let cx = s.x, cy = s.y;
+    if (P.handTremor > 0) {
+      const amp = P.handTremor * (P.width*0.5) * 0.36;
+      const w = (noise(s.x*0.012, s.y*0.012, 5.1) - 0.5) * 2 * amp;
+      cx = s.x + s.nx * w;
+      cy = s.y + s.ny * w;
+    }
     // width envelope: taper tooth length toward both ends (u→0/1)
     const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
     const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
@@ -523,8 +527,8 @@ function drawTeeth(stations, colorOffset){
     const shift  = P.bias * halfLen;
     const offset = random(0, P.radialoffset) * halfLen;
     const push   = shift + offset;
-    const ax = s.x - nx*halfLen + nx*push, ay = s.y - ny*halfLen + ny*push;
-    const bx = s.x + nx*halfLen + nx*push, by = s.y + ny*halfLen + ny*push;
+    const ax = cx - nx*halfLen + nx*push, ay = cy - ny*halfLen + ny*push;
+    const bx = cx + nx*halfLen + nx*push, by = cy + ny*halfLen + ny*push;
     useBrush(activeBrushName, pickColor(i,colorOffset), finalWeight);
     stamp(ax,ay,bx,by);
   }
