@@ -91,6 +91,26 @@ Always smooth with `lerp(prev, current, 0.1–0.2)` — raw FFT values are jitte
 - Expose the seed as a URL parameter for reproducibility: `?seed=12345`.
 - When you find a good variant, **save the seed** in a comment or sidecar file.
 
+### Brushstroke — Bend Field (the Enfantines wiggle)
+
+The gestural stroke wiggle in Project Brushstroke comes from p5.brush's native
+**vector flow field** bending each stroke as it's drawn — confirmed against
+Campos Uribe's `setup.js`. It is NOT position jitter and NOT per-tooth sine (both
+tried, both wrong — see Failed approaches).
+
+- Select per generator via the Field control; `'none'` is the clean off-switch.
+- Built-in fields (`curved`, `waves`, `seabed`, `zigzag`, …) take no amount knob.
+- `'tunable'` is a custom-registered field (`brush.addField('tunable', fn,
+  {angleMode:'degrees'})`) whose angle = `noise(...) * 180 * fieldAmount`,
+  re-baked via `brush.refreshField(0)` when amount changes. **Distortion · amount
+  applies to `'tunable'` only.**
+- `strokeLen` multiplies tooth/stroke length so there's more path to bend — short
+  stamps barely show it, longer strokes show it clearly.
+- Field activation is wrapped in try/catch → `noField()`: an invalid field name
+  fails *silently*. If a generator's default wiggle looks dead, verify the field
+  name is actually registered in the installed p5.brush build before assuming a
+  param bug.
+
 ---
 
 ## Recording & export
@@ -123,6 +143,10 @@ Always smooth with `lerp(prev, current, 0.1–0.2)` — raw FFT values are jitte
 - **ISF audio-reactive hosting in Apple Motion** — Motion has no native audio reactivity for ISF shaders. Use VDMX as the ISF host. (Motion itself remains useful for other purposes — see "Capable but out of scope.")
 - **Curly quotation marks in canvas text rendering** — unresolved. Workaround: pre-render as SVG or use straight quotes.
 - **CPU-side particle updates above ~10k** — always use GPU/shaders.
+- **Position jitter / per-tooth sine waves for stroke wiggle** — neither produces
+  gestural Enfantines character. The correct mechanism is p5.brush's native
+  vector flow field bending strokes during draw (the Bend Field). See p5.js
+  scaffolds.
 
 ### Capable but out of scope
 

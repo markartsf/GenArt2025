@@ -289,6 +289,25 @@ without them load at their default).
   Length is unchanged (still `2*halfLen`); only the start moves. `0` = teeth start
   at the spine (unchanged). Shown for all generators (harmless on Ribbon/Field
   Marks). Distinct from `lenj` (which varies length, not start position).
+- **Bend Field** (`field` = a vector field name; levers `fieldAmount` 0…1 and
+  `strokeLen` 0.5…3) — a p5.brush native **vector flow field** that bends each
+  stroke *as it is drawn*, producing the gestural *Enfantines* wiggle. This is
+  the confirmed wiggle mechanism — NOT position jitter and NOT per-tooth sine
+  waves, which were both tried and rejected. The field is selected per generator
+  via the Field dropdown; `'none'` is the clean off-switch. Most options
+  (`curved`, `waves`, `seabed`, `zigzag`, …) are p5.brush built-ins; `'tunable'`
+  is our own registered field whose angle magnitude is scaled live by
+  **Distortion · amount** (`fieldAmount`). `fieldAmount` therefore applies to the
+  `'tunable'` selection ONLY — it is inert for the built-in fields. **Distortion ·
+  stroke length** (`strokeLen`) multiplies tooth/stroke length so there is more
+  path for the field to bend (a short stamp shows little bend; a longer stroke
+  shows more). Per-generator `fieldDefault` is applied on generator *switch*
+  (never overriding a loaded preset).
+  > **Naming (2026-06-07):** "Bend Field" is deliberately distinct from **Flow
+  > Field** (§3, Field Marks alignment hatch) and from **Pigment Blend** (§1).
+  > Bend = stroke distortion during draw; Flow = mark *alignment* across the
+  > ground; Blend = subtractive colour mixing. Three different mechanisms, three
+  > non-overlapping names.
 
 ---
 
@@ -329,7 +348,7 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
 ## 6. Glossary (quick reference)
 
 Spine · Control Point · Station · Tangent · Normal · Tooth (Stamp) · Comb ·
-Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field ·
+Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field · Bend Field ·
 Brush · Brush Weight · Palette · Preset · Composition · Pigment Blend ·
 Mask Buffer · Registration Marks.
 
