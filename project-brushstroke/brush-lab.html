@@ -823,7 +823,12 @@ function updateGeneratorUI(){
 function setup(){
   const c=createCanvas(min(windowWidth-340,1100), min(windowHeight-40,900), WEBGL);
   c.parent('canvas-holder');
-  pixelDensity(2);
+  // pixelDensity(2) gives retina sharpness in real browsers, but corrupts
+  // p5.brush's deferred-renderer output at high overdraw inside Claude
+  // Preview's embedded Chromium (Electron/ANGLE-Metal). UA check so real
+  // Chrome/Safari keep 2x; only the preview context drops to 1x.
+  const inClaudePreview = /Claude\/.*Electron/.test(navigator.userAgent);
+  pixelDensity(inClaudePreview ? 1 : 2);
   try { if (typeof brush.load==='function') brush.load(); } catch(e){}
   // Custom tunable field — angle magnitude scaled live by P.fieldAmount.
   // Registered once; re-baked via refreshField() when amount changes.
