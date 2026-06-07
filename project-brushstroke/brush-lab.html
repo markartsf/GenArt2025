@@ -137,6 +137,14 @@
     <div class="row"><label>Width taper (ends)</label><span class="val" id="v_taper">0.6</span></div>
     <input type="range" id="taper" min="0" max="1" step="0.01" value="0.6">
   </div>
+  <div class="group">
+    <div class="row"><label>Hand · tremor</label><span class="val" id="v_handTremor"></span></div>
+    <input type="range" id="handTremor" min="0" max="1" step="0.01" value="0">
+    <div class="row"><label>Hand · gate <span style="opacity:.6">cluster ↔ starve</span></label><span class="val" id="v_handGate"></span></div>
+    <input type="range" id="handGate" min="0" max="0.9" step="0.01" value="0">
+    <div class="row"><label>Hand · chaos <span style="opacity:.6">envelope ↔ noise</span></label><span class="val" id="v_handChaos"></span></div>
+    <input type="range" id="handChaos" min="0" max="1" step="0.01" value="0">
+  </div>
   <div class="group" id="swirlGroup" style="display:none;">
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
@@ -195,6 +203,23 @@
   <div class="group">
     <div class="row"><label>Brush</label></div>
     <select id="brushsel"></select>
+    <div class="row"><label>Field</label></div>
+    <select id="fieldsel">
+      <option value="none">none</option>
+      <option value="hand">hand</option>
+      <option value="curved">curved</option>
+      <option value="waves">waves</option>
+      <option value="seabed">seabed</option>
+      <option value="zigzag">zigzag</option>
+      <option value="spiral">spiral</option>
+      <option value="columns">columns</option>
+      <option value="tunable">tunable (amount)</option>
+    </select>
+    <div class="row"><label>Distortion · amount <span style="opacity:.6">tunable field only</span></label><span class="val" id="v_fieldAmount"></span></div>
+    <input type="range" id="fieldAmount" min="0" max="1" step="0.01" value="0.5">
+
+    <div class="row"><label>Distortion · stroke length</label><span class="val" id="v_strokeLen"></span></div>
+    <input type="range" id="strokeLen" min="0.5" max="3" step="0.05" value="1.0">
   </div>
   <div class="group">
     <div class="row"><label>Base Weight</label><span class="val" id="v_mat_weight"></span></div>
@@ -261,6 +286,11 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
+  // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
+  handTremor:0, handGate:0, handChaos:0,
+  field:'none',   // active p5.brush vector field; per-generator default applied on switch
+  fieldAmount:0.5,   // 0..1 — distortion strength for the 'tunable' field
+  strokeLen:1.0,     // 0.5..3 — tooth/stroke length multiplier (room for the bend)
   spineweight:6,
   fieldcount:200, fieldscale:0.003,
   fanspread:110,
@@ -389,7 +419,16 @@ function placeStations(poly, spacing){
       const f=(target-run)/L;
       const x=a.x+(b.x-a.x)*f, y=a.y+(b.y-a.y)*f;
       let tx=b.x-a.x, ty=b.y-a.y; const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m;
-      stations.push({x,y,nx:-ty,ny:tx,u:total?target/total:0}); // normal = perp to tangent
+      const uPos = total ? target/total : 0;
+      let px = x, py = y;
+      if (P.handTremor > 0) {
+        // low-freq wander ALONG the normal; amplitude scales with ribbon width
+        const amp = P.handTremor * P.width * 0.18;
+        const w = (noise(x*0.012, y*0.012) - 0.5) * 2 * amp;
+        px = x + (-ty) * w;
+        py = y + ( tx) * w;
+      }
+      stations.push({x:px, y:py, nx:-ty, ny:tx, u:uPos}); // normal = perp to original tangent
       target+=spacing;
     }
     run+=L;
@@ -453,9 +492,25 @@ function drawTeeth(stations, colorOffset){
 
   for(let i=0;i<stations.length;i++){
     const s=stations[i];
+    // Hand: cluster & starve. Skip stations the noise field gates out.
+    // Noise rides the station's own position → spatially coherent dense
+    // patches and bare stretches, not salt-and-pepper dropout.
+    if (P.handGate > 0) {
+      const g = noise(s.x*0.008, s.y*0.008, 17.3);
+      if (g < P.handGate) continue;            // starved — leave bare canvas
+    }
     // width envelope: taper tooth length toward both ends (u→0/1)
     const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
-    const halfLen=(P.width*0.5)*env*(1-random(0,P.lenj));
+    const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
+    // Hand: length chaos. Blend envelope length → per-tooth noise length,
+    // wide range with occasional long outliers.
+    let halfLen = envLen;
+    if (P.handChaos > 0) {
+      const nL = noise(i*0.45, 91.7);          // per-tooth, smooth run-to-run
+      const chaosLen = (P.width*0.5) * (0.25 + nL*nL*1.35);
+      halfLen = lerp(envLen, chaosLen, P.handChaos);
+    }
+    halfLen *= P.strokeLen;   // distortion lever: longer strokes show the field more
     // jitter the tooth angle off the exact normal (0 = exact right angle)
     const j=radians(random(-P.anglej,P.anglej));
     const nx=s.nx*cos(j)-s.ny*sin(j);
@@ -669,13 +724,13 @@ function drawLinework(idx){
 // organic coral texture. Pen/rotring read too thin to register as a fan
 // against the Ground; spray loses the radiating-line geometry.
 const GENERATORS = {
-  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker'],      biasDefault:0,   draw:drawRibbon     },
-  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBurst      },
-  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, draw:drawBloom      },
-  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, draw:drawFan        },
-  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawFieldMarks },
-  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, draw:drawTuft },
-  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   draw:drawLinework }
+  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker'],      biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawRibbon     },
+  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'none',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawBurst      },
+  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawBloom      },
+  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFan        },
+  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFieldMarks },
+  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawTuft },
+  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -766,6 +821,22 @@ function setup(){
   c.parent('canvas-holder');
   pixelDensity(2);
   try { if (typeof brush.load==='function') brush.load(); } catch(e){}
+  // Custom tunable field — angle magnitude scaled live by P.fieldAmount.
+  // Registered once; re-baked via refreshField() when amount changes.
+  try {
+    if (typeof brush.addField === 'function') {
+      brush.addField('tunable', function(t, field){
+        const amp = (typeof P!=='undefined' && P.fieldAmount!=null) ? P.fieldAmount : 0;
+        for (let c=0; c<field.length; c++){
+          for (let r=0; r<field[0].length; r++){
+            const n = noise(c*0.08, r*0.08) - 0.5;   // -0.5..0.5
+            field[c][r] = n * 180 * amp;             // ±90° * amount
+          }
+        }
+        return field;
+      }, { angleMode:'degrees' });
+    }
+  } catch(e){}
   try { if (typeof brush.noField==='function') brush.noField(); } catch(e){}
   try { if (typeof brush.scaleBrushes==='function') brush.scaleBrushes(1); } catch(e){}
   availableBrushes = discoverBrushes();
@@ -780,6 +851,19 @@ function setup(){
 function draw(){
   randomSeed(seed); noiseSeed(seed);          // reproducible per seed
   try { if (typeof brush.seed==='function') brush.seed(seed); } catch(e){}
+  // Flow field — activate the per-generator field. Seeded above, so the field's
+  // internal noise is reproducible per seed. Wrapped: field name may be invalid
+  // on some builds, and we never want a bad field to crash the whole redraw.
+  try {
+    if (P.field && P.field !== 'none' && typeof brush.field === 'function') {
+      brush.field(P.field);
+      if (P.field === 'tunable' && typeof brush.refreshField === 'function') {
+        brush.refreshField(0);   // re-bake grid with current P.fieldAmount
+      }
+    } else if (typeof brush.noField === 'function') {
+      brush.noField();
+    }
+  } catch(e){ try{ brush.noField(); }catch(_){} }
   background(P.bg);
   push();
   translate(-width/2,-height/2);              // WEBGL origin → top-left screen coords
@@ -870,7 +954,12 @@ function loadPreset(j){
     // load as 0 (symmetric) rather than inheriting the previous editor value.
     if(!j.params || j.params.bias === undefined) P.bias = 0;
     if(!j.params || j.params.radialoffset === undefined) P.radialoffset = 0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight'].forEach(id=>{
+    // Pre-field presets rendered straight → load as 'none' rather than inherit
+    // a stale editor field (same faithfulness rule as bias/radialoffset above).
+    if(!j.params || j.params.field === undefined) P.field = 'none';
+    if(!j.params || j.params.fieldAmount === undefined) P.fieldAmount = 0.5;
+    if(!j.params || j.params.strokeLen  === undefined) P.strokeLen  = 1.0;
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -882,6 +971,9 @@ function loadPreset(j){
     if(P.colormode !== undefined){ cm.value = P.colormode; cm.dispatchEvent(new Event('change')); }
     const ds = document.getElementById('drawspine');
     if(P.drawspine !== undefined){ ds.checked = !!P.drawspine; ds.dispatchEvent(new Event('change')); }
+    // field dropdown — set from loaded value; gensel.value was set directly (no
+    // 'change' event) so the per-generator fieldDefault does NOT override this.
+    if(P.field !== undefined) document.getElementById('fieldsel').value = P.field;
     // 4. palette + bg (top-level fields are canonical; params copies are redundant)
     if(Array.isArray(j.palette)) P.palette = [...j.palette];
     if(j.bg) P.bg = j.bg;
@@ -1100,6 +1192,10 @@ function wireUI(){
   bindSlider('linewidth','linewidth',v=>v.toFixed(1));
   bindSlider('linealpha','linealpha',v=>v.toFixed(2));
   bindSlider('spineweight','spineweight',v=>v.toFixed(1));
+  // Hand modifier sliders (gestural / Enfantines behavior)
+  bindSlider('handTremor','handTremor',v=>v.toFixed(2));
+  bindSlider('handGate','handGate',v=>v.toFixed(2));
+  bindSlider('handChaos','handChaos',v=>v.toFixed(2));
   populateGenSelect();
   
   document.getElementById('mat_weight').addEventListener('input', e => {
@@ -1131,8 +1227,27 @@ function wireUI(){
     const bEl = document.getElementById('bias');
     bEl.value = bd;
     document.getElementById('v_bias').textContent = bd.toFixed(2);
+    // Per-generator field default — same user-switch-only guard as bias above.
+    const fd = GENERATORS[P.generator].fieldDefault ?? 'none';
+    P.field = fd;
+    document.getElementById('fieldsel').value = fd;
+    // Per-generator distortion defaults — same user-switch-only guard as bias/field.
+    P.fieldAmount = GENERATORS[P.generator].fieldAmountDefault ?? 0.5;
+    P.strokeLen   = GENERATORS[P.generator].strokeLenDefault   ?? 1.0;
+    const faEl = document.getElementById('fieldAmount');
+    faEl.value = P.fieldAmount;
+    document.getElementById('v_fieldAmount').textContent = P.fieldAmount.toFixed(2);
+    const slEl = document.getElementById('strokeLen');
+    slEl.value = P.strokeLen;
+    document.getElementById('v_strokeLen').textContent = P.strokeLen.toFixed(2);
     updateGeneratorUI(); redraw();
   });
+  document.getElementById('fieldsel').addEventListener('change', e=>{
+    P.field = e.target.value;
+    redraw();
+  });
+  bindSlider('fieldAmount','fieldAmount',v=>v.toFixed(2));
+  bindSlider('strokeLen','strokeLen',v=>v.toFixed(2));
   document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
   document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
   document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
@@ -1160,12 +1275,13 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
     document.getElementById('colormode').value=P.colormode;
     document.getElementById('gensel').value=P.generator;
+    document.getElementById('fieldsel').value=P.field;
     document.getElementById('drawspine').checked=P.drawspine;
     buildSwatches(); updateGeneratorUI(); redraw();
   });
