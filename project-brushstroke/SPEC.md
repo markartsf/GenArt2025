@@ -26,7 +26,7 @@ Three layers, kept deliberately separate so we never debug all three at once:
 |---|---|---|---|
 | **Form** | Where do marks go and which way do they point? | Generators (our code) | v0 lab — *active* |
 | **Pigment** | What happens where marks overlap in colour? | p5.brush (native subtractive blend) | milestone 2 |
-| **Performance** | How does sound move parameters over time? | audio analyser → Composition | milestone 3 |
+| **Performance** | How does sound move parameters over time? | audio analyser → Composition | milestone 4 |
 
 Build and tune each in isolation, then port. Never wire two unfinished layers
 together. (For the *object* model — Brush / Generator / Preset / Composition —
@@ -376,18 +376,37 @@ without them load at their default).
 
 ## 4. Roadmap
 
-1. **Form (v0 — active).** `brush-lab.html`. Get the Ribbon's Comb reading right
-   in isolation. No audio, no pigment blending. Tune via the translation table.
-2. **Pigment (m2).** p5.brush blends overlapping Teeth subtractively on its own —
-   m2 is tuning palette + brush settings so overlaps read right, not building a
-   blend stage. (Owned Spectral.js shader parked — see §1; p5.blender ruled out.)
-3. **More Generators (m3).** Add Burst, Bloom, Fan as their own modules, each
-   tuned in isolation in the lab harness.
+1. **Form (m1 — complete).** `brush-lab.html`. The Generator family —
+   Ribbon, Burst, Bloom, Fan, Field Marks, Tuft, Linework — plus the shared
+   `drawTeeth` renderer, Tooth bias, Radial offset, Gestural modifiers
+   (Tremor/Gate/Chaos), Bend Field + Distortion, and preset save/load. Each
+   generator tuned in isolation in the lab harness. *(The earlier version of
+   this list named "add Burst/Bloom/Fan" as a future m3 — those generators
+   shipped here in m1; the line was stale and is corrected.)*
+2. **Pigment (m2 — active).** p5.brush blends overlapping Teeth subtractively on
+   its own — m2 is tuning palette + brush settings so overlaps read as layered
+   translucency, not building a blend stage. (Owned Spectral.js shader parked —
+   see §1; p5.blender ruled out.) Scope is a bounded tuning checkpoint, not an
+   open-ended phase: the blend *mechanism* is already confirmed, so m2 is "dial
+   palettes/brush settings until overlaps read right across the generator
+   family," then move on.
+3. **Composition (m3).** Stage multiple Presets together — layered-plate
+   richness (stipple under bold strokes, multiple passes, Ground + Wash under
+   hero Generators + Field Marks + Linework). The "ground under the colour" that
+   §3 defers from the individual generators is owned here.
 4. **Performance (m4).** Map audio bands to parameters over time. Only after the
    static forms look right standing still.
 
 Each milestone is its own branch / file. "Build in isolation, then port" is the
 rule that keeps us out of the days-long tangles.
+
+> **Diagnostic spikes may cut across milestones; milestone *work* may not.**
+> A throwaway vertical slice through Form→Pigment→Composition→Performance is
+> sanctioned *as a spike* (see §5) to de-risk architectural unknowns — render-loop
+> fit, plates-as-layers, p5.brush performance under many generators at audio
+> frame rates — before committing a milestone to them. Its product is a written
+> finding, not committed code. This does not relax "build in isolation, then
+> port" for actual milestone work.
 
 ---
 
@@ -399,6 +418,20 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
 - **Propose before editing.** Describe the change and show the diff; wait for
   explicit sign-off before writing it.
 - **One change at a time.** No bundling unrelated edits.
+- **Spike vs. feature — never mix them.** A *spike* answers a question and is
+  discarded; its only product is a written finding. A *feature* is built in
+  isolation and committed. A spike lives in its own untracked file with a dated
+  verdict block (e.g. `pigment-m2.html`'s PAUSED verdict), is never committed as
+  a feature, and is never built upon — findings flow back into this SPEC, the
+  code does not flow into the app.
+- **A spike may cut across milestones; milestone work may not.** This is the one
+  sanctioned way to look ahead: a quarantined throwaway slice through several
+  layers, to learn, not to ship. It does *not* relax "build in isolation, then
+  port" — that rule governs committed work; the spike quarantine is what keeps
+  cross-layer exploration from becoming the layer-tangling it looks like.
+- **Spike performance numbers are indicative, not a verdict.** A quick slice
+  lacks the optimizations real milestone work would have. Read "it chugs at N
+  generators" as "investigate," not "the stack can't do it."
 - **No unrequested changes.** Don't "improve" things that weren't asked about.
 - **Keep the adapter quarantined.** All p5.brush calls live behind a
   few named helper functions, so a library-API fix is a one-line change and the
@@ -413,7 +446,8 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
 Spine · Control Point · Station · Tangent · Normal · Tooth (Stamp) · Comb ·
 Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field · Bend Field ·
 Gestural modifiers (Tremor / Gate / Chaos) · Brush · Brush Weight · Palette ·
-Preset · Composition · Pigment Blend · Mask Buffer · Registration Marks.
+Preset · Composition · Pigment Blend · Mask Buffer · Registration Marks ·
+Spike · Vertical Slice.
 
 *If a term isn't here and we find ourselves needing it, add it — the value of
 this file is that one word always means one thing.*
