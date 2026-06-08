@@ -24,7 +24,7 @@ Three layers, kept deliberately separate so we never debug all three at once:
 
 | Layer | Question it answers | Owned by | Status |
 |---|---|---|---|
-| **Form** | Where do marks go and which way do they point? | Generators (our code) | v0 lab — *active* |
+| **Form** | Where do marks go and which way do they point? | Generators (our code) | m1 — *complete* |
 | **Pigment** | What happens where marks overlap in colour? | p5.brush (native subtractive blend) | milestone 2 |
 | **Performance** | How does sound move parameters over time? | audio analyser → Composition | milestone 4 |
 
