@@ -2,10 +2,15 @@
   "schema": "brushstroke.presetindex/1",
   "presets": [
     "bloom-seed1002.json",
+    "bloom-seed1wiggle.json",
+    "bloom-swirl-warm.json",
+    "burst-seed4.json",
     "fan-default.json",
+    "fan-enfantines-arc.json",
     "fieldmarks-rotring-default.json",
     "ribbon-seed1045.json",
     "toothbias001.json",
+    "tuft-radial-dense.json",
     "tuftspread01.json"
   ]
 }

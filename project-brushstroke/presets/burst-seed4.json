@@ -1,0 +1,60 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "burst-seed4",
+  "generator": "burst",
+  "brush": "pen",
+  "seed": 4,
+  "params": {
+    "ribbons": 9,
+    "ctrl": 5,
+    "spacing": 11,
+    "width": 120,
+    "weight": 11.9,
+    "anglej": 8,
+    "lenj": 0.25,
+    "taper": 0.6,
+    "bias": 1,
+    "radialoffset": 0,
+    "swirl": 60,
+    "colormode": "random",
+    "drawspine": true,
+    "spineweight": 3,
+    "fieldcount": 200,
+    "fieldscale": 0.003,
+    "fanspread": 110,
+    "tuftcount": 24,
+    "tuftradius": 60,
+    "tuftspread": 1,
+    "tuftjitter": 0.4,
+    "linecount": 14,
+    "linesegments": 7,
+    "linewander": 0.9,
+    "linewidth": 1.2,
+    "linealpha": 0.5,
+    "generator": "burst",
+    "palette": [
+      "#e63946",
+      "#1d3557",
+      "#e9c46a",
+      "#2a9d8f",
+      "#c97fa8",
+      "#77bb41",
+      "#f1faee"
+    ],
+    "bg": "#efe7d8"
+  },
+  "material": {
+    "baseWeight": 1.3,
+    "vibration": 0
+  },
+  "palette": [
+    "#e63946",
+    "#1d3557",
+    "#e9c46a",
+    "#2a9d8f",
+    "#c97fa8",
+    "#77bb41",
+    "#f1faee"
+  ],
+  "bg": "#efe7d8"
+}

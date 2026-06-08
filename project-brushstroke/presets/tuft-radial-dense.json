@@ -1,0 +1,56 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "tuft-radial-dense",
+  "generator": "tuft",
+  "brush": "marker",
+  "seed": 1,
+  "params": {
+    "ribbons": 9,
+    "ctrl": 4,
+    "spacing": 21,
+    "width": 190,
+    "weight": 4.1,
+    "anglej": 0,
+    "lenj": 0.25,
+    "taper": 0.6,
+    "swirl": 60,
+    "fieldcount": 200,
+    "fieldscale": 0.003,
+    "fanspread": 110,
+    "tuftcount": 24,
+    "tuftradius": 60,
+    "tuftspread": 1.0,
+    "tuftjitter": 0.4,
+    "colormode": "random",
+    "drawspine": false,
+    "spineweight": 6,
+    "handTremor": 0,
+    "handGate": 0,
+    "handChaos": 0,
+    "generator": "tuft",
+    "palette": [
+      "#e63946",
+      "#1d3557",
+      "#e9c46a",
+      "#2a9d8f",
+      "#c97fa8",
+      "#7d4f2a",
+      "#f1faee"
+    ],
+    "bg": "#efe7d8"
+  },
+  "material": {
+    "baseWeight": 2.5,
+    "vibration": 0.2
+  },
+  "palette": [
+    "#e63946",
+    "#1d3557",
+    "#e9c46a",
+    "#2a9d8f",
+    "#c97fa8",
+    "#7d4f2a",
+    "#f1faee"
+  ],
+  "bg": "#efe7d8"
+}
