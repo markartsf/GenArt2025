@@ -441,13 +441,63 @@ To prevent the memory-loss / silent-drift / unrequested-change problems:
 
 ---
 
-## 6. Glossary (quick reference)
+## 6. Capture / Output (viewing & recording)
+
+Two distinct goals, routinely conflated; kept separate here.
+
+### Fullscreen (viewing)
+- brush-lab and any published piece support TRUE OS-level display fullscreen via
+  the Fullscreen API (`el.requestFullscreen()`) — not a maximized window. This is
+  both an authoring need (viewing while tuning) and a viewer-facing feature
+  (published pieces let the audience go fullscreen).
+- Target element = the canvas's WRAPPER (owns canvas + control panel), not the
+  canvas itself, so chrome/panel hide cleanly. Panel auto-hides on fullscreen
+  (existing `setPanelForFullscreen` pattern).
+- Must fire from a user gesture (same constraint as AudioContext).
+- Canvas MUST resize to fill the display on `fullscreenchange` AND `resize`
+  (render at innerWidth/innerHeight × devicePixelRatio). The "fullscreen but
+  small centered canvas with black margins" symptom is a missing resize, not a
+  browser limit. brush-lab has `windowResized → resizeCanvas`; confirm it also
+  fires on `fullscreenchange`.
+- Idle cursor hide: cursor hidden after ~3s of no movement, reappears on move,
+  for clean viewing/performing. Global by default; may be scoped to
+  fullscreen-only.
+- Caveat: inside a sandboxed iframe (Claude.ai artifact preview, or an embed)
+  fullscreen needs `allow="fullscreen"` on the iframe. Test real fullscreen by
+  opening the file directly / at its published URL, not in a sandboxed preview.
+
+### Recording (output to disk)
+Three sanctioned routes; pick by piece type.
+1. **Canvas stream** — `canvas.captureStream(60)` + `MediaRecorder`, audio muxed
+   via a `MediaStreamAudioDestinationNode` tapped off the Web Audio graph. Output
+   at RENDER resolution, independent of on-screen size or fullscreen; one file,
+   video+audio. Best for pixel-clean audio-reactive realtime. Works identically
+   on 2D, p5, or Three.js (`renderer.domElement`) canvases. Safari caveat:
+   `MediaRecorder` codec coverage is narrower than Chrome's — feature-detect
+   `isTypeSupported` (prefer `video/mp4;codecs=avc1`, fall back to `video/webm`);
+   if quality/codec disappoints, use route 2. Proven end-to-end in
+   `capture-fullscreen-demo.html` (untracked reference, not a feature).
+2. **Screen / window capture** — OBS or QuickTime capturing the display or
+   browser window; system audio via BlackHole + an Audio MIDI Multi-Output Device
+   (monitors AND routes to BlackHole). The route where true fullscreen matters,
+   because it films the screen. Confirmed working setup.
+3. **Frame export + assemble offline** — render frames to PNG at 2× and stitch
+   (optionally via the FILM interpolation pipeline). Highest quality,
+   resolution-independent, deterministic with seeds. Non-realtime only — does
+   not capture live audio reactivity.
+
+Decision rule: audio-reactive realtime → route 1 (clean single file) or route 2
+(screen). Deterministic / seeded still-to-motion → route 3.
+
+---
+
+## 7. Glossary (quick reference)
 
 Spine · Control Point · Station · Tangent · Normal · Tooth (Stamp) · Comb ·
 Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field · Bend Field ·
 Gestural modifiers (Tremor / Gate / Chaos) · Brush · Brush Weight · Palette ·
 Preset · Composition · Pigment Blend · Mask Buffer · Registration Marks ·
-Spike · Vertical Slice.
+Spike · Vertical Slice · Fullscreen · Capture Stream · Multi-Output Device.
 
 *If a term isn't here and we find ourselves needing it, add it — the value of
 this file is that one word always means one thing.*
