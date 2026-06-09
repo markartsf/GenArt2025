@@ -91,6 +91,26 @@ Always smooth with `lerp(prev, current, 0.1–0.2)` — raw FFT values are jitte
 - Expose the seed as a URL parameter for reproducibility: `?seed=12345`.
 - When you find a good variant, **save the seed** in a comment or sidecar file.
 
+### Seeded exploration harness
+
+Reusable dev wrapper for stepping through seed space while tuning a sketch.
+Lives at `templates/seed-harness.html` — copy it, drop your algorithm into the
+VARIABLE block. It is a *development* tool, not a shipping chrome: the finished
+piece is the fullscreen canvas (see Composition → "the frame is the piece").
+
+- Builds on Seeded randomness above: `randomSeed(seed)` + `noiseSeed(seed)` at
+  the top of a single `initSystem()` the harness calls.
+- Reproducibility contract: same seed → same *initial state*. Motion may still
+  evolve over time (motion is the medium); only stochastic structure is pinned.
+  One stray `Math.random()` breaks it — keep all randomness in seeded
+  `random()`/`noise()`.
+- Controls (monospace, top-left, `h` to hide, auto-hidden in fullscreen): seed
+  readout · prev/next/random · jump-to-seed · regen · reset-params · freeze ·
+  save PNG. Seed reflects to the URL (`?seed=`), same convention as above.
+- `freeze` is the still-grab: pause, then PNG. Aligns with "let things rest."
+- Chrome is deliberately recessive — near-black, monospace, unbranded
+  (live-coding/demoscene lineage, *not* the gallery viewer; see Scoped out).
+
 ### Brushstroke — Bend Field (the Enfantines wiggle)
 
 The gestural stroke wiggle in Project Brushstroke comes from p5.brush's native
