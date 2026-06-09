@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════════
+  GenArt2025 — SEEDED EXPLORATION HARNESS
+  ════════════════════════════════════════════════════════════════════════
+  A development wrapper for stepping through seed space while tuning a sketch.
+  This is a DEV TOOL, not a shipping chrome. The finished piece is the
+  fullscreen canvas (DESIGN.md: "the frame is the piece"). Press `h` to hide
+  the panel; it auto-hides in fullscreen.
+
+  Lineage note: deliberately near-black, monospace, unbranded — the
+  live-coding/demoscene tradition, NOT the cream/Poppins gallery viewer that
+  was scoped out (PATTERNS.md → Scoped out → algorithmic-art skill).
+
+  Reproducibility contract: same seed → same INITIAL state. Motion may still
+  evolve over time (motion is the medium); only the stochastic structure is
+  pinned. Keep every random call inside seeded random()/noise() — one stray
+  Math.random() breaks reproducibility.
+
+  ── HOW TO USE ──────────────────────────────────────────────────────────
+  1. Drop your algorithm into the VARIABLE block (marked below).
+  2. Put tunable values in PARAMS; mirror DEFAULTS so Reset works.
+  3. Add one control-row per param in the PARAMETERS panel section.
+  4. Everything in the FIXED block (seed nav, actions, URL sync) stays.
+
+  p5 2.x via cdnjs (the source allowed inside the Claude artifact iframe, so
+  this also renders in-chat). Bump the version in the <script> src to match the
+  project's pinned p5 build if it matters. Serve over http for consistency
+  (python3 -m http.server 8080) though this harness needs no audio.
+  ════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>seed harness</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/2.0.5/p5.min.js"></script>
+<style>
+  :root {
+    /* harness chrome only — NOT the art palette. One palette per piece lives
+       in PARAMS / the algorithm below, per DESIGN.md. */
+    --bg:    #050608;
+    --ink:   #cdccc4;
+    --muted: #6f6e68;
+    --line:  rgba(255,255,255,0.14);
+    --hover: rgba(255,255,255,0.07);
+    --accent: #4ecdc4;   /* used only for control affordances (sliders) */
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body { background:var(--bg); overflow:hidden; }
+  canvas { display:block; position:fixed; inset:0; z-index:0; }
+
+  #panel {
+    position:fixed; top:12px; left:12px; z-index:10;
+    width:220px;
+    background:rgba(8,9,11,0.72);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 11px 11px;
+    font:11px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color:var(--ink);
+    backdrop-filter:blur(3px);
+    user-select:none;
+  }
+  #panel.hidden { display:none; }
+  #panel h2 {
+    font-size:9.5px; font-weight:600; letter-spacing:0.14em;
+    color:var(--muted); text-transform:uppercase; margin-bottom:9px;
+  }
+  .sec { margin-bottom:12px; }
+  .sec:last-child { margin-bottom:0; }
+  .sec-label {
+    font-size:9px; letter-spacing:0.12em; color:var(--muted);
+    text-transform:uppercase; margin-bottom:6px;
+  }
+  .row { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  .row + .row { margin-top:6px; }
+
+  button {
+    font:inherit; color:var(--ink); background:transparent;
+    border:1px solid var(--line); border-radius:3px;
+    padding:3px 7px; cursor:pointer; line-height:1;
+  }
+  button:hover { background:var(--hover); }
+  button:active { background:rgba(255,255,255,0.12); }
+
+  #seed-display {
+    flex:1; text-align:center; font-weight:600; letter-spacing:0.04em;
+    padding:3px 4px; border:1px solid var(--line); border-radius:3px;
+    min-width:0;
+  }
+  input[type="number"] {
+    width:64px; font:inherit; color:var(--ink); background:transparent;
+    border:1px solid var(--line); border-radius:3px; padding:3px 5px;
+  }
+  input[type="range"] { width:100%; accent-color:var(--accent); height:3px; }
+  .param-row label { display:flex; justify-content:space-between; margin-bottom:3px; }
+  .param-row .val { color:var(--muted); }
+
+  .hint { font-size:9px; color:var(--muted); margin-top:10px; }
+  .hint b { color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h2>Seed Exploration Harness</h2>
+
+  <!-- ═══ FIXED: seed navigation ═══ -->
+  <div class="sec">
+    <div class="sec-label">seed</div>
+    <div class="row">
+      <button id="prev" title="previous seed">‹</button>
+      <span id="seed-display">—</span>
+      <button id="next" title="next seed">›</button>
+      <button id="rand" title="random seed">rnd</button>
+    </div>
+    <div class="row">
+      <input type="number" id="jump-input" placeholder="jump to…">
+      <button id="jump-go">go</button>
+    </div>
+  </div>
+
+  <!-- ═══ VARIABLE: parameter controls (one .param-row per PARAMS entry) ═══ -->
+  <div class="sec">
+    <div class="sec-label">parameters</div>
+
+    <div class="param-row">
+      <label>agents <span class="val" id="agentCount-val"></span></label>
+      <input type="range" id="agentCount" min="20" max="400" step="10">
+    </div>
+    <div class="param-row" style="margin-top:7px;">
+      <label>flow scale <span class="val" id="flowScale-val"></span></label>
+      <input type="range" id="flowScale" min="0.001" max="0.012" step="0.0005">
+    </div>
+    <div class="param-row" style="margin-top:7px;">
+      <label>drift <span class="val" id="speed-val"></span></label>
+      <input type="range" id="speed" min="0.1" max="2.0" step="0.1">
+    </div>
+  </div>
+
+  <!-- ═══ FIXED: actions ═══ -->
+  <div class="sec">
+    <div class="sec-label">actions</div>
+    <div class="row">
+      <button id="regen">regen</button>
+      <button id="reset">reset</button>
+      <button id="freeze">freeze</button>
+      <button id="png">png</button>
+    </div>
+  </div>
+
+  <div class="hint"><b>h</b> hide · <b>f</b> fullscreen · <b>←/→</b> seed</div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   PARAMS — all tunable values. Mirror every key in DEFAULTS.
+   ════════════════════════════════════════════════════════════════════════ */
+const DEFAULTS = {
+  seed: 1,
+  agentCount: 140,
+  flowScale: 0.004,
+  speed: 0.8,
+};
+let PARAMS = { ...DEFAULTS };
+let frozen = false;
+
+/* ════════════════════════════════════════════════════════════════════════
+   VARIABLE BLOCK — your algorithm. Replace freely.
+   The placeholder is a calm seeded flow-field drift: dark field, one accent,
+   slow motion, negative space — a living example of the DESIGN.md aesthetic
+   and proof the harness works. Different seeds → visibly different fields.
+   ════════════════════════════════════════════════════════════════════════ */
+
+// one palette per piece (DESIGN.md). Placeholder: Plexus, additive-friendly.
+const ART = { void: '#03040a', accent: '#4ecdc4' };
+let agents = [];
+
+function initSystem() {
+  // re-seed FIRST so the build is reproducible for PARAMS.seed
+  randomSeed(PARAMS.seed);
+  noiseSeed(PARAMS.seed);
+
+  agents = [];
+  for (let i = 0; i < PARAMS.agentCount; i++) {
+    agents.push({
+      x: random(width),
+      y: random(height),
+      life: random(60, 260),
+    });
+  }
+  // paint the ground once on (re)build
+  background(ART.void);
+}
+
+function stepSystem() {
+  // gentle trail fade — negative space stays dominant
+  noStroke();
+  fill(3, 4, 10, 14);
+  rect(0, 0, width, height);
+
+  stroke(78, 205, 196, 70);
+  strokeWeight(1);
+  for (const a of agents) {
+    const ang = noise(a.x * PARAMS.flowScale, a.y * PARAMS.flowScale, frameCount * 0.0008) * TWO_PI * 2;
+    const nx = a.x + cos(ang) * PARAMS.speed;
+    const ny = a.y + sin(ang) * PARAMS.speed;
+    point(nx, ny);
+    a.x = nx; a.y = ny;
+    a.life--;
+    // respawn off-screen / dead agents from a SEEDED stream (stays reproducible)
+    if (a.life < 0 || a.x < 0 || a.x > width || a.y < 0 || a.y > height) {
+      a.x = random(width); a.y = random(height); a.life = random(60, 260);
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   FIXED BLOCK — p5 lifecycle + harness wiring. Generally leave as-is.
+   ════════════════════════════════════════════════════════════════════════ */
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  readSeedFromURL();
+  syncControls();
+  initSystem();
+}
+
+function draw() {
+  if (frozen) return;
+  stepSystem();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  initSystem();
+}
+
+// ── seed control ──────────────────────────────────────────────────────────
+function setSeed(s) {
+  PARAMS.seed = Math.max(0, Math.floor(Number(s) || 0));
+  document.getElementById('seed-display').textContent = PARAMS.seed;
+  writeSeedToURL();
+  initSystem();
+  if (frozen) redraw();
+}
+function readSeedFromURL() {
+  const u = new URLSearchParams(location.search);
+  if (u.has('seed')) PARAMS.seed = Math.max(0, parseInt(u.get('seed'), 10) || 0);
+  document.getElementById('seed-display').textContent = PARAMS.seed;
+}
+function writeSeedToURL() {
+  const u = new URLSearchParams(location.search);
+  u.set('seed', PARAMS.seed);
+  history.replaceState(null, '', '?' + u.toString());
+}
+
+// ── params / reset ──────────────────────────────────────────────────────--
+function updateParam(name, value) {
+  PARAMS[name] = parseFloat(value);
+  const span = document.getElementById(name + '-val');
+  if (span) span.textContent = fmt(PARAMS[name]);
+  initSystem();              // these params are structural → rebuild
+  if (frozen) redraw();
+}
+function fmt(v) { return Number.isInteger(v) ? v : v.toString(); }
+
+function syncControls() {
+  for (const key of Object.keys(DEFAULTS)) {
+    if (key === 'seed') continue;
+    const el = document.getElementById(key);
+    if (el) { el.value = PARAMS[key]; }
+    const span = document.getElementById(key + '-val');
+    if (span) span.textContent = fmt(PARAMS[key]);
+  }
+}
+
+// ── panel / fullscreen ────────────────────────────────────────────────────
+function togglePanel() { document.getElementById('panel').classList.toggle('hidden'); }
+function setPanelForFullscreen() {
+  const fs = !!document.fullscreenElement;
+  document.getElementById('panel').classList.toggle('hidden', fs);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('prev').onclick = () => setSeed(PARAMS.seed - 1);
+  document.getElementById('next').onclick = () => setSeed(PARAMS.seed + 1);
+  document.getElementById('rand').onclick = () => setSeed(Math.floor(Math.random() * 1e6));
+  document.getElementById('jump-go').onclick = () => {
+    const v = document.getElementById('jump-input').value;
+    if (v !== '') setSeed(v);
+  };
+  document.getElementById('regen').onclick = () => { initSystem(); if (frozen) redraw(); };
+  document.getElementById('reset').onclick = () => {
+    PARAMS = { ...DEFAULTS, seed: PARAMS.seed }; // reset params, keep current seed
+    syncControls(); initSystem(); if (frozen) redraw();
+  };
+  document.getElementById('freeze').onclick = (e) => {
+    frozen = !frozen;
+    e.target.textContent = frozen ? 'run' : 'freeze';
+    if (frozen) noLoop(); else loop();
+  };
+  document.getElementById('png').onclick = () => saveCanvas('genart-seed-' + PARAMS.seed, 'png');
+
+  for (const key of Object.keys(DEFAULTS)) {
+    if (key === 'seed') continue;
+    const el = document.getElementById(key);
+    if (el) el.addEventListener('input', (e) => updateParam(key, e.target.value));
+  }
+
+  document.addEventListener('fullscreenchange', setPanelForFullscreen);
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.target.matches('input')) return;
+  if (e.key === 'h') togglePanel();
+  else if (e.key === 'f') {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen();
+  }
+  else if (e.key === 'ArrowLeft') setSeed(PARAMS.seed - 1);
+  else if (e.key === 'ArrowRight') setSeed(PARAMS.seed + 1);
+});
+</script>
+</body>
+</html>
