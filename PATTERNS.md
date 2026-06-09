@@ -232,6 +232,14 @@ Tools that are genuinely capable in their own domain but intentionally not part 
 
 - **Apple Motion** — post-production and finishing tool. Legitimately useful for: 2.5D compositing of rendered layers, Behaviors-driven typographic animation, particle effects as atmospheric post layer, color grading, clean export pipeline to FCP/ProRes. Not useful for: audio reactivity, generative systems, shader hosting. Revisit specifically if a piece calls for 2.5D parallax compositing, Behaviors-driven motion on typography or logos, or post-layer atmospheric effects over code-rendered footage.
 - **Spline** — product-design lineage (see DESIGN.md Commitment #6). Legitimate for Metaculture materials, companion UI, control-panel interfaces, portfolio framing. Not for the art itself.
+- **Anthropic `algorithmic-art` skill + `viewer.html` template** — generates a
+  philosophy doc, then a branded p5 viewer (Poppins/Lora, cream gradient,
+  blurred white sidebar, brand colours; p5 1.7.0). Product-design lineage plus a
+  static "Art Blocks print" ethos (perfect still frame, craft-signalling prose)
+  — both scoped out here (DESIGN.md #1, #2, #6 and "what this is not doing").
+  The one portable piece, the seed-exploration UX, was lifted into
+  `templates/seed-harness.html` in our own dark chrome on p5 2.x. Don't adopt
+  the viewer or re-run the manifesto step — DESIGN.md *is* the vision statement.
 
 ---
 
