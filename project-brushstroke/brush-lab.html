@@ -78,9 +78,18 @@
   button:hover{ background:#32323b; }
   button.primary{ background:var(--acc); color:#1a1a1a; border-color:transparent; font-weight:600; }
   .btnrow{ display:flex; gap:6px; margin-top:6px; }
+  /* fullscreen viewing + idle cursor hide */
+  #panel{ transition:opacity .35s; }
+  #panel.fs-hidden{ opacity:0; pointer-events:none; }
+  #stage:fullscreen{ background:#0e0e12; }
+  #stage.cursor-idle, #stage.cursor-idle *{ cursor:none; }
+  /* pin the fullscreen canvas flush at 0,0 structurally (not via centering) */
+  #stage:fullscreen #canvas-holder{ place-items:stretch; }
+  #stage:fullscreen #canvas-holder canvas{ position:absolute; inset:0; }
 </style>
 </head>
 <body>
+<div id="stage">
 <div id="canvas-holder"></div>
 
 <div id="panel">
@@ -262,6 +271,7 @@
   </div>
   <div class="btnrow">
     <button id="download">Download PNG</button>
+    <button id="fullscreen">⤢ Fullscreen</button>
   </div>
 
   <div class="divider"></div>
@@ -278,6 +288,7 @@
     <input type="file" id="presetLoad" accept=".json,application/json" style="display:none">
   </div>
 </div>
+</div><!-- /#stage -->
 
 <script>
 // ============================================================================
@@ -1297,6 +1308,35 @@ function wireUI(){
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
   document.getElementById('seedRand').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('download').addEventListener('click',()=>saveCanvas('brush-lab_seed'+seed,'png'));
+  // Fullscreen (viewing) — request on the #stage WRAPPER (owns canvas + panel),
+  // from the click gesture.
+  document.getElementById('fullscreen').addEventListener('click',()=>{
+    const stage=document.getElementById('stage');
+    if(!document.fullscreenElement){
+      const req=stage.requestFullscreen||stage.webkitRequestFullscreen;
+      const p=req&&req.call(stage);
+      if(p&&p.catch) p.catch(()=>{});   // sandboxed iframe may block it
+    } else { document.exitFullscreen(); }
+  });
+  // Entering/leaving fullscreen: hide the panel + re-route through the existing
+  // canvas-resize path (windowResized → resizeCanvas + redraw) so the static
+  // sketch fills the display and re-renders.
+  document.addEventListener('fullscreenchange',()=>{
+    setPanelForFullscreen(!!document.fullscreenElement);
+    windowResized();
+  });
+  // Idle cursor hide: cursor:none on the wrapper after 3s of stillness, restored
+  // on any move. Global; to scope to fullscreen-only, gate the timeout body on
+  // `document.fullscreenElement`.
+  const stageEl=document.getElementById('stage');
+  let cursorIdleTimer=null;
+  const armCursorIdle=()=>{
+    stageEl.classList.remove('cursor-idle');
+    clearTimeout(cursorIdleTimer);
+    cursorIdleTimer=setTimeout(()=>stageEl.classList.add('cursor-idle'),3000);
+  };
+  window.addEventListener('mousemove',armCursorIdle);
+  armCursorIdle();
   document.getElementById('presetSave').addEventListener('click', savePreset);
   document.getElementById('presetLoadBtn').addEventListener('click', () => document.getElementById('presetLoad').click());
   document.getElementById('presetLoad').addEventListener('change', e => {
@@ -1329,8 +1369,19 @@ function wireUI(){
   });
 }
 
+// Auto-hide the control panel in fullscreen (viewing). Class toggle keeps it
+// trivial to scope/extend later. Called from the fullscreenchange handler.
+function setPanelForFullscreen(isFs){
+  document.getElementById('panel').classList.toggle('fs-hidden', isFs);
+}
+
 function windowResized(){
-  resizeCanvas(min(windowWidth-340,1100), min(windowHeight-40,900));
+  if(document.fullscreenElement){
+    // fill the display; p5 handles devicePixelRatio via pixelDensity()
+    resizeCanvas(window.innerWidth, window.innerHeight);
+  } else {
+    resizeCanvas(min(windowWidth-340,1100), min(windowHeight-40,900));
+  }
   redraw();
 }
 </script>
