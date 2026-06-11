@@ -212,43 +212,6 @@ another (the trap that produced the rejected wiggle attempts).
 
 ---
 
-## Realistic color mixing (pigment, not RGB)
-
-For "blue + yellow = green" paint behavior (Kubelka–Munk), don't hand-roll it
-and don't reach for Mixbox by default. Decision is settled — record, don't
-rediscover:
-
-- **Default: Spectral.js** (Ronald van Wijnen) — Kubelka–Munk pigment mixing,
-  **MIT licensed**, free including commercial use and selling output.
-  - `github.com/rvanwijnen/spectral.js` (v3). Confirm exact `mix` API in README.
-- **In p5.js: `p5.blender`** (Campos-Uribe) wraps Spectral.js into p5.
-  - `github.com/acamposuribe/p5.blender`
-  - **Requires WEBGL mode**, shader-based. `blender.color(r,g,b,a)` to set,
-    `blender.noBlend()` to exit. Tested ~50 mixes/frame, no perf hit.
-- **2D canvas (no WEBGL):** use **plain Spectral.js** directly — simple
-  `mix`-style call, drops in like a `lerp`. Preferred for current brush-lab.
-
-### Scoped out / paid
-- **Mixbox** (Secret Weapons) — also Kubelka–Munk, `mixbox.lerp(a,b,t)`, maybe a
-  hair more pigment-accurate. **CC BY-NC 4.0**: fine for non-commercial personal
-  posting, but **selling the app or its output needs a paid license** (Campos-
-  Uribe paid it himself; "not cheap"). Use only if its quality edge proves worth
-  paying for. If evaluating, use the **public** build, never a commercial copy
-  lifted from someone else's bundle.
-
-### Gotcha
-- p5.blender forces WEBGL — if a sketch is 2D-canvas, either move it to WEBGL
-  (architecture cost) or use plain Spectral.js in 2D. Don't assume drop-in.
-
-| Need | Use |
-|---|---|
-| Pigment mixing, 2D canvas | Spectral.js (plain) |
-| Pigment mixing, p5 + WEBGL | p5.blender |
-| Selling output | Spectral.js (MIT) — avoids licensing |
-| Max pigment accuracy, willing to license | Mixbox (paid) |
-
----
-
 ## Scoped out
 
 ### Failed approaches (don't re-investigate)
