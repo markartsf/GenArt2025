@@ -8,58 +8,27 @@ copy-pasting the code.
 
 ---
 
-## 1. Mixbox — real pigment mixing (the headline)
+## 1. Pigment mixing — deferred to SPEC §1
 
-`mixbox.js` is Secret Weapons' Mixbox: color mixing based on the Kubelka–Munk
-model of how physical pigments behave. Ordinary screen color averages, so
-blue + yellow = muddy grey. Mixbox makes blue + yellow = green, like paint.
+The Enfantines bundle does its "blue + yellow → green" mixing with Mixbox
+(Secret Weapons' Kubelka–Munk model), and applies it at scale through a GLSL
+shader reading an offscreen mask buffer where the RGBA channels are
+instructions, not visible colour. That's the headline technique of the piece.
 
-- **API is trivial:** `mixbox.lerp(colorA, colorB, t)` — RGB in, RGB out.
-- **Direct fit for brush-lab:** this *is* the "paint mixing when colors overlap"
-  feature. The plain-JS `lerp` needs none of the shader machinery below — it can
-  drop straight into the 2D canvas so overlapping strokes blend like pigment.
-- **Multi-color mixing** (for >2 pigments) uses the latent form:
-  `rgbToLatent` → weighted sum → `latentToRgb`.
+**We don't adopt that approach, and this note makes no library recommendation.**
+The pigment-layer decision is owned by `SPEC.md` §1 (Pigment-layer nouns), which
+is settled: realistic subtractive mixing is produced by **p5.brush's native
+subtractive blend** (overlapping marks mix as pigment automatically, p5.brush
+2.1.9-beta) — *not* an external Mixbox/Spectral.js/p5.blender dependency, and
+*not* an owned shader stage (that path, including the mask-buffer compositor, is
+**parked**). See SPEC §1 for the full rationale and the spike history.
 
-### Licensing (important)
-- Public Mixbox is **CC BY-NC 4.0 — non-commercial use only**. Posting sketches,
-  videos, and screenshots to a personal art site (no sales) reads as
-  non-commercial. *Not legal advice; the NC term licenses the code, with output
-  status less explicit.*
-- Commercial use (selling the app, or minting/selling the output) needs a paid
-  license from **mixbox@scrtwpns.com**. Secret Weapons' stated position: you
-  don't need it until you're ready to launch a product.
-- **Note:** the `mixbox.js` inside the Enfantines bundle is a **commercial-
-  licensed** build (its header says so) — the artist paid because the piece was
-  minted/sold. Do **not** reuse that specific file. Use the public CC BY-NC
-  build from `https://scrtwpns.com/mixbox.js` (or download it for offline use).
+If you came here looking for the pigment call, stop and read SPEC §1 — don't
+re-derive it from the bundle.
 
 ---
 
-## 2. Mask-buffer-as-control-signal + shader compositing (advanced, future)
-
-How Campos-Uribe applies Mixbox at scale: not in JS per-pixel, but via a GLSL
-shader reading an offscreen "mask" buffer where **the RGBA channels are
-instructions, not visible color**:
-
-- **Green** = lay pigment here
-- **Red** = darken this edge
-- **Blue** = add texture / intensity
-- **Alpha** = how strongly
-
-The shader (`paintColor()` in `bundle.js`, three variants: marker / simple /
-color) reads the mask and runs `mixbox_lerp(existingCanvasColor, newColor, t)`,
-where `t` comes from the mask channels plus noise. That's how watercolor bleeds,
-layers, and darkens convincingly at the edges.
-
-- **Powerful but it's a real architecture shift** — WebGL compositing on top of
-  a 2D painting model. File this as a deliberate brush-lab v2 / future-project
-  decision, not a mid-stream insertion, unless watercolor fidelity becomes a
-  milestone of its own.
-
----
-
-## 3. `grow()` — organic watercolor edges (portable, no shader needed)
+## 2. `grow()` — organic watercolor edges (portable, no shader needed)
 
 The irregular, living edges of his watercolor blobs come from a recursive
 polygon routine (`Tip.grow()`):
@@ -75,7 +44,7 @@ Tyler Hobbs documents for watercolor.)
 
 ---
 
-## 4. `LineStyle` — a clean multi-brush model (reference for presets)
+## 3. `LineStyle` — a clean multi-brush model (reference for presets)
 
 His dry-media engine: pen, rotring, 2B / HB / 2H pencil, charcoal, marker, spray.
 Mechanically it's just **stipple circles stamped along a path** with a
@@ -91,12 +60,10 @@ tidy parameter set: `weight, vibration, definition, quality, opacity, step`.
 
 | Technique | Effort | For brush-lab |
 |---|---|---|
-| Mixbox `lerp` for overlap mixing | Low | **Now**, if overlap-mixing is in scope |
+| Pigment mixing | — | **Decided in SPEC §1** (p5.brush native blend) — not this note's call |
 | `grow()` organic edges | Low–medium | Whenever the watercolor brush is touched |
 | `LineStyle` preset structure | Low | As a documentation model for presets |
-| Mask-buffer + GLSL pipeline | High | v2 / future "real-media" painter |
 
 ## Files
-- Keep: `mixbox.js` *(public CC BY-NC build — not the bundle's commercial copy)*
-- Study only: `setup.js`, `bundle.js`, `loading.js`
+- Study only: `setup.js`, `bundle.js`, `loading.js`, `mixbox.js`
 - Skip from project knowledge: the p5 libraries and the minified bundle bulk
