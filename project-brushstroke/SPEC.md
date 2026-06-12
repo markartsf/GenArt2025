@@ -383,13 +383,24 @@ without them load at their default).
    generator tuned in isolation in the lab harness. *(The earlier version of
    this list named "add Burst/Bloom/Fan" as a future m3 — those generators
    shipped here in m1; the line was stale and is corrected.)*
-2. **Pigment (m2 — active).** p5.brush blends overlapping Teeth subtractively on
-   its own — m2 is tuning palette + brush settings so overlaps read as layered
-   translucency, not building a blend stage. (Owned Spectral.js shader parked —
-   see §1; p5.blender ruled out.) Scope is a bounded tuning checkpoint, not an
-   open-ended phase: the blend *mechanism* is already confirmed, so m2 is "dial
-   palettes/brush settings until overlaps read right across the generator
-   family," then move on.
+2. **Pigment (m2 — complete, 2026-06-11).** p5.brush blends overlapping Teeth
+   subtractively on its own; m2 confirmed by eye that this reads right across the
+   generator family — Tuft, Bloom, Burst, with Tuft the densest-overlap
+   substrate. Two-colour overlaps read as believable subtractive mixes
+   (blue + yellow → green); triple+ overlaps deepen rather than collapse when the
+   palette keeps most members mid-to-light value. Findings (full detail in
+   PATTERNS, "Brushstroke — Brush bands"):
+   - Blending is a **brush-band property**, not a tuning failure — marker and
+     spray blend; dry brushes do not, by material nature.
+   - Lighter blues mix to cleaner greens; dark members (navy, dark red) are valid
+     as placed depth in sparse contexts but collapse dense pile-ups — a placement
+     decision, not a palette ban (per the Enfantines reference plates).
+   - Warm browns from red/orange overlaps are expected and acceptable.
+
+   The "translucent dry-media" look in the reference plates is a **composition
+   effect** — light spray/stipple texture passes over opaque dry strokes — owned
+   by m3, not a missing opacity lever. Owned Spectral.js shader stays parked (m4
+   trigger only — see §1; p5.blender ruled out). Evidence: presets/ (m2 set).
 3. **Composition (m3).** Stage multiple Presets together — layered-plate
    richness (stipple under bold strokes, multiple passes, Ground + Wash under
    hero Generators + Field Marks + Linework). The "ground under the colour" that

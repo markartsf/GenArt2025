@@ -160,6 +160,30 @@ p5.brush gives you no setter for an already-registered brush.
     them they fall through to the default renderer and lose their geometry.
   If p5.brush is ever version-bumped, re-decode the table — the defaults may move.
 
+### Brushstroke — Brush bands (which materials blend)
+
+Closed at m2 (2026-06-11). For pigment purposes p5.brush materials sort into three
+bands. This is a **material property** — don't try to tune a dry brush into
+blending; check the band before reaching for the palette or opacity.
+
+- **Wet / blending — `marker`, `spray`.** Overlaps mix subtractively (the m2 blend
+  mechanism: blue + yellow → green). `spray` at low base weight + high vibration
+  additionally throws a grainy atmospheric translucency close to the Enfantines
+  texture passes — a candidate m3 atmosphere material.
+- **Dry-grainy — `pastel`, `cpencil`, `HB`.** Opaque pigment but porous grain, so
+  the background breathes through and crossings mingle *visually* without any
+  colour math. Legitimate non-blending translucency.
+- **Dry-solid — `crayon`, `charcoal`, `pen`.** Fully opaque; overlap = top mark
+  wins. Compose with these as layered marks, never expect mixing.
+
+Exemplars per band; the remaining graphite grades (`rotring`, `2B`, `2H`) are dry
+and non-blending too. Only `marker` and `spray` blend.
+
+**Vibration is the dry-brush expressiveness lever** (opacity is not exposed): the
+best dry presets ride vibration ~0.65–1.55 to roughen strokes. The reference
+plates' "see-through" dry media is light spray/stipple passes layered *over*
+opaque strokes — an m3 composition technique, not a brush setting.
+
 ### Brushstroke — Gestural modifiers vs the other irregularities
 
 Project Brushstroke has several "make it less rigid" knobs that look similar but
