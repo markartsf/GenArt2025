@@ -68,10 +68,10 @@ Read top-to-bottom; each term builds on the one above.
 
 ### Pigment-layer nouns (milestone 2)
 - **Pigment Blend** — realistic subtractive mixing where Teeth overlap
-  (blue + yellow → green), produced by p5.brush's native subtractive blend —
-  overlapping marks in different colours mix as pigment automatically
-  (p5.brush 2.1.9-beta). *Not* RGB alpha layering, and *not* an owned shader
-  stage (see below).
+  (blue + yellow → green). **m2:** produced by p5.brush's native subtractive
+  blend (wet band only — marker/spray; p5.brush 2.1.9-beta). **m3 (adopted
+  2026-06-12):** produced by an owned Spectral.js Kubelka-Munk shader reading a
+  mask buffer — see the resolution below. *Not* RGB alpha layering.
 - **Mask Buffer (parked)** — was the off-screen per-colour layer an owned blend
   stage would read from. Not needed for m2 (p5.brush blends natively). Retained
   as a term only for the parked owned-shader path.
@@ -89,6 +89,25 @@ Read top-to-bottom; each term builds on the one above.
   > build caveat for whoever revisits: the vendored `spectral.min.js` is a newer
   > generation than spike 2 assumed (variadic `[Color, weight]` API, no
   > `RGBA255`; blue + yellow ≈ `[61,148,62]`, not spike 2's `[4,110,90]`).
+  >
+  > **Reopened & adopted for M3 (2026-06-12).** A standalone raw-WebGL2 spike
+  > (`pigment-shader-spike2.html`) proved the vendored Spectral.js KM GLSL
+  > composites overlapping coverage into believable subtractive pigment,
+  > fringe-free, writing opaque output (`fragColor = vec4(col,1.0)`) — the
+  > mechanism the *Enfantines* look requires. p5.brush native blend is sufficient
+  > only for the **wet band** (marker/spray); it cannot produce fringe-free **dry
+  > media**. The 06-02 park was a capture-timing failure (`loadPixels`), not a
+  > shader flaw; its named revival condition ("prove on synthetic layers") is met.
+  >
+  > **Mechanism (M3):** generators write coverage/instructions into an **owned
+  > mask buffer**; a **Spectral.js KM fragment shader** reads the mask and mixes
+  > the incoming pigment *into* the existing canvas, **every pixel opaque (alpha
+  > 1.0)** — no transparency anywhere in the pigment path, so no fringe regardless
+  > of coverage. **Draw order = mix order; no per-colour layers** (this retires the
+  > deferred-compositor scaling worry that justified the park). Library is **MIT
+  > Spectral.js, not Mixbox**; the Spectral-MIT trigger §1 reserved for m4 is
+  > pulled forward to M3. Proven end-to-end on real Tuft geometry in
+  > `tuft-shader-spike.html`.
 
 ---
 
