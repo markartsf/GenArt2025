@@ -309,11 +309,14 @@ The Ribbon is built first; the rest are variations on "Stations along a path."
   **Composition** concern (staging generators together); Linework is built here as
   a standalone, tunable generator only — no compositing under other forms yet.
 - **Wash** — soft translucent colour fields underneath (p5.brush fill / `mass`).
-- **Registration Marks** — the small `+` crosses and dotted frame border;
-  compositional scaffolding, drawn last.
+- **Registration Marks** — *eliminated (standing decision 2026-06-18).* The small
+  `+` crosses and dotted frame border are not used anywhere — not as a generator,
+  not as a default, not as an option. This **overrides** the composition-spike
+  "available but off by default" note. Kept here only so the decision is not
+  re-litigated.
 
 A finished Composition usually = Ground + Wash + one or two hero Generators
-(Ribbon / Bloom) + scattered Field Marks + Registration Marks on top.
+(Ribbon / Bloom) + scattered Field Marks on top. (No Registration Marks — see above.)
 
 ### 3.1 Shared tooth-geometry parameters (Form layer)
 
@@ -553,7 +556,7 @@ Decision rule: audio-reactive realtime → route 1 (clean single file) or route 
 Spine · Control Point · Station · Tangent · Normal · Tooth (Stamp) · Comb ·
 Width Envelope · Generator · Ground · Wash · Field Marks · Flow Field · Bend Field ·
 Gestural modifiers (Tremor / Gate / Chaos) · Brush · Brush Weight · Palette ·
-Preset · Composition · Pigment Blend · Mask Buffer · Registration Marks ·
+Preset · Composition · Pigment Blend · Mask Buffer ·
 Spike · Vertical Slice · Fullscreen · Capture Stream · Multi-Output Device.
 
 *If a term isn't here and we find ourselves needing it, add it — the value of
