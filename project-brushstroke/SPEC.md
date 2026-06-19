@@ -19,8 +19,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **Decisions pending doc-commit** (clear each when its amendment lands):
   - 2026-06-18 grain / weathering overlay: fine-scale + knockout — **DIRECTION**,
     needs a spike (see PATTERNS → *Brushstroke — draw-on / append-only render*).
-- **Spikes ready to delete** (findings now in docs; not yet removed): `composition-spike.html`,
-  `drybrush-km-spike.html`. Keep `tuft-shader-spike.html`, `drawon-spike.html` as seeds.
+- Seeds retained: `tuft-shader-spike.html`, `drawon-spike.html`.
 
 ---
 
