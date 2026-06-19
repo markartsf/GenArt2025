@@ -418,12 +418,39 @@ without them load at their default).
 
    The "translucent dry-media" look in the reference plates is a **composition
    effect** — light spray/stipple texture passes over opaque dry strokes — owned
-   by m3, not a missing opacity lever. Owned Spectral.js shader stays parked (m4
-   trigger only — see §1; p5.blender ruled out). Evidence: presets/ (m2 set).
-3. **Composition (m3).** Stage multiple Presets together — layered-plate
-   richness (stipple under bold strokes, multiple passes, Ground + Wash under
-   hero Generators + Field Marks + Linework). The "ground under the colour" that
-   §3 defers from the individual generators is owned here.
+   by m3, not a missing opacity lever. Owned Spectral.js shader parked at m2
+   close; **reopened for M3** — see §1 and item 3 (p5.blender remains ruled out).
+   Evidence: presets/ (m2 set).
+3. **Composition (m3).** Three strands; (a) is proven and is the milestone's bulk,
+   (b) is scoped only with its verdict still open, (c) is the confirmed direction.
+
+   **(a) Owned pigment pipeline — PROVEN.** Every Generator stops emitting colour
+   via p5.brush and instead writes stamps into a shared **mask buffer**; one
+   Spectral.js KM shader composites the whole mask (generator-agnostic — the shader
+   only ever sees the mask, never a generator). Proven end-to-end on real Tuft
+   geometry (`tuft-shader-spike.html`). Sequence: **convert Tuft first** —
+   generator→mask→shader — then convert the rest by the same pattern. Mechanism
+   detail in §1 and PATTERNS → *Owned pigment pipeline (M3)*.
+
+   **(b) Composition staging — SCOPE ONLY; findings PENDING.** Model a piece as an
+   ordered array of Presets drawn in draw-order (= depth): layered-plate richness
+   (stipple under bold strokes, multiple passes, Ground + Wash under hero Generators
+   + Field Marks + Linework). The "ground under the colour" §3 defers from the
+   individual generators is owned here. **Composition-staging findings (Q1
+   plate-flush, Q3 perf/caching) are pending verdict transcription** —
+   `composition-spike-VERDICT.md` ran but its verdict is not yet transcribed, so do
+   NOT assert "plates flush cleanly" / "draw-order reads as depth" / any perf number
+   as validated.
+
+   **(c) Aesthetic direction — CONFIRMED 2026-06-18.** Restraint and negative space
+   are the default; **density is the audio-reactive lever** — a calm/slow ambient
+   track yields a sparse, open final frame, a faster/denser track a denser,
+   overlapping one. The piece is a timed **reveal** toward an authored final
+   composition (draw-on along bezier paths, holding at rest). Reconcile with
+   DESIGN.md #1 (emergence) and #2 (motion is the medium): the final frame is
+   *generatively produced*, not hand-placed, and the work is the motion toward it —
+   "authoring the destination" is the composition's seed, not a contradiction of
+   emergence.
 4. **Performance (m4).** Map audio bands to parameters over time. Only after the
    static forms look right standing still.
 
