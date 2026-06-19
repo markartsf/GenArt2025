@@ -22,6 +22,11 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **Decisions pending doc-commit** (clear each when its amendment lands):
   - 2026-06-18 grain / weathering overlay: fine-scale + knockout — **DIRECTION**,
     needs a spike (see PATTERNS → *Brushstroke — draw-on / append-only render*).
+  - 2026-06-19 dense/perf spike (IN PROGRESS): combined draw-on + recipe-B engine =
+    **p5 hosts canvas/loop/pixelDensity2** (no p5.brush — can't emit channel codes),
+    own canvas2D stamps the recipe mask, raw-WebGL2 KM via an **FBO plate-cache**
+    (settled plates cached as textures; only dirty plates recomposited; rest = 0 KM
+    passes). Awaiting look verdict + perf table + whole-stack-vs-single-layer answer.
 - Seeds retained: `tuft-shader-spike.html`, `drawon-spike.html`.
 
 ---
