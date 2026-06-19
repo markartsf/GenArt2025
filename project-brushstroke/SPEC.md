@@ -13,13 +13,14 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- Docs current through: **2026-06-18** — M3 pigment-pivot doc pass (owned KM shader
-  adopted §1/§4; reg marks removed; flicker fix + M3 aesthetic recorded).
+- Docs current through: **2026-06-19** — dry-brush KM spike closed (§4·3a); composition
+  -spike verdict transcribed (§4·3b). Prior: M3 pigment-pivot pass (owned KM §1/§4;
+  reg marks removed; flicker fix + M3 aesthetic).
 - **Decisions pending doc-commit** (clear each when its amendment lands):
   - 2026-06-18 grain / weathering overlay: fine-scale + knockout — **DIRECTION**,
     needs a spike (see PATTERNS → *Brushstroke — draw-on / append-only render*).
-- **Open verdict:** composition staging (§4 item 3b) findings PENDING transcription —
-  `composition-spike-VERDICT.md` is still blank (Q1 plate-flush, Q3 perf).
+- **Spikes ready to delete** (findings now in docs; not yet removed): `composition-spike.html`,
+  `drybrush-km-spike.html`. Keep `tuft-shader-spike.html`, `drawon-spike.html` as seeds.
 
 ---
 
@@ -448,15 +449,42 @@ without them load at their default).
    generator→mask→shader — then convert the rest by the same pattern. Mechanism
    detail in §1 and PATTERNS → *Owned pigment pipeline (M3)*.
 
-   **(b) Composition staging — SCOPE ONLY; findings PENDING.** Model a piece as an
-   ordered array of Presets drawn in draw-order (= depth): layered-plate richness
-   (stipple under bold strokes, multiple passes, Ground + Wash under hero Generators
-   + Field Marks + Linework). The "ground under the colour" §3 defers from the
-   individual generators is owned here. **Composition-staging findings (Q1
-   plate-flush, Q3 perf/caching) are pending verdict transcription** —
-   `composition-spike-VERDICT.md` ran but its verdict is not yet transcribed, so do
-   NOT assert "plates flush cleanly" / "draw-order reads as depth" / any perf number
-   as validated.
+   **Dry band proven (2026-06-19, `drybrush-km-spike.html`).** Dry-media brushes
+   (charcoal/2H/pastel) blend fringe-free through the KM path — the white fringe on
+   the charcoal Bloom B in composition-spike was the *naive* p5.brush alpha path, not
+   a KM result. The owned grain (jittered discrete stamps + probabilistic skip)
+   reproduces the brush-lab Vibration texture closely enough by eye, with **knockout
+   OFF** + fewer stamps, sigma ~8–10px, radius-min ~1.1, higher skip + lower coverage.
+   Knockout is a per-look lever (off = open spacey grain; on = harder carved edges),
+   not always-on. Grain reads best at real (small) mark scale — tune in the rewrite,
+   not on a magnified test strip. **Note for the rewrite:** p5.brush's own Vibration
+   is unavailable in the owned path (it lives in p5.brush's renderer; bridging it
+   needs the `loadPixels` capture that originally parked the shader — see §1). To get
+   a pixel-faithful match, **port p5.brush's scatter math into the mask-stamping**
+   (copy the formula, never capture pixels). Wet brushes (marker/spray) blend
+   fringe-free natively, so a hybrid (native wet + owned-KM dry) remains a possible
+   fork if exact native Vibration on wet marks is wanted.
+
+   **(b) Composition staging.** Model a piece as an ordered array of Presets drawn in
+   draw-order (= depth): layered-plate richness (stipple under bold strokes, multiple
+   passes, Ground + Wash under hero Generators + Field Marks + Linework). The "ground
+   under the colour" §3 defers from the individual generators is owned here.
+   **Findings (`composition-spike`, transcribed 2026-06-19):**
+   - **Q1 render-loop fit — CLEAN.** Preset "plates" draw in sequence into one canvas;
+     no flush/await needed for a *static* composite, no field leak between plates, no
+     console errors. (The M2 "mid-state" risk is a per-frame rapid-redraw problem —
+     owned by the draw-on / append-only strategy, not static staging.)
+   - **Q3 performance — naive full-stack redraw is expensive + high-variance:** ~1–1.6 s
+     for a 4-plate static composite (436→642→1435 ms across 1→3 plates; dense
+     bloom/charcoal plates dominate; same stack varies ±600 ms from stochastic
+     re-rasterization). Untenable per-frame → corroborates append-only for the reveal.
+   - **Q2 (Mark) — draw-order staging works structurally;** the dry-brush fringe seen
+     there was a naive-path artifact deferred to the KM pipeline, NOT a staging defect.
+     Density / open space is a composition-authoring concern (mark count, size,
+     placement); any per-plate wash/dim lever must be **coverage / mix-amount, not
+     alpha** (alpha transparency is what reintroduces fringe). Linework pen-default
+     rejected as too thin — use a heavier / pencil / dry brush.
+   - **Q4 (audio cohabitation)** not exercised — needs a real user gesture; deferred to M4.
 
    **(c) Aesthetic direction — CONFIRMED 2026-06-18.** Restraint and negative space
    are the default; **density is the audio-reactive lever** — a calm/slow ambient
