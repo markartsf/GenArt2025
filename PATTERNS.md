@@ -162,6 +162,14 @@ p5.brush gives you no setter for an already-registered brush.
 
 ### Brushstroke — Brush bands (which materials blend)
 
+> **Superseded for M3 (2026-06-12).** The "dry brushes never blend — compose as
+> layered marks" conclusion holds **only under naive compositing**. Under the owned
+> Spectral.js KM shader (see *Brushstroke — Owned pigment pipeline (M3)*), dry media
+> mixes subtractively and fringe-free like any other coverage, because blending no
+> longer depends on the brush's own alpha. The band taxonomy below still accurately
+> describes p5.brush's *native* behaviour (relevant to m2 presets and any
+> native-blend path) — it is just not a constraint on the M3 pigment pipeline.
+
 Closed at m2 (2026-06-11). For pigment purposes p5.brush materials sort into three
 bands. This is a **material property** — don't try to tune a dry brush into
 blending; check the band before reaching for the palette or opacity.
@@ -212,6 +220,85 @@ another (the trap that produced the rejected wiggle attempts).
   `noise(s.x, s.y)` field so skipped stations cluster into coherent bare
   stretches (a hand lifting off), rather than independent random dropout, which
   would read as salt-and-pepper speckle.
+
+### Brushstroke — Owned pigment pipeline (M3)
+
+Adopted 2026-06-12 (SPEC §1, §4). Generators write coverage into an owned **mask
+buffer**; a vendored Spectral.js Kubelka-Munk fragment shader composites the mask
+into the canvas, **opaque output** (no transparency in the pigment path → no
+fringe). Proven end-to-end on real Tuft geometry in `tuft-shader-spike.html`.
+
+- **Mask-channel convention — study-only, design our own.** In the Enfantines
+  reference the mask RGBA channels are a paint *recipe*, not a colour: distinct
+  channels select shader paint behaviours (the ref uses green/blue/red codes) and
+  per-channel alpha carries amount. Our spikes instead use **scheme A** (mask `rgb`
+  = the stroke's actual colour, `alpha` = coverage), which is enough to prove
+  pigment reads. **Pick and document our own convention here before the generator
+  rewrite — do not assume the shader already branches on channel codes; it does
+  not.**
+- **Grain = jittered discrete stamps with probabilistic skip**, not a noise texture
+  over strokes. Each point stamps several small circles at Gaussian-jittered
+  offsets, randomised radius, omitting some at random (`tuft-shader-spike.html`:
+  `if(rnd(0,q)<0.4) continue`). Grain is the *distribution of discrete stamps*, not
+  a post effect.
+- **Knockout edges, not gradient falloff.** Carve mask edges with
+  `erase()`/`noErase()` (2D: `globalCompositeOperation='destination-out'`);
+  coverage is present-or-gone with a stippled porous boundary. The spikes' green/red
+  edge speckle came from synthetic *gradient* edges feeding the KM mix a near-zero
+  coverage ratio that oversaturates. Confirmed via the `[K]` knockout toggle in
+  `tuft-shader-spike.html`.
+- **Environment findings:**
+  - Vendored Spectral GLSL needs **WebGL2 / GLSL ES 3.00** — will not compile under
+    WebGL1.
+  - Lifting GLSL out of `p5_blend.js`'s `glsl()` wrapper can leak a stray
+    `` return ` `` line and drop the closing `#endif` — verify the extracted source
+    mechanically.
+  - Run **`glslangValidator`** (apt: `glslang-tools`) before browser testing.
+  - **p5 2.x custom-shader APIs fail silently — use raw WebGL2** for the owned
+    shader.
+
+### Brushstroke — draw-on reveal / append-only render (M3)
+
+- **Flicker root cause + fix.** p5.brush holds strokes in its private framebuffer
+  and composites them onto the canvas at end-of-frame; a per-frame `background()`
+  clear races that composite, so some frames show the cleared canvas a beat early →
+  alternating-frame "low-res" blink. **Performance is NOT the cause** (8 strokes
+  held ~7 ms / 59 fps). Three approaches ranked: **A** presentation tweaks
+  (`preserveDrawingBuffer` / antialias / pixelDensity) — insufficient (naive still
+  showed 6/6 distinct static frames under `preserveDrawingBuffer:true`, so the
+  instability is the redraw, not the present path); **B** offscreen WEBGL buffer +
+  single blit; **C append-only persistent layer — ADOPTED.** C: paint the Ground
+  once, `preserveDrawingBuffer:true`, never clear, append only each stroke's
+  newly-revealed tip span. Kills the flicker (settled pixels are physically never
+  touched again — byte-stable), ~30–50× cheaper, and *is* the M3 reveal-animation
+  engine (additive draw-on = progressive reveal of the authored final frame).
+  Provenance: `drawon-spike.html` (2026-06-18).
+  - `setAttributes()` must be called **once in `setup()`, after `createCanvas`**; a
+    runtime call freezes the loop in instance mode — drive attribute changes by
+    page reload, not a live call.
+  - **Owed:** the user's by-eye check at **pixelDensity 2 in a real browser**
+    (Claude Preview corrupts WebGL at density 2 / heavy overdraw — see *brush-lab
+    pixelDensity gate*); plus a **real-browser dense-generator perf pass** (native
+    rAF, a real Tuft/Bloom stamped incrementally at the target slow reveal) before
+    committing draw-on to dense generators — the spike's ~0.1 ms numbers were
+    sandbox `setInterval`-driven on 8 trivial strokes and do not prove dense
+    throughput. Append's "cost scales with new marks/frame, not total accumulated"
+    is what makes that pass likely to pass, but it must be measured, not assumed.
+- **Grain / weathering overlay — DIRECTION, not yet spiked.** A global
+  paper-grain/weathering pass should be **fine-scale** (the first pass rendered too
+  large) and **participate in knockout** (carve into the generator marks below
+  where chosen), not sit as a flat large overlay. Distinct from the per-mark grain
+  in the pigment pipeline above. **Flag as a future spike; do not treat as a settled
+  mechanism.**
+- **Install / load notes (from the draw-on spike).**
+  - Correct dist path is **`dist/p5.brush.js`** (UMD). The npm package has **no
+    `p5.brush.min.js`** — jsdelivr only 200s that path by auto-minifying on the
+    fly, so it breaks against a real local install / stricter host. Fix any spike
+    files still referencing `.min.js` (e.g. `composition-spike.html:47`).
+  - Pin p5 to **`^2.2`** (resolves 2.3.x, has `registerAddon`; matches
+    `p5.brush@2.1.9-beta`'s peer dep). Use **instance mode** (`new p5(sketch)` +
+    `brush.instance(p)`) — global-mode auto-detection does not fire reliably when
+    the file is served behind a bundler.
 
 ---
 
