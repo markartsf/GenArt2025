@@ -10,6 +10,19 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 
 ---
 
+## Status & open loops  (read at every session start)
+
+- Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
+- Docs current through: **2026-06-18** — M3 pigment-pivot doc pass (owned KM shader
+  adopted §1/§4; reg marks removed; flicker fix + M3 aesthetic recorded).
+- **Decisions pending doc-commit** (clear each when its amendment lands):
+  - 2026-06-18 grain / weathering overlay: fine-scale + knockout — **DIRECTION**,
+    needs a spike (see PATTERNS → *Brushstroke — draw-on / append-only render*).
+- **Open verdict:** composition staging (§4 item 3b) findings PENDING transcription —
+  `composition-spike-VERDICT.md` is still blank (Q1 plate-flush, Q3 perf).
+
+---
+
 ## 0. The one idea everything hangs on
 
 > **A ribbon is not a brush. It is a *Generator*.**

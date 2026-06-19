@@ -9,7 +9,10 @@ At the start of every session in this repo, BEFORE responding to the user's firs
    - `PATTERNS.md` (project-wide technical patterns)
    - `DESIGN.md` (visual / aesthetic doctrine)
    - `project-brushstroke/SPEC.md` (only when work might touch Project Brushstroke)
-4. Briefly tell the user you're oriented — current branch, last commit, anything uncommitted. Do NOT dump full file contents back; the user knows what's in them.
+4. Read SPEC's **"Status & open loops"** banner (top of `project-brushstroke/SPEC.md`). If it lists decisions pending doc-commit — OR a recent chat session (search past chats) made decisions not yet reflected in the docs — surface them and reconcile with the user BEFORE reporting oriented. The docs lag the latest chat by design; do not start from them alone.
+5. Briefly tell the user you're oriented — current branch, last commit, anything uncommitted. Do NOT dump full file contents back; the user knows what's in them.
+
+> **Decision-logging discipline:** when a decision is made in chat, log it to SPEC's "Status & open loops" banner immediately — one line — before any handoff runs. A decision isn't real until it has a home in the docs; the banner is that home until the full amendment lands.
 
 For a deeper, on-demand re-orientation (e.g., starting cold, or context feels stale mid-session), the user can type `/orient` — see `.claude/commands/orient.md` for what that does. The baseline above runs every session whether the user invokes `/orient` or not.
 
