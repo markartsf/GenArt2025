@@ -228,14 +228,23 @@ buffer**; a vendored Spectral.js Kubelka-Munk fragment shader composites the mas
 into the canvas, **opaque output** (no transparency in the pigment path → no
 fringe). Proven end-to-end on real Tuft geometry in `tuft-shader-spike.html`.
 
-- **Mask-channel convention — study-only, design our own.** In the Enfantines
-  reference the mask RGBA channels are a paint *recipe*, not a colour: distinct
-  channels select shader paint behaviours (the ref uses green/blue/red codes) and
-  per-channel alpha carries amount. Our spikes instead use **scheme A** (mask `rgb`
-  = the stroke's actual colour, `alpha` = coverage), which is enough to prove
-  pigment reads. **Pick and document our own convention here before the generator
-  rewrite — do not assume the shader already branches on channel codes; it does
-  not.**
+- **Mask-channel convention — recipe scheme (B), adopted 2026-06-19** (mask A/B
+  spike, side-by-side on real Tuft geometry). The mask RGBA channels are a paint
+  *recipe*, not a literal colour — the KM shader BRANCHES on the codes:
+  - `mask.R` = pigment id        → shader looks up colour in `uPal[id]` (id = `floor(R*7)`; 7-entry palette)
+  - `mask.G` = grain amount       → shader applies PROCEDURAL dither/porosity
+  - `mask.B` = knockout strength  → shader does a hard carved replace (no mix)
+  - `mask.A` = amount             → coverage / KM concentration
+
+  Grain + knockout are NOT baked — they are instructions the shader honours,
+  live-tunable by uniform without re-stamping. Wash-under-hero comes from ordered
+  KM passes (wash → hero). Chosen over scheme A (literal `rgb` + `alpha` coverage)
+  because paint behaviours carried as uniforms/codes make audio modulation cheap —
+  a uniform change + re-composite, not a CPU mask rebuild.
+  - **Rewrite guardrails:** animate via uniforms where possible; rebuild only the
+    mask layer that changed; cache static layers as textures.
+  - **Per-frame budget for global modulation = full-screen KM × plate depth —
+    measure at real retina res before committing dense reactivity.**
 - **Grain = jittered discrete stamps with probabilistic skip**, not a noise texture
   over strokes. Each point stamps several small circles at Gaussian-jittered
   offsets, randomised radius, omitting some at random (`tuft-shader-spike.html`:

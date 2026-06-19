@@ -13,9 +13,12 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- Docs current through: **2026-06-19** — dry-brush KM spike closed (§4·3a); composition
-  -spike verdict transcribed (§4·3b). Prior: M3 pigment-pivot pass (owned KM §1/§4;
-  reg marks removed; flicker fix + M3 aesthetic).
+- Docs current through: **2026-06-19** — mask A/B spike closed: recipe scheme (B)
+  adopted; dry-brush KM spike closed (§4·3a); composition-spike verdict transcribed
+  (§4·3b). Prior: M3 pigment-pivot pass (owned KM §1/§4; reg marks removed; flicker
+  fix + M3 aesthetic).
+- **Mask-channel convention: recipe scheme (B) adopted 2026-06-19, folded into
+  PATTERNS. Tuft rewrite unblocked.**
 - **Decisions pending doc-commit** (clear each when its amendment lands):
   - 2026-06-18 grain / weathering overlay: fine-scale + knockout — **DIRECTION**,
     needs a spike (see PATTERNS → *Brushstroke — draw-on / append-only render*).
