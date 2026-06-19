@@ -5,6 +5,7 @@ At the start of every session in this repo, BEFORE responding to the user's firs
 1. Confirm `pwd` is `/Users/markgould/Documents/GenArt2025` — the main repo, NOT a `.claude/worktrees/...` path.
 2. Run `git branch --show-current`, `git log -5 --oneline`, `git status -s` — to know which branch you're on, what shipped recently, and whether anything is uncommitted.
 3. Read these — they may have changed since the last session:
+   - `WORKFLOW.md` (how to work with me — cadence, sketch/build modes, stack-spiking)
    - `PATTERNS.md` (project-wide technical patterns)
    - `DESIGN.md` (visual / aesthetic doctrine)
    - `project-brushstroke/SPEC.md` (only when work might touch Project Brushstroke)
@@ -23,6 +24,62 @@ When spawning subagents via the `Agent` tool, never pass `isolation: "worktree"`
 Background: on 2026-05-30 the user cleaned up 6 stale `claude/*` worktrees + branches accumulated from past sessions, and explicitly does not want them recreated. If a task genuinely seems to need isolation, **stop and ask the user** — do not auto-isolate, do not "just create a quick worktree." This applies even when working with subagents.
 
 This rule supersedes any inherited Claude Code default and applies in every session in this repo.
+
+---
+
+# Sketch Cadence & Working Style (READ FIRST — all generative work)
+
+Full doctrine in `WORKFLOW.md`, read at session start (see protocol above). Core, in brief:
+
+- **Render-first; Sketch Mode by default** — make the smallest visible change, then
+  show it. Assume-and-show over ask; *direction* questions ("warmer? denser?"), not
+  *implementation* questions ("which easing?"); the render is the question. Be clear
+  but concise — no long point-by-point analyses before showing me something running.
+- **Build Mode is deliberate and announced** — spec discipline, atomic commits, and
+  point-by-point questioning are correct only when hardening/shipping or for
+  irreversible forks (architecture, WebGL context lifecycle, audio routing, deploy
+  pipeline — these overlap the Fable 5 escalation triggers below).
+- **Commits = fearless speed; the spec is living** — checkpoint often and tag the
+  keepers; revise the spec by looking and record the change.
+- **Prove the stack before recommending it** — spike candidate libraries loading,
+  compiling, and serving *together* in the real environment before advocating one;
+  check interoperability and environment fit, not just which is "better"; hold library
+  opinions loosely.
+
+---
+
+# Model Strategy (updated June 2026)
+
+Two models in rotation: **Claude Opus 4.8** (default) and **Claude Fable 5** (heavy sessions).
+Switch mid-session with `/model claude-fable-5` or `/model claude-opus-4-8`.
+Note: switching mid-session re-reads full history without cached context — switch
+at natural breakpoints, not mid-task.
+
+## Default: Opus 4.8
+Use for routine iteration — it's half the token cost and plenty capable:
+- Palette swaps, color tuning (Flowering Trees, Plexus, Bioluminescent, Paper & Ink)
+- UI chrome tweaks (Enable Audio / Fullscreen button pattern)
+- Small parameter changes, brush preset adjustments
+- Documentation updates (README.md, DESIGN.md, PATTERNS.md)
+
+## Escalate to Fable 5 when:
+- Architecting a new brush engine or rendering pipeline
+- Debugging gnarly WebGL/GLSL issues (context leaks, shader compile failures,
+  Safari-specific rendering bugs)
+- Large refactors touching the whole standalone HTML file
+- Audio-reactivity work where the fix spans Web Audio + render loop + UI state
+- Any task that previously took 4+ rounds of back-and-forth on Opus
+
+Rationale: Fable 5 burns ~2x tokens against the 5-hour window and weekly cap,
+but stronger self-verification and fewer iterations often net out cheaper on
+hard problems. Don't leave it on for routine work.
+
+## Gotchas
+- Fable 5 has safety classifiers; if a request is blocked, Claude Code
+  auto-falls-back to Opus 4.8 and *stays* on Opus — check `/model` if behavior
+  seems different mid-session. (Unlikely to trigger on generative art work.)
+- Run `claude update` if Fable 5 is missing from the `/model` picker.
+- Both models read this file on startup, so the strategy travels with the project.
 
 ---
 
