@@ -24,6 +24,9 @@ GPU banding, shader artifacts, aliasing at edges — these are part of the mediu
 **6. Patch-programming lineage, not product-design lineage.**
 The project's visual sensibility descends from the live-coding, shader-patching, node-graph tradition — TouchDesigner, vvvv, Max/MSP Jitter, openFrameworks, the demoscene. This tradition values: signal and feedback as material, real-time responsiveness, mathematical/procedural beauty, comfort with complexity and noise, the aesthetic of systems that *appear* to be thinking. It is suspicious of: over-polished surfaces, preset-driven "looks," easy beauty. When evaluating a tool or a finished piece, ask which lineage it belongs to. Spline and similar web-3D design tools produce genuinely good work in their own tradition (interactive product/web design, polished marketing 3D) but that tradition isn't this one. Use them for companion UI and Metaculture materials; don't let their defaults leak into the art.
 
+**7. Element scale — small relative to the frame.**
+Generators render at a small fraction of the frame, not blown up to fill it. Following Alejandro Campos Uribe's *Enfantines* plates: many fine, delicate marks with the ground leading and negative space dominant — a single comb or burst typically occupies roughly a fifth to a quarter of the frame, not most of it. Mark scale relative to the frame is a primary, per-piece composition lever, independent of bend-response, brush, and palette. Default to small-and-many over large-and-few; let the ground breathe. (The blown-up single-spine framing in the SVG-spine spike was a geometry stress test, not a compositional target.) This is the spatial complement to #4 (restraint / negative space).
+
 ---
 
 ## Palettes
