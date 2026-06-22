@@ -26,3 +26,14 @@ npm-debug.log*
 .claude/settings.local.json
 .claude/*.local.json
 Enfantines-CamposUribe/
+
+# Project Brushstroke — throwaway spikes, verdict notes, and large ground plates.
+# Kept on disk as local references (incl. SPEC-designated retained seeds), but
+# intentionally not committed: spikes are throwaway and git is not their backstop
+# (see CLAUDE.md "Git is the backup" / PATTERNS repo-hygiene). The committed
+# renderer lives in project-brushstroke/render/.
+project-brushstroke/*-spike.html
+project-brushstroke/*-VERDICT.md
+project-brushstroke/spike-plate*.png
+project-brushstroke/capture-fullscreen-demo.html
+project-brushstroke/pigment-m2.html
