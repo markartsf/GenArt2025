@@ -13,10 +13,11 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- Docs current through: **2026-06-19** — mask A/B spike closed: recipe scheme (B)
-  adopted; dry-brush KM spike closed (§4·3a); composition-spike verdict transcribed
-  (§4·3b). Prior: M3 pigment-pivot pass (owned KM §1/§4; reg marks removed; flicker
-  fix + M3 aesthetic).
+- Docs current through: **2026-06-20** — SVG spine-import spike closed: importer
+  proven 1:1 (§4·3d, PATTERNS *SVG spine import*); Bend response param added (§3.1,
+  default `tame`, all three shipped); p5.brush runtime-resize corruption logged.
+  Prior 06-19: mask A/B spike closed (recipe scheme B); dry-brush KM (§4·3a);
+  composition-spike verdict (§4·3b).
 - **Mask-channel convention: recipe scheme (B) adopted 2026-06-19, folded into
   PATTERNS. Tuft rewrite unblocked.**
 - **Decisions pending doc-commit** (clear each when its amendment lands):
@@ -27,7 +28,10 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
     own canvas2D stamps the recipe mask, raw-WebGL2 KM via an **FBO plate-cache**
     (settled plates cached as textures; only dirty plates recomposited; rest = 0 KM
     passes). Awaiting look verdict + perf table + whole-stack-vs-single-layer answer.
-- Seeds retained: `tuft-shader-spike.html`, `drawon-spike.html`.
+- Seeds retained: `tuft-shader-spike.html`, `drawon-spike.html`,
+  `svg-spine-spike.html` (importer reference for the upcoming feature; spine inlined
+  so it runs standalone — ground PNGs removed, re-copy from
+  `~/Downloads/background plates/` if the ground is wanted).
 
 ---
 
@@ -371,6 +375,27 @@ without them load at their default).
   Length is unchanged (still `2*halfLen`); only the start moves. `0` = teeth start
   at the spine (unchanged). Shown for all generators (harmless on Ribbon/Field
   Marks). Distinct from `lenj` (which varies length, not start position).
+- **Bend response** (`bendResponse` ∈ `embrace` / `tame` / `oneside`, **default
+  `tame`**) — how a Tooth behaves where the Spine bends tighter than the Tooth is
+  long. Per-generator selectable (lives in shared `drawTeeth`, so every generator
+  on any spine inherits it). Proven on imported hand-drawn spines in
+  `svg-spine-spike.html` (2026-06-20); decision is Mark's, made on real marks.
+  - Local radius of curvature at station *i*: `Δθ = acos(clamp(T[i-1]·T[i+1],−1,1))`,
+    `r = (2·spacing)/Δθ` (∞ on straights). **Knot condition:** `toothHalfLength > r`
+    — the inside ends cross the centerline and neighbours pile.
+  - **`embrace`** — full half-length both sides; the pile-up/knot is allowed. With
+    real grain it reads as dense *texture*, not error (the *Enfantines*/Campos look).
+  - **`tame`** — cap half-length to the local radius only where the bend is tighter
+    than the tooth: `hlEff = clamp(min(base, 0.85·r), 0.18·base, base)`. Removes the
+    crossover, **keeps the combed-ribbon character.** The default.
+  - **`oneside`** — stamp the **convex** flank only (convex dir = `sign((station[i] −
+    midpoint(station[i-1],station[i+1]))·normal)·normal`; keep a manual flip
+    safeguard for paths whose winding fools it). Inside never crowds, **but the
+    ribbon becomes a one-sided radial fringe** — a different motif, not a "cleaner
+    ribbon." Use deliberately.
+  - **Convention:** ship all three as options; `embrace` stays first-class but is the
+    least differentiated (at moderate curvature often ≈ `tame`) — acceptable to
+    narrow to `tame`+`oneside` if fewer options are wanted.
 - **Gestural modifiers** (`handTremor` / `handGate` / `handChaos`, each 0…1,
   default 0) — the three "loose human hand" axes, all applied in shared
   `drawTeeth` and inherited by **every generator except Linework** (which draws
@@ -445,8 +470,9 @@ without them load at their default).
    by m3, not a missing opacity lever. Owned Spectral.js shader parked at m2
    close; **reopened for M3** — see §1 and item 3 (p5.blender remains ruled out).
    Evidence: presets/ (m2 set).
-3. **Composition (m3).** Three strands; (a) is proven and is the milestone's bulk,
-   (b) is scoped only with its verdict still open, (c) is the confirmed direction.
+3. **Composition (m3).** Four strands; (a) is proven and is the milestone's bulk,
+   (b) is scoped only with its verdict still open, (c) is the confirmed direction,
+   (d) is the spine-import path proven 2026-06-20.
 
    **(a) Owned pigment pipeline — PROVEN.** Every Generator stops emitting colour
    via p5.brush and instead writes stamps into a shared **mask buffer**; one
@@ -502,6 +528,26 @@ without them load at their default).
    *generatively produced*, not hand-placed, and the work is the motion toward it —
    "authoring the destination" is the composition's seed, not a contradiction of
    emergence.
+
+   **(d) Spine import — PROVEN (2026-06-20, `svg-spine-spike.html`).** A hand-drawn
+   Affinity SVG `<path>` flattens to a polyline and registers **1:1 over its ground
+   plate**, feeding the existing `placeStations` unchanged. Recipe + gotchas in
+   PATTERNS → *Brushstroke — SVG spine import*. Generator-agnostic by construction:
+   stations/tangents/normals live in the shared renderer, so Tuft/Bloom/Fan ride the
+   same imported spines for free; Ribbon was tested first only as the harshest
+   customer. The **Bend response** param (§3.1) was settled on these spines — ship
+   all three, default `tame`. **Cleared to graduate to a small isolated feature**
+   (the proven draw-on then rides it). Still owed: grain check at pixelDensity 2 in
+   a real browser (Mark's eye).
+   - **Renderer constraint surfaced here:** p5.brush **corrupts under runtime
+     `resizeCanvas`** — reallocating the WEBGL framebuffer leaves its internal stroke
+     buffers reading misaligned GPU memory → block/checkerboard tearing that persists
+     until page reload (NOT overdraw-related; heavy settings render clean absent a
+     resize). The real app resizes (fullscreen, window) and animates the reveal, so
+     the **final renderer must not be p5.brush** — corroborates §4·3a (owned mask
+     buffer + raw-WebGL2 KM; own the framebuffer and drive resize yourself). If
+     multiple ground plates are ever staged in one piece, author them at the same
+     pixel size + aspect so no canvas resize is needed.
 4. **Performance (m4).** Map audio bands to parameters over time. Only after the
    static forms look right standing still.
 

@@ -309,6 +309,48 @@ fringe). Proven end-to-end on real Tuft geometry in `tuft-shader-spike.html`.
     `brush.instance(p)`) — global-mode auto-detection does not fire reliably when
     the file is served behind a bundler.
 
+### Brushstroke — SVG spine import (M3)
+
+Proven in `svg-spine-spike.html` (2026-06-20): a hand-drawn **Affinity** SVG `<path>`
+becomes a registered Generator **Spine**, landing 1:1 over its ground plate. Spike
+closed; importer cleared to graduate to an isolated feature. Recipe:
+
+- **Affinity only.** Its export is clean: separate `<path>` objects, cubic-bezier
+  `d`, named ids, proper `viewBox`. Pixelmator's SVG export is broken — don't use it.
+  One path = one Spine; keep paths as separate objects.
+- **Registration is 1:1 by construction.** The spine SVG `viewBox` is pixel-identical
+  to its ground PNG (plate 1: 3437×2402; plate 2: 4595×3213). Normalize each path
+  point by viewBox, then scale to canvas — `canvasX = (pathX/viewBoxW)*canvasW` —
+  and the spine sits exactly over the ground. No alignment guessing. Confirmed by a
+  debug polyline overlay tracing the painted spine.
+- **Flatten, don't refit.** Use the browser's native
+  **`SVGPathElement.getPointAtLength()`** to sample each path uniformly by arc length
+  (build an off-DOM `<path>`, `getTotalLength()`, sample ~1 pt/viewBox-unit — for
+  these plates ~6000 pts, far past 48–64/segment). Feed the polyline **straight into
+  the existing `placeStations(poly, spacing)`** — no other change to station math. Do
+  NOT reduce to control points and re-fit Catmull-Rom: that throws away the drawn
+  precision. Only stamped marks render, so faceting can't leak as long as sampling
+  beats station spacing. Normals are stable across smooth paths incl. self-crossings
+  (stations are independent); a true cusp/corner anchor is still untested.
+- **Generator-agnostic.** Stations/tangents/normals live in the shared `drawTeeth`
+  renderer, so Tuft/Bloom/Fan ride imported spines for free. The **Bend response**
+  param (SPEC §3.1) governs tight-bend behaviour; default `tame`.
+- **Inline the path data; do NOT `fetch()` it under a bundler.** A Vite dev server's
+  history-API fallback returns the app's `index.html` (HTTP **200**) for any
+  unrecognized path, so `fetch('spine.svg')` silently gets HTML → DOMParser finds no
+  `<path>` → blank spine, no error. Either inline the SVG as a constant (spike did
+  this) or ship spines as bundled assets (`import`, not runtime fetch) / serve from a
+  non-fallback static route (`python3 -m http.server` is immune — it 404s honestly).
+- **NEVER `resizeCanvas` a p5.brush WEBGL canvas at runtime.** It reallocates the
+  framebuffer out from under p5.brush's internal stroke buffers → they read
+  misaligned GPU memory → block/checkerboard tearing that persists until page reload.
+  NOT overdraw-related (heavy width/weight render clean absent a resize). Triggered in
+  the spike by a plate switch that resized the canvas; fixed by sizing once at setup
+  and never resizing (window-resize → reload to refit). **Implication:** the M3 final
+  renderer must own its framebuffer (raw-WebGL2 KM, SPEC §4·3a), not lean on p5.brush
+  — the real app resizes (fullscreen) and animates the reveal. Stage multiple ground
+  plates at identical pixel size + aspect so no resize is ever needed.
+
 ---
 
 ## Recording & export
