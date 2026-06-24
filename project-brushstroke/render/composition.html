@@ -50,6 +50,7 @@ import { startComposition } from './compositionHost.js';
 import { buildGround } from './groundProducer.js';
 import { washMarks } from './washGenerator.js';
 import { tuftMarks } from './tuftGenerator.js';
+import { accentMarks } from './accentGenerator.js';
 
 const hud = document.getElementById('hud');
 const statEl = document.getElementById('stat');
@@ -64,6 +65,7 @@ try {
     layers: [
       { name: 'wash', gen: (W, H, seed, scale) => washMarks(W, H, seed, scale) },
       { name: 'hero', gen: (W, H, seed, scale) => tuftMarks(W, H, seed, scale) },
+      { name: 'accent', gen: (W, H, seed, scale) => accentMarks(W, H, seed, scale) },
     ],
   });
 } catch (e) {
