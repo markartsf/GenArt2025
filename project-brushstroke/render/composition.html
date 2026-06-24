@@ -121,6 +121,7 @@ function buildPanel() {
 
     <h2>Grain</h2>
     <div class="ctl"><label>amount</label><input type="range" id="c-grain" min="0" max="2" step="0.05" value="1"><span class="val" id="v-grain">1.00</span></div>
+    <div class="ctl"><label>size</label><input type="range" id="c-gsize" min="0.4" max="6" step="0.1" value="1.3"><span class="val" id="v-gsize">1.3</span></div>
 
     <h2>Wash</h2>
     <div class="ctl"><label>strength</label><input type="range" id="c-wamt" min="0" max="0.5" step="0.01" value="${WASH.amount}"><span class="val" id="v-wamt">${WASH.amount.toFixed(2)}</span></div>
@@ -150,8 +151,9 @@ function buildPanel() {
     app.setPalette(pal);
   });
   document.querySelectorAll('#swatches input').forEach(sw => sw.addEventListener('input', () => { pal[+sw.dataset.i] = sw.value; app.setPalette(pal); }));
-  // grain amount (uniform)
+  // grain amount (uniform) + grain size (cell px at scale 1, scales with the mark)
   live('c-grain', 'v-grain', v => app.setGrainAmt(v));
+  live('c-gsize', 'v-gsize', v => app.setGrainSize(v), v => (+v).toFixed(1));
   // wash
   live('c-wamt', 'v-wamt', v => app.setLayer('wash', { amount: v }));
   $('c-wid').addEventListener('change', e => app.setLayer('wash', { id: +e.target.value }));

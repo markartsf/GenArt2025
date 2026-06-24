@@ -36,7 +36,8 @@ uniform sampler2D canvasTex;  // cached composite of the plate below
 uniform vec3 uPal[7];
 uniform float uBreath;        // palette-breathe modulation (0 = none, M4 seam)
 uniform float uGrainPulse;    // grain-amount multiplier (1 = neutral, M4 seam)
-uniform float uSkip, uScale;  // procedural-grain controls
+uniform float uSkip;          // grain porosity (hole fraction) — scale-independent
+uniform float uGrainCell;     // grain cell size in DEVICE PIXELS (scales with the mark)
 float hash21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 `;
 
@@ -51,7 +52,10 @@ void main(){
   pig = mix(pig, pig.gbr, uBreath);               // palette breathe (M4 seam; 0 now)
   float grainAmt = clamp(m.g * uGrainPulse, 0.0, 1.0);
   if(grainAmt > 0.01){
-    float gh = hash21(floor(vTex * uScale));
+    // pixel-space grain cell → size set by uGrainCell (device px), so it scales with
+    // the mark when the host ties uGrainCell to element scale. Hole fraction (uSkip)
+    // is independent of cell size, so areal porosity holds across scales.
+    float gh = hash21(floor(gl_FragCoord.xy / uGrainCell));
     if(gh < grainAmt * uSkip) cov = 0.0;          // porous: present-or-gone holes
     else cov *= mix(1.0, 0.55, grainAmt);         // thin the survivors
   }
@@ -70,7 +74,7 @@ precision highp float; in vec2 vTex; out vec4 fragColor; uniform sampler2D src;
 void main(){ fragColor = vec4(texture(src, vTex).rgb, 1.0); }`;
 
 export const FRAGMENT_SRC = HEAD + SPECTRAL_GLSL + MAIN;
-export const GRAIN_DEFAULTS = { skip: 0.45, scale: 320 };
+export const GRAIN_DEFAULTS = { skip: 0.45, cellPx: 4 };   // cellPx = device-px fallback
 // neutral modulation (no audio/LFO this build); generators carry grain/knockout in-mask
 export const MOD_NEUTRAL = { on: false, whole: true, plate: -1, breath: 0, grain: 1 };
 
@@ -104,7 +108,7 @@ export function createCompositor(glCanvas, W, H, plateCount) {
   const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   for (const p of [progKM, progBlit]) { gl.useProgram(p); const l = gl.getAttribLocation(p, 'aPos'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0); }
-  const locKM = uloc(progKM, ['maskTex', 'canvasTex', 'uBreath', 'uGrainPulse', 'uSkip', 'uScale',
+  const locKM = uloc(progKM, ['maskTex', 'canvasTex', 'uBreath', 'uGrainPulse', 'uSkip', 'uGrainCell',
     'uPal[0]', 'uPal[1]', 'uPal[2]', 'uPal[3]', 'uPal[4]', 'uPal[5]', 'uPal[6]']);
   const locBlit = uloc(progBlit, ['src']);
   const fbo = gl.createFramebuffer();
@@ -153,7 +157,7 @@ export function createCompositor(glCanvas, W, H, plateCount) {
     let passes = 0;
     if (top >= 1) {
       gl.useProgram(progKM);
-      gl.uniform1f(locKM.uSkip, GRAIN_DEFAULTS.skip); gl.uniform1f(locKM.uScale, opts.grainScale || GRAIN_DEFAULTS.scale);
+      gl.uniform1f(locKM.uSkip, GRAIN_DEFAULTS.skip); gl.uniform1f(locKM.uGrainCell, opts.grainCell || GRAIN_DEFAULTS.cellPx);
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.viewport(0, 0, W, H);
       for (let i = Math.max(1, dirtyFrom); i <= top; i++) {

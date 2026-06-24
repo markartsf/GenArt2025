@@ -34,9 +34,11 @@ export function startComposition(config) {
     const M = C.layers.length;        // number of mark plates
 
     // live control state (the levers mutate these, then rebuild + recompose)
-    let scaleMul = 1, grainAmt = 1;
+    let scaleMul = 1, grainAmt = 1, grainSize = C.grainSize ?? 1.3;   // grainSize = grain cell px at scale 1
     const groundOpts = { ...C.groundOpts };
     const layerOpts = C.layers.map(l => ({ ...(l.opts || {}) }));
+    // KM opts: grain cell scales with element scale → in-mark grain tracks the mark
+    const kmOpts = () => ({ grainAmt, grainCell: grainSize * scale });
 
     function recomputeSize() { cssW = p.constrain(p.windowWidth, 360, 1600); cssH = p.constrain(p.windowHeight, 360, 1000); }
     function buildGroundPlate() { ground = C.ground(W, H, scale, groundOpts); K.uploadGround(ground); }
@@ -52,7 +54,7 @@ export function startComposition(config) {
         K.uploadMask(i + 1, cv);
       }
       t = 0;
-      K.composite(0, 0, { grainAmt }); present();   // show the quiet ground at t=0
+      K.composite(0, 0, kmOpts()); present();   // show the quiet ground at t=0
     }
 
     // plate i (0-based mark index) reveals across global-t window [i/M, (i+1)/M]
@@ -81,7 +83,7 @@ export function startComposition(config) {
     function rebuildPlate(i) { plates[i].marks = genPlate(i); restampPlate(i); }
     function recompose(from) {
       const top = currentTop();
-      const r = K.composite(top < 1 ? 0 : Math.max(0, Math.min(from, top)), top, { grainAmt });
+      const r = K.composite(top < 1 ? 0 : Math.max(0, Math.min(from, top)), top, kmOpts());
       kmPasses = r.passes; present();
     }
 
@@ -104,7 +106,7 @@ export function startComposition(config) {
       if (revealing()) {
         t = p.min(1, t + (p.deltaTime / C.revealMs));
         const { dirtyFrom, top } = advanceReveal();
-        if (dirtyFrom !== Infinity) { const r = K.composite(dirtyFrom, top, { grainAmt }); kmPasses = r.passes; present(); }
+        if (dirtyFrom !== Infinity) { const r = K.composite(dirtyFrom, top, kmOpts()); kmPasses = r.passes; present(); }
         else kmPasses = 0;
       } else { kmPasses = 0; newMarks = 0; }   // rest: nothing dirty, P2D retains last frame
       frameMs = performance.now() - t0;
@@ -125,6 +127,8 @@ export function startComposition(config) {
     api.setPalette = (hexArr) => { K.setPalette(hexArr); recompose(1); };
     // grain amount: global uniform on mask.G — cheap, no re-stamp
     api.setGrainAmt = (a) => { grainAmt = a; recompose(1); };
+    // grain size: cell px at scale 1; actual cell = grainSize·scale, so it scales with the mark
+    api.setGrainSize = (s) => { grainSize = s; recompose(1); };
     // per-layer opts (wash strength/colour, accent dot-size/amount/colour): rebuild that plate
     api.setLayer = (name, partial) => { const i = C.layers.findIndex(l => l.name === name); if (i < 0) return; Object.assign(layerOpts[i], partial); rebuildPlate(i); recompose(i + 1); };
 
