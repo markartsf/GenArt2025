@@ -13,8 +13,14 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- Docs current through: **2026-06-23** — dense/perf spike CLOSED (all three verdicts);
-  retina perf measured on Apple-M2 GPU, M4 modulation bound to **single-layer**.
+- Docs current through: **2026-06-24** — **§4·3b composition staging BUILT** (committed;
+  Mark's by-eye verdict: pleased). Multi-plate plate-cache compositor + composition host
+  graduated from the spike into `project-brushstroke/render/`; plate stack **Ground → Wash
+  → Tuft hero**; full live control surface; in-mark grain (mask.G) made **finer + scale-
+  locked** to the element; the accent stipple layer was removed (not in SPEC, unrequested).
+  Commits `2dc1bbc` → `0038a3a`. See §4·3b.
+  Prior 06-23: dense/perf spike CLOSED (all three verdicts); retina perf measured on
+  Apple-M2 GPU, M4 modulation bound to **single-layer**.
   Prior 06-20: SVG spine-import spike closed: importer proven 1:1 (§4·3d, PATTERNS
   *SVG spine import*); Bend response param added (§3.1, default `tame`); p5.brush
   runtime-resize corruption logged. 06-19: mask A/B spike closed (recipe scheme B);
@@ -480,7 +486,7 @@ without them load at their default).
    close; **reopened for M3** — see §1 and item 3 (p5.blender remains ruled out).
    Evidence: presets/ (m2 set).
 3. **Composition (m3).** Four strands; (a) is proven and is the milestone's bulk,
-   (b) is scoped only with its verdict still open, (c) is the confirmed direction,
+   (b) is **BUILT and judged by eye (2026-06-24)**, (c) is the confirmed direction,
    (d) is the spine-import path proven 2026-06-20.
 
    **(a) Owned pigment pipeline — PROVEN.** Every Generator stops emitting colour
@@ -527,6 +533,38 @@ without them load at their default).
      alpha** (alpha transparency is what reintroduces fringe). Linework pen-default
      rejected as too thin — use a heavier / pencil / dry brush.
    - **Q4 (audio cohabitation)** not exercised — needs a real user gesture; deferred to M4.
+
+   **BUILT — composition staging renderer (2026-06-24, committed; Mark's by-eye verdict:
+   pleased).** The proven multi-plate compositor + FBO plate-cache from `dense-perf-spike.html`
+   is graduated into the committed renderer (`project-brushstroke/render/`, ES modules; entry
+   `composition.html`). A real composition renders end-to-end through the cached multi-plate KM:
+   - **Plate stack, bottom→top: Ground → Wash → Tuft hero.** Ground is a swappable quiet
+     base (cream + seeded noise/contrast, image-ready via runtime file-load — DESIGN #8);
+     Wash is a few big soft **low-coverage** radial fields in a muted ground-tuned pigment
+     (dim = coverage falloff, **never alpha** — the §4·3b rule above); Tuft is the
+     owned-pigment hero (a). Ground = `cacheTex[0]`; each mark plate is one KM pass over the
+     cache below; **dirty-only recompose** (rest = 0 passes, reveal/edit = the dirty plates
+     only — the dense/perf-spike economics, now in committed code).
+   - **Live control surface (Mark's by-eye levers):** element scale to frame (#7), ground
+     noise/contrast + image swap (#8), palette preset + per-swatch tune, grain amount +
+     grain size, wash strength + colour. Each lever rebuilds only the plate(s) it touches
+     and recomposites from there up.
+   - **In-mark grain — finer + scale-locked (2026-06-24).** The coarse white speckle inside
+     marks is the `mask.G` procedural dither (porosity holes showing the ground), not `mask.B`
+     knockout (confirmed: grain amount = 0 makes marks solid). It was a fixed *screen-space*
+     cell (`floor(vTex·uScale)`) that read blocky and didn't track mark size. Now a
+     **pixel-space cell** (`floor(gl_FragCoord/uGrainCell)`) with `uGrainCell = grainSize ·
+     element-scale`, so grain shrinks with the mark; areal porosity holds across scales
+     (hole fraction `uSkip` is scale-independent). Finer default; exposed as the grain-size
+     lever. Detail in PATTERNS → *Brushstroke — composition staging renderer*.
+   - **Accent layer — REMOVED.** A spray/stipple top pass was added during the build but was
+     never in SPEC and not requested; pulled out (commit `6718948`). The see-through dry-media
+     texture stays a future composition concern (the queued fine-scale grain/weathering
+     overlay — pending below), distinct from the in-mark grain.
+   - **Deferred (not this build):** audio/M4 hooks, rich composition save/load schema
+     (`brushstroke.composition`), other generator conversions (Bloom/Burst/Fan… fold in by
+     the same emit-marks → mask seam), the global grain/weathering overlay spike,
+     modularization / app integration (standalone for this build).
 
    **(c) Aesthetic direction — CONFIRMED 2026-06-18.** Restraint and negative space
    are the default; **density is the audio-reactive lever** — a calm/slow ambient

@@ -370,6 +370,43 @@ closed; importer cleared to graduate to an isolated feature. Recipe:
   — the real app resizes (fullscreen) and animates the reveal. Stage multiple ground
   plates at identical pixel size + aspect so no resize is ever needed.
 
+### Brushstroke — composition staging renderer (M3 §4·3b)
+
+The committed composition renderer lives at `project-brushstroke/render/` (ES modules,
+served over HTTP — `npx vite project-brushstroke/render --port 8091`, or
+`python3 -m http.server` from that dir). Built 2026-06-24 by graduating the proven
+`dense-perf-spike.html` machinery into a feature; **judge it at retina in a real browser**
+(the host forces `pixelDensity(1)` only inside Claude Preview).
+
+- **Modules / seam.** `kmCompositor` (raw-WebGL2 KM plate-cache), `compositionHost`
+  (p5/P2D host: stack + append-only reveal + control levers), `groundProducer`,
+  `washGenerator`, `tuftGenerator`, `recipeMask` (`stampMark` dispatches by mark
+  *kind*: `capsule`/`disc`/`dot`/`wash`), `palette`, `rng`, `spectral.glsl`. Adding a
+  generator = emit flat recipe-coded marks `{kind,x,y,…,id,grain,ko,amount,key}`; the
+  stamper + compositor are generator-agnostic. Entry `composition.html`.
+- **Plate stack = ground + ordered mark plates.** `cacheTex[0]` is the **ground itself**
+  (a real plate — uploaded image / cream+noise, blitted in, NOT a flat uniform), so it's
+  swappable + tunable. Mark plates 1..N each KM-pass over `cacheTex[i-1]`. **Dirty-only
+  recompose** from the lowest changed plate up (rest = 0 passes; reveal/edit = the dirty
+  plates only). A control lever rebuilds only the plate(s) it touches.
+- **Wash = coverage falloff, never alpha.** A `wash` mark is a radial gradient on the
+  *coverage* (mask.A) with the recipe codes (R/G/B) held constant; muted ground-tuned
+  pigment so the low-coverage tail fades to ground without the saturated-pigment KM
+  speckle. This honours the §4·3b "dim = coverage, not alpha" rule.
+- **In-mark grain is `mask.G` procedural dither, and must be pixel-cell + scale-locked.**
+  The coarse white speckle *inside* marks is the G-channel porosity (holes punch
+  `cov→0`, showing the ground), **not** `mask.B` knockout — confirm by setting grain
+  amount 0 (marks go solid). The cell MUST be hashed in **pixel space**
+  (`floor(gl_FragCoord.xy / uGrainCell)`), with `uGrainCell = grainSize · elementScale`,
+  so the grain shrinks with the mark. Hashing in 0–1 texture space (`vTex·uScale`) gives
+  a fixed screen-space cell that reads blocky and ignores mark size — the bug fixed here.
+  Areal porosity is held across scales because the hole fraction (`uSkip`) is
+  scale-independent; only the cell *size* tracks the element.
+- **The accent / spray-stipple top pass is NOT part of this.** It was built then removed
+  (not in SPEC, unrequested). The reference plates' see-through dry-media texture is the
+  separate, still-deferred global grain/weathering overlay (below) — distinct from both
+  in-mark grain and any per-element stipple.
+
 ---
 
 ## Recording & export
