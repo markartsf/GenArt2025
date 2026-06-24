@@ -1,145 +1,177 @@
-// KM compositor (raw WebGL2 / GLSL ES 3.00) — Pigment layer, scheme B.
-// Composites ONE recipe-mask plate over the ground in a single Kubelka-Munk pass.
-// Opaque output (alpha always 1.0) — this is what eliminates fringing.
+// KM compositor — multi-plate FBO plate-cache (raw WebGL2 / GLSL ES 3.00).
+// Graduated from the proven dense/perf spike (verdict b39ae13). Pigment layer,
+// recipe scheme B, OPAQUE output (no alpha on marks → no fringe).
+//
+// The plate stack is composited bottom→up into per-plate cache textures:
+//   cacheTex[0]      = the GROUND (a real plate — uploaded image / cream+noise,
+//                      blitted in directly; NOT a flat uniform). See groundProducer.
+//   cacheTex[1..N-1] = mark plates (wash / hero / accent), each one KM pass that
+//                      mixes its recipe mask over cacheTex[i-1].
+// We recomposite only from the lowest DIRTY plate upward (`dirtyFrom`), sampling the
+// clean cache below it, and present cacheTex[top] (highest non-empty plate). So:
+//   · at rest        → caller passes nothing dirty → 0 KM passes (last frame retained)
+//   · revealing      → 1 plate dirty → 1 KM pass, regardless of stack depth
+//   · ground swap    → dirtyFrom=0 → re-blit ground, recomposite all
+// This dirty-only recomposite IS the M4 reactivity architecture (single-layer budget,
+// verdict b39ae13). The modulation uniforms (uBreath/uGrainPulse) are wired but the
+// caller passes neutral values this build — no audio/LFO hooks yet (scope: out).
 //
 // The fragment shader BRANCHES on the recipe codes:
-//   mask.R → pigment id → uPal[id] lookup   (id = floor(R*7))
-//   mask.G → grain amount → procedural porosity (present-or-gone holes + thinning)
-//   mask.B → knockout strength → hard carved replace (no KM mix)
-//   mask.A → amount → KM concentration / coverage
-//
-// Grain + knockout are uniform-tunable instructions, not baked pixels — a uniform
-// change + re-composite restyles the plate without re-stamping the mask.
-// p5 2.x custom-shader APIs fail silently, so this owns raw WebGL2 directly.
+//   mask.R → pigment id    → uPal[id] lookup   (id = floor(R*7))
+//   mask.G → grain amount  → procedural porosity (present-or-gone holes + thinning)
+//   mask.B → knockout      → hard carved replace (no KM mix)
+//   mask.A → amount        → KM concentration / coverage
 import { SPECTRAL_GLSL } from './spectral.glsl.js';
-import { CREAM, PALETTE, NPAL, hexRGB } from './palette.js';
+import { PALETTE, NPAL, hexRGB } from './palette.js';
 
 const VS = `#version 300 es
 in vec2 aPos; out vec2 vTex;
-void main(){ vTex = aPos * 0.5 + 0.5; vTex.y = 1.0 - vTex.y; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+void main(){ vTex = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
 const HEAD = `#version 300 es
 precision highp float;
-in vec2 vTex;
-out vec4 fragColor;
-uniform sampler2D maskTex;
-uniform vec3 groundCol;
+in vec2 vTex; out vec4 fragColor;
+uniform sampler2D maskTex;    // recipe mask of the plate being composited
+uniform sampler2D canvasTex;  // cached composite of the plate below
 uniform vec3 uPal[7];
-uniform bool uGrain;
-uniform bool uKnockout;
-uniform float uSigma;
-uniform float uScale;
-uniform float uSkip;
-uniform float uCov;
-uniform float uSeed;
+uniform float uBreath;        // palette-breathe modulation (0 = none, M4 seam)
+uniform float uGrainPulse;    // grain-amount multiplier (1 = neutral, M4 seam)
+uniform float uSkip, uScale;  // procedural-grain controls
 float hash21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 `;
 
-// Single-plate KM: incoming recipe mask mixed over the cream ground, one pass.
 const MAIN = `
 void main(){
   vec4 m = texture(maskTex, vTex);
-  vec3 existing = groundCol;
+  vec3 existing = texture(canvasTex, vTex).rgb;   // the plate below (ground for plate 1)
   float cov = m.a;
   if(cov <= 0.004){ fragColor = vec4(existing, 1.0); return; }
-  // R → pigment id → palette lookup
   int id = int(floor(m.r * 7.0 + 0.0001)); id = clamp(id, 0, 6);
   vec3 pig = uPal[id];
-  // G → grain amount → procedural porosity / dither
-  float grainAmt = m.g;
-  if(uGrain && grainAmt > 0.01){
-    vec2 jit = uSigma * (vec2(hash21(vTex * 157.0 + uSeed), hash21(vTex * 311.0 - uSeed)) - 0.5);
-    float gh = hash21(floor((vTex + jit) * uScale + uSeed * 13.0));
-    if(gh < grainAmt * uSkip) cov = 0.0;            // porous: present-or-gone holes
-    else cov *= mix(1.0, uCov, grainAmt);           // thin the survivors
+  pig = mix(pig, pig.gbr, uBreath);               // palette breathe (M4 seam; 0 now)
+  float grainAmt = clamp(m.g * uGrainPulse, 0.0, 1.0);
+  if(grainAmt > 0.01){
+    float gh = hash21(floor(vTex * uScale));
+    if(gh < grainAmt * uSkip) cov = 0.0;          // porous: present-or-gone holes
+    else cov *= mix(1.0, 0.55, grainAmt);         // thin the survivors
   }
   if(cov <= 0.004){ fragColor = vec4(existing, 1.0); return; }
-  // B → knockout strength → hard carved replace (no subtractive mix)
   float ko = m.b;
-  vec3 km = spectral_mix(existing, pig, clamp(cov, 0.0, 1.0));
-  vec3 col = km;
-  if(uKnockout && ko > 0.01){
-    float hard = step(0.5, cov);                    // present-or-gone boundary
-    vec3 carved = mix(existing, pig, hard);         // opaque replace, no KM blend
-    col = mix(km, carved, ko);
+  vec3 col = spectral_mix(existing, pig, clamp(cov, 0.0, 1.0));
+  if(ko > 0.01){
+    float hard = step(0.5, cov);                  // present-or-gone boundary
+    col = mix(col, mix(existing, pig, hard), ko); // hard carved replace
   }
   fragColor = vec4(col, 1.0);
 }`;
 
+const BLIT_F = `#version 300 es
+precision highp float; in vec2 vTex; out vec4 fragColor; uniform sampler2D src;
+void main(){ fragColor = vec4(texture(src, vTex).rgb, 1.0); }`;
+
 export const FRAGMENT_SRC = HEAD + SPECTRAL_GLSL + MAIN;
+export const GRAIN_DEFAULTS = { skip: 0.45, scale: 320 };
+// neutral modulation (no audio/LFO this build); generators carry grain/knockout in-mask
+export const MOD_NEUTRAL = { on: false, whole: true, plate: -1, breath: 0, grain: 1 };
 
-// default procedural-grain knobs (from the mask-A/B spike Panel B defaults)
-export const GRAIN_DEFAULTS = { grain: true, knockout: true, sigma: 0.4, scale: 320, skip: 0.45, cov: 0.55, seed: 0 };
-
-export function createCompositor(W, H) {
-  const glc = document.createElement('canvas');
-  glc.width = W; glc.height = H;
-  const gl = glc.getContext('webgl2', { preserveDrawingBuffer: true });
+// plateCount includes the ground (index 0). e.g. ground + wash + hero + accent → 4.
+export function createCompositor(glCanvas, W, H, plateCount) {
+  const gl = glCanvas.getContext('webgl2', { preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: false });
   if (!gl) throw new Error('WebGL2 unavailable');
+  let P = plateCount;
 
-  const compile = (type, src) => {
-    const sh = gl.createShader(type);
-    gl.shaderSource(sh, src); gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      throw new Error((type === gl.VERTEX_SHADER ? 'VERT' : 'FRAG') + ': ' + gl.getShaderInfoLog(sh));
-    }
+  const compile = (t, s) => {
+    const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error((t === gl.VERTEX_SHADER ? 'VS' : 'FS') + ': ' + gl.getShaderInfoLog(sh));
     return sh;
   };
+  const linkProg = (vs, fs) => {
+    const p = gl.createProgram(); gl.attachShader(p, compile(gl.VERTEX_SHADER, vs)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
+    return p;
+  };
+  const uloc = (p, names) => { const o = {}; for (const n of names) o[n] = gl.getUniformLocation(p, n); return o; };
+  const mkTex = () => {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return t;
+  };
+  const allocRGBA = (t) => { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); };
 
-  const prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAGMENT_SRC));
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(prog));
-
-  gl.useProgram(prog);
-  const quad = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  const progKM = linkProg(VS, FRAGMENT_SRC);
+  const progBlit = linkProg(VS, BLIT_F);
+  const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const aPos = gl.getAttribLocation(prog, 'aPos');
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  for (const p of [progKM, progBlit]) { gl.useProgram(p); const l = gl.getAttribLocation(p, 'aPos'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0); }
+  const locKM = uloc(progKM, ['maskTex', 'canvasTex', 'uBreath', 'uGrainPulse', 'uSkip', 'uScale',
+    'uPal[0]', 'uPal[1]', 'uPal[2]', 'uPal[3]', 'uPal[4]', 'uPal[5]', 'uPal[6]']);
+  const locBlit = uloc(progBlit, ['src']);
+  const fbo = gl.createFramebuffer();
 
-  // persistent mask texture, reused every render (allocating per-frame leaks GPU mem)
-  const texMask = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texMask);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-  const U = {};
-  for (const n of ['maskTex', 'groundCol', 'uGrain', 'uKnockout', 'uSigma', 'uScale', 'uSkip', 'uCov', 'uSeed',
-    'uPal[0]', 'uPal[1]', 'uPal[2]', 'uPal[3]', 'uPal[4]', 'uPal[5]', 'uPal[6]']) {
-    U[n] = gl.getUniformLocation(prog, n);
+  const groundTex = mkTex();   // ground source (uploaded from groundProducer canvas)
+  let maskTex = [], cacheTex = [];
+  function rebuildTextures() {
+    maskTex.forEach(t => gl.deleteTexture(t)); cacheTex.forEach(t => gl.deleteTexture(t));
+    maskTex = []; cacheTex = [];
+    for (let i = 0; i < P; i++) { maskTex.push(mkTex()); const c = mkTex(); allocRGBA(c); cacheTex.push(c); }
   }
+  rebuildTextures();
 
-  // upload palette once (static for the piece)
-  for (let i = 0; i < NPAL; i++) {
-    const c = hexRGB(PALETTE[i]).map(v => v / 255);
-    gl.uniform3f(U[`uPal[${i}]`], c[0], c[1], c[2]);
+  // palette is uploaded once (static for the piece); setPalette re-uploads for commit-4 tuning
+  let palette = PALETTE.slice();
+  function uploadPalette() {
+    gl.useProgram(progKM);
+    for (let i = 0; i < NPAL; i++) { const c = hexRGB(palette[i]).map(v => v / 255); gl.uniform3f(locKM[`uPal[${i}]`], c[0], c[1], c[2]); }
   }
+  uploadPalette();
 
-  function render(maskCanvas, opts = {}) {
-    const o = { ...GRAIN_DEFAULTS, ...opts };
-    const t0 = performance.now();
+  function setPlateCount(n) { P = n; rebuildTextures(); }
+  function setPalette(hexArr) { palette = hexArr.slice(); uploadPalette(); }
+  function uploadGround(srcCanvas) { gl.bindTexture(gl.TEXTURE_2D, groundTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas); }
+  function uploadMask(i, srcCanvas) { gl.bindTexture(gl.TEXTURE_2D, maskTex[i]); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas); }
+
+  function blit(srcTex, dstTex /* null = screen */) {
+    gl.useProgram(progBlit);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstTex ? fbo : null);
+    if (dstTex) gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, dstTex, 0);
     gl.viewport(0, 0, W, H);
-    gl.useProgram(prog);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texMask);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, maskCanvas);
-    gl.uniform1i(U.maskTex, 0);
-    gl.uniform3fv(U.groundCol, (o.ground || CREAM).map(v => v / 255));
-    gl.uniform1i(U.uGrain, o.grain ? 1 : 0);
-    gl.uniform1i(U.uKnockout, o.knockout ? 1 : 0);
-    gl.uniform1f(U.uSigma, o.sigma);
-    gl.uniform1f(U.uScale, o.scale);
-    gl.uniform1f(U.uSkip, o.skip);
-    gl.uniform1f(U.uCov, o.cov);
-    gl.uniform1f(U.uSeed, o.seed);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex); gl.uniform1i(locBlit.src, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    return performance.now() - t0;
   }
 
-  return { canvas: glc, gl, render };
+  // composite plates [dirtyFrom..top]; dirtyFrom=0 re-blits the ground first.
+  // top = highest non-empty plate (0 = only ground showing). Returns KM pass count.
+  function composite(dirtyFrom, top, mod = MOD_NEUTRAL) {
+    const t0 = performance.now();
+    if (dirtyFrom <= 0) blit(groundTex, cacheTex[0]);   // ground refresh into cache[0]
+    let passes = 0;
+    if (top >= 1) {
+      gl.useProgram(progKM);
+      gl.uniform1f(locKM.uSkip, GRAIN_DEFAULTS.skip); gl.uniform1f(locKM.uScale, mod.scale || GRAIN_DEFAULTS.scale);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.viewport(0, 0, W, H);
+      for (let i = Math.max(1, dirtyFrom); i <= top; i++) {
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, cacheTex[i], 0);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex[i]); gl.uniform1i(locKM.maskTex, 0);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, cacheTex[i - 1]); gl.uniform1i(locKM.canvasTex, 1);
+        const lit = mod.on && (mod.whole || i === mod.plate);
+        gl.uniform1f(locKM.uBreath, lit ? mod.breath : 0.0);
+        gl.uniform1f(locKM.uGrainPulse, lit ? mod.grain : 1.0);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        passes++;
+      }
+    }
+    blit(cacheTex[top], null);   // present highest non-empty plate to the screen
+    return { passes, ms: performance.now() - t0 };
+  }
+
+  // 1×1 readback forces GPU execution to complete (perf timing only — see PATTERNS)
+  const _px = new Uint8Array(4);
+  function sync() { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px); return _px[0]; }
+
+  return {
+    canvas: glCanvas, gl, setPlateCount, setPalette, uploadGround, uploadMask, composite, sync,
+    isLost: () => gl.isContextLost(), get plateCount() { return P; },
+  };
 }

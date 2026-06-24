@@ -21,11 +21,10 @@
       "port": 8080
     },
     {
-      "name": "tuft-plate (static)",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8091"],
-      "port": 8091,
-      "cwd": "project-brushstroke/render"
+      "name": "composition (static)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "project-brushstroke/render", "--port", "8091", "--strictPort"],
+      "port": 8091
     }
   ]
 }
