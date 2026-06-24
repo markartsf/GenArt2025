@@ -48,6 +48,7 @@
 <script type="module">
 import { startComposition } from './compositionHost.js';
 import { buildGround } from './groundProducer.js';
+import { washMarks } from './washGenerator.js';
 import { tuftMarks } from './tuftGenerator.js';
 
 const hud = document.getElementById('hud');
@@ -61,6 +62,7 @@ try {
     revealMs: 4200,
     ground: (W, H, scale) => buildGround(W, H, { noise: 0.035, contrast: 0 }),
     layers: [
+      { name: 'wash', gen: (W, H, seed, scale) => washMarks(W, H, seed, scale) },
       { name: 'hero', gen: (W, H, seed, scale) => tuftMarks(W, H, seed, scale) },
     ],
   });

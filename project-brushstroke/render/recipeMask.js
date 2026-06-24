@@ -30,6 +30,17 @@ export function recipePx(id, grain, ko) {
 export function stampMark(g, mk) {
   const [r, gg, b] = recipePx(mk.id, mk.grain, mk.ko);
   const style = `rgba(${r},${gg},${b},${mk.amount})`;
+  if (mk.kind === 'wash') {
+    // broad soft field: COVERAGE falloff (alpha varies, recipe codes constant) so KM
+    // mixes the muted pigment gently into the ground; tail → 0 coverage fades to ground.
+    // Dim = coverage, never alpha-on-a-mark (composition-spike rule).
+    const grad = g.createRadialGradient(mk.x, mk.y, 0, mk.x, mk.y, mk.r);
+    grad.addColorStop(0, `rgba(${r},${gg},${b},${mk.amount})`);
+    grad.addColorStop(1, `rgba(${r},${gg},${b},0)`);
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(mk.x, mk.y, mk.r, 0, Math.PI * 2); g.fill();
+    return;
+  }
   if (mk.kind === 'disc' || mk.kind === 'dot') {
     g.fillStyle = style;
     g.beginPath(); g.arc(mk.x, mk.y, mk.r, 0, Math.PI * 2); g.fill();
