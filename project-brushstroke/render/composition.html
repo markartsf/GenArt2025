@@ -13,15 +13,14 @@
       plate 0  Ground   — swappable quiet base (cream+noise / image)   [groundProducer]
       plate 1  Wash     — broad soft low-coverage underlay              [washGenerator]
       plate 2  Hero     — Tuft, owned pigment pipeline                  [tuftGenerator]
-      plate 3  Accent   — see-through spray/stipple top pass            [accentGenerator]
 
   p5 (instance, P2D) hosts the canvas + rAF loop + pixelDensity + append-only
   reveal; raw-WebGL2 KM is the pigment path (no p5.brush — it can't emit recipe
   channel codes). Opaque output: translucency is compositional, never alpha.
 
   Every authoring lever is live (right panel): element scale, ground noise/contrast
-  + image swap, palette pick/tune, grain amount, wash strength/colour, accent dot
-  size/amount/colour. Each lever rebuilds only the plate(s) it touches.
+  + image swap, palette pick/tune, grain amount, wash strength/colour. Each lever
+  rebuilds only the plate(s) it touches.
 
   Serve over HTTP (ES modules): `npx vite project-brushstroke/render --port 8091`,
   or `python3 -m http.server 8091` from this dir. Sized once at load at 2× DPR;
@@ -70,7 +69,6 @@ import { startComposition } from './compositionHost.js';
 import { buildGround, GROUND_DEFAULTS } from './groundProducer.js';
 import { washMarks, WASH } from './washGenerator.js';
 import { tuftMarks } from './tuftGenerator.js';
-import { accentMarks, ACCENT } from './accentGenerator.js';
 import { PALETTE } from './palette.js';
 
 // palette presets — "Diagnostic" is the build's bright id-check rainbow; the others
@@ -91,9 +89,8 @@ try {
     groundOpts: { noise: GROUND_DEFAULTS.noise, contrast: GROUND_DEFAULTS.contrast },
     ground: (W, H, scale, opts) => buildGround(W, H, opts),
     layers: [
-      { name: 'wash',   opts: {}, gen: (W, H, seed, scale, o) => washMarks(W, H, seed, scale, o) },
-      { name: 'hero',   opts: {}, gen: (W, H, seed, scale, o) => tuftMarks(W, H, seed, scale) },
-      { name: 'accent', opts: {}, gen: (W, H, seed, scale, o) => accentMarks(W, H, seed, scale, o) },
+      { name: 'wash', opts: {}, gen: (W, H, seed, scale, o) => washMarks(W, H, seed, scale, o) },
+      { name: 'hero', opts: {}, gen: (W, H, seed, scale, o) => tuftMarks(W, H, seed, scale) },
     ],
     onReady: buildPanel,
   });
@@ -129,11 +126,6 @@ function buildPanel() {
     <div class="ctl"><label>strength</label><input type="range" id="c-wamt" min="0" max="0.5" step="0.01" value="${WASH.amount}"><span class="val" id="v-wamt">${WASH.amount.toFixed(2)}</span></div>
     <div class="ctl"><label>colour</label><select id="c-wid">${colorOptions(WASH.id)}</select></div>
 
-    <h2>Accent</h2>
-    <div class="ctl"><label>dot size</label><input type="range" id="c-adot" min="0.4" max="4" step="0.1" value="${ACCENT.dotSize}"><span class="val" id="v-adot">${ACCENT.dotSize.toFixed(1)}</span></div>
-    <div class="ctl"><label>amount</label><input type="range" id="c-aamt" min="0" max="1" step="0.02" value="${ACCENT.amount}"><span class="val" id="v-aamt">${ACCENT.amount.toFixed(2)}</span></div>
-    <div class="ctl"><label>colour</label><select id="c-aid">${colorOptions(ACCENT.id)}</select></div>
-
     <div class="btns"><button id="b-reseed">reseed</button><button id="b-replay">replay</button><button id="b-save">save</button></div>
   `;
 
@@ -163,10 +155,6 @@ function buildPanel() {
   // wash
   live('c-wamt', 'v-wamt', v => app.setLayer('wash', { amount: v }));
   $('c-wid').addEventListener('change', e => app.setLayer('wash', { id: +e.target.value }));
-  // accent (grain/stipple size = dot stamp radius)
-  live('c-adot', 'v-adot', v => app.setLayer('accent', { dotSize: v }), v => (+v).toFixed(1));
-  live('c-aamt', 'v-aamt', v => app.setLayer('accent', { amount: v }));
-  $('c-aid').addEventListener('change', e => app.setLayer('accent', { id: +e.target.value }));
   // actions
   $('b-reseed').addEventListener('click', () => app.reseed());
   $('b-replay').addEventListener('click', () => app.replay());
