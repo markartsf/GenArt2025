@@ -5,15 +5,16 @@
 //
 // The stack is generic: a `ground` builder (plate 0) + an ordered `layers` list of
 // mark generators (plates 1..N). The host knows nothing about Tuft/wash/accent — it
-// reveals marks append-only and recomposites only the dirty plates upward, exactly
-// as the dense/perf spike proved (rest = 0 passes, reveal = 1 pass).
+// reveals marks append-only and recomposites only the dirty plates upward (rest = 0
+// passes, reveal = 1 pass), and exposes the live control levers (see api.* below):
+// each lever rebuilds only the plate(s) it touches and recomposites from there up.
 //
 //   config = {
-//     holderId,                       // parent element id for the p5 canvas
-//     seed,                           // deterministic seed
-//     revealMs,                       // total reveal duration (ms) across all layers
-//     ground: (W,H,scale) => canvas,  // plate 0 producer (opaque RGB canvas)
-//     layers: [ { name, gen: (W,H,seed,scale) => marks } ],  // plates 1..N
+//     holderId, seed, revealMs,
+//     ground: (W,H,scale,opts) => canvas,          // plate 0 producer (opaque RGB)
+//     groundOpts,                                   // initial ground options
+//     layers: [ { name, opts, gen: (W,H,seed,scale,opts) => marks } ],  // plates 1..N
+//     onReady: (api) => {},                         // called once after setup
 //   }
 import { createCompositor } from './kmCompositor.js';
 import { stampMark } from './recipeMask.js';
@@ -22,37 +23,39 @@ const FRAME_REF = 620;   // mark scale is relative to the frame (DESIGN #7)
 const ease = x => x * x * x * (x * (x * 6 - 15) + 10);   // smootherstep reveal cadence
 
 export function startComposition(config) {
-  const C = { seed: 11, revealMs: 4200, ...config };
-  let api = {};
+  const C = { seed: 11, revealMs: 4200, groundOpts: {}, ...config };
+  const api = {};
 
   const sketch = (p) => {
     let inPreview = false, dpr = 2;
-    let cssW, cssH, W, H, scale, comp, K;
+    let cssW, cssH, W, H, baseScale, scale, comp, K;
     let ground, plates = [], t = 0;
     let frameMs = 0, kmPasses = 0, newMarks = 0;
     const M = C.layers.length;        // number of mark plates
 
+    // live control state (the levers mutate these, then rebuild + recompose)
+    let scaleMul = 1, grainAmt = 1;
+    const groundOpts = { ...C.groundOpts };
+    const layerOpts = C.layers.map(l => ({ ...(l.opts || {}) }));
+
     function recomputeSize() { cssW = p.constrain(p.windowWidth, 360, 1600); cssH = p.constrain(p.windowHeight, 360, 1000); }
+    function buildGroundPlate() { ground = C.ground(W, H, scale, groundOpts); K.uploadGround(ground); }
+    function genPlate(i) { return C.layers[i].gen(W, H, C.seed + i, scale, layerOpts[i]); }
 
     function build() {
-      W = cssW * dpr; H = cssH * dpr; scale = Math.min(W, H) / FRAME_REF;
-      // ground (plate 0)
-      ground = C.ground(W, H, scale);
-      K.uploadGround(ground);
-      // mark plates (1..N)
+      W = cssW * dpr; H = cssH * dpr; baseScale = Math.min(W, H) / FRAME_REF; scale = baseScale * scaleMul;
+      buildGroundPlate();
       plates = [];
       for (let i = 0; i < M; i++) {
         const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-        plates.push({ name: C.layers[i].name, canvas: cv, ctx: cv.getContext('2d'),
-                      marks: C.layers[i].gen(W, H, C.seed + i, scale), cursor: 0, dirty: true });
-        K.uploadMask(i + 1, cv);      // empty mask until marks land
+        plates.push({ name: C.layers[i].name, canvas: cv, ctx: cv.getContext('2d'), marks: genPlate(i), cursor: 0, dirty: true });
+        K.uploadMask(i + 1, cv);
       }
       t = 0;
-      K.composite(0, 0);              // blit ground so the quiet base shows at t=0
-      present();
+      K.composite(0, 0, { grainAmt }); present();   // show the quiet ground at t=0
     }
 
-    // plate i (1-based mark index) reveals across global-t window [(i-1)/M, i/M]
+    // plate i (0-based mark index) reveals across global-t window [i/M, (i+1)/M]
     function plateLocalT(mi) { const w = 1 / M; return ease(p.constrain((t - mi * w) / w, 0, 1)); }
 
     function advanceReveal() {
@@ -71,6 +74,16 @@ export function startComposition(config) {
 
     function present() { p.drawingContext.drawImage(comp, 0, 0, cssW, cssH); }
     function revealing() { return t < 1; }
+    function currentTop() { let top = 0; for (let i = 0; i < M; i++) if (plates[i].cursor > 0) top = i + 1; return top; }
+
+    // control edits happen at rest → re-stamp the fully-revealed plate, then recompose
+    function restampPlate(i) { const pl = plates[i]; pl.ctx.clearRect(0, 0, pl.canvas.width, pl.canvas.height); for (const mk of pl.marks) stampMark(pl.ctx, mk); pl.cursor = pl.marks.length; K.uploadMask(i + 1, pl.canvas); }
+    function rebuildPlate(i) { plates[i].marks = genPlate(i); restampPlate(i); }
+    function recompose(from) {
+      const top = currentTop();
+      const r = K.composite(top < 1 ? 0 : Math.max(0, Math.min(from, top)), top, { grainAmt });
+      kmPasses = r.passes; present();
+    }
 
     p.setup = function () {
       inPreview = /Claude\/.*Electron/.test(navigator.userAgent);
@@ -82,6 +95,7 @@ export function startComposition(config) {
       K = createCompositor(comp, cssW * dpr, cssH * dpr, M + 1);
       build();
       api._ready = true;
+      if (C.onReady) C.onReady(api);
     };
 
     p.draw = function () {
@@ -90,7 +104,7 @@ export function startComposition(config) {
       if (revealing()) {
         t = p.min(1, t + (p.deltaTime / C.revealMs));
         const { dirtyFrom, top } = advanceReveal();
-        if (dirtyFrom !== Infinity) { const r = K.composite(dirtyFrom, top); kmPasses = r.passes; present(); }
+        if (dirtyFrom !== Infinity) { const r = K.composite(dirtyFrom, top, { grainAmt }); kmPasses = r.passes; present(); }
         else kmPasses = 0;
       } else { kmPasses = 0; newMarks = 0; }   // rest: nothing dirty, P2D retains last frame
       frameMs = performance.now() - t0;
@@ -98,10 +112,23 @@ export function startComposition(config) {
 
     p.windowResized = function () { recomputeSize(); };   // sized on load; reload to refit retina
 
-    // ---- controller surface (HUD + commit-4 controls) ----
+    // ---- controller surface: HUD actions + the live levers ----
     api.replay = () => { for (const pl of plates) { pl.ctx.clearRect(0, 0, pl.canvas.width, pl.canvas.height); pl.cursor = 0; pl.dirty = true; } build(); };
     api.savePNG = () => { const a = document.createElement('a'); a.href = comp.toDataURL('image/png'); a.download = `composition_seed${C.seed}.png`; document.body.appendChild(a); a.click(); a.remove(); };
-    api.stats = () => ({ t: +t.toFixed(3), frameMs: +frameMs.toFixed(2), kmPasses, newMarks, plates: M + 1, dpr, state: revealing() ? 'revealing' : 'rest', lost: K.isLost() });
+    api.reseed = (s) => { C.seed = (s == null) ? ((C.seed * 7 + 1) & 0xffff) : (s >>> 0); api.replay(); return C.seed; };
+
+    // DESIGN #7 — element scale to frame: rebuild every mark plate at the new scale
+    api.setScale = (m) => { scaleMul = m; scale = baseScale * scaleMul; for (let i = 0; i < M; i++) rebuildPlate(i); recompose(1); };
+    // DESIGN #8 — quiet grounds: noise / contrast / image swap (rebuild ground only)
+    api.setGround = (partial) => { Object.assign(groundOpts, partial); buildGroundPlate(); recompose(0); };
+    // palette: re-upload the 7 entries, recomposite the mark stack (ground unaffected)
+    api.setPalette = (hexArr) => { K.setPalette(hexArr); recompose(1); };
+    // grain amount: global uniform on mask.G — cheap, no re-stamp
+    api.setGrainAmt = (a) => { grainAmt = a; recompose(1); };
+    // per-layer opts (wash strength/colour, accent dot-size/amount/colour): rebuild that plate
+    api.setLayer = (name, partial) => { const i = C.layers.findIndex(l => l.name === name); if (i < 0) return; Object.assign(layerOpts[i], partial); rebuildPlate(i); recompose(i + 1); };
+
+    api.stats = () => ({ t: +t.toFixed(3), frameMs: +frameMs.toFixed(2), kmPasses, newMarks, plates: M + 1, dpr, scale: +scaleMul.toFixed(2), seed: C.seed, state: revealing() ? 'revealing' : 'rest', lost: K.isLost() });
   };
 
   const inst = new (window.p5)(sketch);

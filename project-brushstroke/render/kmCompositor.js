@@ -142,13 +142,18 @@ export function createCompositor(glCanvas, W, H, plateCount) {
 
   // composite plates [dirtyFrom..top]; dirtyFrom=0 re-blits the ground first.
   // top = highest non-empty plate (0 = only ground showing). Returns KM pass count.
-  function composite(dirtyFrom, top, mod = MOD_NEUTRAL) {
+  //   opts.grainAmt   global grain-amount multiplier on mask.G (live lever, 1 = neutral)
+  //   opts.grainScale procedural-grain hash scale (uScale)
+  //   opts.mod        M4 modulation seam (off this build); multiplies grain on the lit plate
+  function composite(dirtyFrom, top, opts = {}) {
+    const grainAmt = opts.grainAmt == null ? 1 : opts.grainAmt;
+    const mod = opts.mod || MOD_NEUTRAL;
     const t0 = performance.now();
     if (dirtyFrom <= 0) blit(groundTex, cacheTex[0]);   // ground refresh into cache[0]
     let passes = 0;
     if (top >= 1) {
       gl.useProgram(progKM);
-      gl.uniform1f(locKM.uSkip, GRAIN_DEFAULTS.skip); gl.uniform1f(locKM.uScale, mod.scale || GRAIN_DEFAULTS.scale);
+      gl.uniform1f(locKM.uSkip, GRAIN_DEFAULTS.skip); gl.uniform1f(locKM.uScale, opts.grainScale || GRAIN_DEFAULTS.scale);
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.viewport(0, 0, W, H);
       for (let i = Math.max(1, dirtyFrom); i <= top; i++) {
@@ -157,7 +162,7 @@ export function createCompositor(glCanvas, W, H, plateCount) {
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, cacheTex[i - 1]); gl.uniform1i(locKM.canvasTex, 1);
         const lit = mod.on && (mod.whole || i === mod.plate);
         gl.uniform1f(locKM.uBreath, lit ? mod.breath : 0.0);
-        gl.uniform1f(locKM.uGrainPulse, lit ? mod.grain : 1.0);
+        gl.uniform1f(locKM.uGrainPulse, grainAmt * (lit ? mod.grain : 1.0));
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         passes++;
       }

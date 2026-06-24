@@ -11,49 +11,76 @@
   compositor lifted from the dense/perf spike (verdict b39ae13):
 
       plate 0  Ground   — swappable quiet base (cream+noise / image)   [groundProducer]
-      plate 1  Hero     — Tuft, owned pigment pipeline                 [tuftGenerator]
-      (commit 2 inserts Wash beneath the hero; commit 3 adds Accent on top)
+      plate 1  Wash     — broad soft low-coverage underlay              [washGenerator]
+      plate 2  Hero     — Tuft, owned pigment pipeline                  [tuftGenerator]
+      plate 3  Accent   — see-through spray/stipple top pass            [accentGenerator]
 
   p5 (instance, P2D) hosts the canvas + rAF loop + pixelDensity + append-only
   reveal; raw-WebGL2 KM is the pigment path (no p5.brush — it can't emit recipe
   channel codes). Opaque output: translucency is compositional, never alpha.
 
-  Serve over HTTP (ES modules): `python3 -m http.server 8091` from this dir, or Vite.
-  Sized once at load at 2× DPR; window resize → reload (never resize a live GL canvas).
+  Every authoring lever is live (right panel): element scale, ground noise/contrast
+  + image swap, palette pick/tune, grain amount, wash strength/colour, accent dot
+  size/amount/colour. Each lever rebuilds only the plate(s) it touches.
+
+  Serve over HTTP (ES modules): `npx vite project-brushstroke/render --port 8091`,
+  or `python3 -m http.server 8091` from this dir. Sized once at load at 2× DPR;
+  window resize → reload (never resize a live GL canvas). Judge at retina in a real
+  browser — Claude Preview forces pixelDensity 1.
 -->
 <script src="https://cdn.jsdelivr.net/npm/p5@2.2/lib/p5.min.js"></script>
 <style>
-  html,body{margin:0;height:100%;background:#0e0e12;overflow:hidden}
+  :root{--panel:rgba(20,20,24,.92);--ink:#f4efe7;--muted:#9a948c;--acc:#e9c46a;--warn:#e07a5f;--line:rgba(255,255,255,.1)}
+  html,body{margin:0;height:100%;background:#0e0e12;overflow:hidden;font-family:ui-monospace,Menlo,monospace}
   #canvas-holder{position:fixed;inset:0;display:grid;place-items:center}
-  #hud{position:fixed;top:10px;left:10px;font:11px ui-monospace,Menlo,monospace;color:#9a948c;
-       background:rgba(14,14,18,.72);border:1px solid #333;border-radius:6px;padding:7px 9px;
-       display:flex;gap:7px;align-items:center;user-select:none;z-index:10}
-  #hud.hide{display:none}
-  #hud button{font:inherit;background:#1c1c22;color:#f4efe7;border:1px solid #444;border-radius:5px;padding:3px 8px;cursor:pointer}
-  #hud button:hover{border-color:#e9c46a;color:#e9c46a}
-  #hud .stat{color:#e9c46a}
-  #err{position:fixed;bottom:10px;left:14px;right:14px;color:#e07a5f;font:11px ui-monospace,monospace;white-space:pre-wrap;z-index:20}
+  #hud{position:fixed;top:10px;left:10px;font-size:11px;color:var(--muted);
+       background:var(--panel);border:1px solid #333;border-radius:6px;padding:7px 9px;display:flex;gap:7px;align-items:center;user-select:none;z-index:10}
+  #hud .stat{color:var(--acc)}
+  #hud button,#panel button{font:inherit;background:#1c1c22;color:var(--ink);border:1px solid #444;border-radius:5px;padding:3px 8px;cursor:pointer}
+  #hud button:hover,#panel button:hover{border-color:var(--acc);color:var(--acc)}
+  #panel{position:fixed;top:10px;right:10px;width:262px;max-height:calc(100vh - 20px);overflow-y:auto;
+         background:var(--panel);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:10px;
+         padding:12px 13px 14px;font-size:11px;color:var(--ink);z-index:10;user-select:none}
+  #panel.hide,#hud.hide{display:none}
+  #panel h2{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);margin:14px 0 6px;border-top:1px solid var(--line);padding-top:9px}
+  #panel h2:first-child{margin-top:0;border-top:0;padding-top:0}
+  .ctl{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0}
+  .ctl label{color:var(--muted);flex:0 0 92px}
+  .ctl input[type=range]{flex:1;min-width:0;accent-color:var(--acc)}
+  .ctl .val{flex:0 0 34px;text-align:right;color:var(--ink)}
+  .ctl select,.ctl input[type=file]{flex:1;min-width:0;background:#1c1c22;color:var(--ink);border:1px solid #444;border-radius:4px;font:inherit;padding:2px}
+  #swatches{display:flex;gap:3px;margin:6px 0}
+  #swatches input[type=color]{flex:1;height:20px;padding:0;border:1px solid #444;border-radius:3px;background:none;cursor:pointer}
+  .btns{display:flex;gap:6px;margin-top:8px}
+  .btns button{flex:1}
+  #err{position:fixed;bottom:10px;left:14px;right:14px;color:var(--warn);font-size:11px;white-space:pre-wrap;z-index:20}
 </style>
 </head>
 <body>
 <div id="canvas-holder"></div>
 <div id="hud">
   <span class="stat" id="stat">booting…</span>
-  <button data-k="r">R · replay</button>
-  <button data-k="s">S · save</button>
-  <span style="color:#5a554e">h · hide</span>
+  <span style="color:#5a554e">p · panel · h · hide</span>
 </div>
+<div id="panel"></div>
 <div id="err"></div>
 
 <script type="module">
 import { startComposition } from './compositionHost.js';
-import { buildGround } from './groundProducer.js';
-import { washMarks } from './washGenerator.js';
+import { buildGround, GROUND_DEFAULTS } from './groundProducer.js';
+import { washMarks, WASH } from './washGenerator.js';
 import { tuftMarks } from './tuftGenerator.js';
-import { accentMarks } from './accentGenerator.js';
+import { accentMarks, ACCENT } from './accentGenerator.js';
+import { PALETTE } from './palette.js';
 
-const hud = document.getElementById('hud');
-const statEl = document.getElementById('stat');
+// palette presets — "Diagnostic" is the build's bright id-check rainbow; the others
+// quiet it toward a ground-tuned read (Mark tunes per-swatch on top of any preset).
+const PRESETS = {
+  'Diagnostic': [...PALETTE],
+  'Quiet earth': ['#a8584e', '#5b6f8c', '#c9a24b', '#7e8c6a', '#b08a86', '#8a8276', '#e7dcc8'],
+  'Flowering Trees': ['#5B1F2A', '#8B2E3F', '#C8D84A', '#E8EEB8', '#7A8450', '#A6603A', '#E8E2D0'],
+};
+let pal = [...PALETTE];
 
 let app;
 try {
@@ -61,30 +88,102 @@ try {
     holderId: 'canvas-holder',
     seed: 11,
     revealMs: 4200,
-    ground: (W, H, scale) => buildGround(W, H, { noise: 0.035, contrast: 0 }),
+    groundOpts: { noise: GROUND_DEFAULTS.noise, contrast: GROUND_DEFAULTS.contrast },
+    ground: (W, H, scale, opts) => buildGround(W, H, opts),
     layers: [
-      { name: 'wash', gen: (W, H, seed, scale) => washMarks(W, H, seed, scale) },
-      { name: 'hero', gen: (W, H, seed, scale) => tuftMarks(W, H, seed, scale) },
-      { name: 'accent', gen: (W, H, seed, scale) => accentMarks(W, H, seed, scale) },
+      { name: 'wash',   opts: {}, gen: (W, H, seed, scale, o) => washMarks(W, H, seed, scale, o) },
+      { name: 'hero',   opts: {}, gen: (W, H, seed, scale, o) => tuftMarks(W, H, seed, scale) },
+      { name: 'accent', opts: {}, gen: (W, H, seed, scale, o) => accentMarks(W, H, seed, scale, o) },
     ],
+    onReady: buildPanel,
   });
 } catch (e) {
   document.getElementById('err').textContent = 'FATAL: ' + (e.message || e);
   console.error(e);
 }
 
-function apply(k) {
-  k = (k || '').toLowerCase();
-  if (k === 'r') app && app.replay();
-  else if (k === 's') app && app.savePNG();
-  else if (k === 'h') hud.classList.toggle('hide');
-}
-window.addEventListener('keydown', e => { if (['r','s','h'].includes(e.key.toLowerCase())) { apply(e.key); e.preventDefault(); } });
-document.querySelectorAll('#hud button').forEach(b => b.addEventListener('click', () => apply(b.dataset.k)));
-window.onerror = (m) => { document.getElementById('err').textContent = 'ERROR: ' + m; };
+// ---- control panel ----------------------------------------------------------
+function el(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; }
+function colorOptions(sel) { return pal.map((c, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>id ${i}</option>`).join(''); }
 
-// live stat readout
-setInterval(() => { if (app && app.stats) { const s = app.stats(); statEl.textContent = `${s.state} · ${(s.t*100)|0}% · ${s.plates} plates · ${s.kmPasses} KM/frame · ${s.frameMs}ms @${s.dpr}x`; } }, 200);
+function buildPanel() {
+  const panel = document.getElementById('panel');
+  panel.innerHTML = `
+    <h2>Composition</h2>
+    <div class="ctl"><label>element scale</label><input type="range" id="c-scale" min="0.4" max="2" step="0.05" value="1"><span class="val" id="v-scale">1.00</span></div>
+
+    <h2>Ground</h2>
+    <div class="ctl"><label>noise</label><input type="range" id="c-gnoise" min="0" max="0.1" step="0.005" value="${GROUND_DEFAULTS.noise}"><span class="val" id="v-gnoise">${GROUND_DEFAULTS.noise}</span></div>
+    <div class="ctl"><label>contrast</label><input type="range" id="c-gcon" min="-0.5" max="0.5" step="0.02" value="0"><span class="val" id="v-gcon">0.00</span></div>
+    <div class="ctl"><label>image</label><input type="file" id="c-gimg" accept="image/*"></div>
+    <div class="btns"><button id="b-gclear">clear image</button></div>
+
+    <h2>Palette</h2>
+    <div class="ctl"><label>preset</label><select id="c-preset">${Object.keys(PRESETS).map(k => `<option>${k}</option>`).join('')}</select></div>
+    <div id="swatches">${pal.map((c, i) => `<input type="color" data-i="${i}" value="${c}" title="id ${i}">`).join('')}</div>
+
+    <h2>Grain</h2>
+    <div class="ctl"><label>amount</label><input type="range" id="c-grain" min="0" max="2" step="0.05" value="1"><span class="val" id="v-grain">1.00</span></div>
+
+    <h2>Wash</h2>
+    <div class="ctl"><label>strength</label><input type="range" id="c-wamt" min="0" max="0.5" step="0.01" value="${WASH.amount}"><span class="val" id="v-wamt">${WASH.amount.toFixed(2)}</span></div>
+    <div class="ctl"><label>colour</label><select id="c-wid">${colorOptions(WASH.id)}</select></div>
+
+    <h2>Accent</h2>
+    <div class="ctl"><label>dot size</label><input type="range" id="c-adot" min="0.4" max="4" step="0.1" value="${ACCENT.dotSize}"><span class="val" id="v-adot">${ACCENT.dotSize.toFixed(1)}</span></div>
+    <div class="ctl"><label>amount</label><input type="range" id="c-aamt" min="0" max="1" step="0.02" value="${ACCENT.amount}"><span class="val" id="v-aamt">${ACCENT.amount.toFixed(2)}</span></div>
+    <div class="ctl"><label>colour</label><select id="c-aid">${colorOptions(ACCENT.id)}</select></div>
+
+    <div class="btns"><button id="b-reseed">reseed</button><button id="b-replay">replay</button><button id="b-save">save</button></div>
+  `;
+
+  const $ = id => document.getElementById(id);
+  const live = (id, vid, fn, fmt = v => (+v).toFixed(2)) => {
+    const c = $(id), v = vid && $(vid);
+    c.addEventListener('input', () => { if (v) v.textContent = fmt(c.value); fn(+c.value); });
+  };
+  // element scale (rebuilds all marks — light enough for live drag at these counts)
+  live('c-scale', 'v-scale', v => app.setScale(v));
+  // ground noise / contrast: getImageData pass is heavy → apply on release ('change')
+  $('c-gnoise').addEventListener('input', () => $('v-gnoise').textContent = (+$('c-gnoise').value).toFixed(3));
+  $('c-gcon').addEventListener('input', () => $('v-gcon').textContent = (+$('c-gcon').value).toFixed(2));
+  $('c-gnoise').addEventListener('change', () => app.setGround({ noise: +$('c-gnoise').value }));
+  $('c-gcon').addEventListener('change', () => app.setGround({ contrast: +$('c-gcon').value }));
+  $('c-gimg').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const img = new Image(); img.onload = () => app.setGround({ image: img }); img.src = URL.createObjectURL(f); });
+  $('b-gclear').addEventListener('click', () => { $('c-gimg').value = ''; app.setGround({ image: null }); });
+  // palette
+  $('c-preset').addEventListener('change', e => {
+    pal = [...PRESETS[e.target.value]];
+    document.querySelectorAll('#swatches input').forEach((sw, i) => sw.value = pal[i]);
+    app.setPalette(pal);
+  });
+  document.querySelectorAll('#swatches input').forEach(sw => sw.addEventListener('input', () => { pal[+sw.dataset.i] = sw.value; app.setPalette(pal); }));
+  // grain amount (uniform)
+  live('c-grain', 'v-grain', v => app.setGrainAmt(v));
+  // wash
+  live('c-wamt', 'v-wamt', v => app.setLayer('wash', { amount: v }));
+  $('c-wid').addEventListener('change', e => app.setLayer('wash', { id: +e.target.value }));
+  // accent (grain/stipple size = dot stamp radius)
+  live('c-adot', 'v-adot', v => app.setLayer('accent', { dotSize: v }), v => (+v).toFixed(1));
+  live('c-aamt', 'v-aamt', v => app.setLayer('accent', { amount: v }));
+  $('c-aid').addEventListener('change', e => app.setLayer('accent', { id: +e.target.value }));
+  // actions
+  $('b-reseed').addEventListener('click', () => app.reseed());
+  $('b-replay').addEventListener('click', () => app.replay());
+  $('b-save').addEventListener('click', () => app.savePNG());
+}
+
+// ---- HUD + keys -------------------------------------------------------------
+const hud = document.getElementById('hud'), panel = document.getElementById('panel'), statEl = document.getElementById('stat');
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'h') { hud.classList.toggle('hide'); panel.classList.toggle('hide'); e.preventDefault(); }
+  else if (k === 'p') { panel.classList.toggle('hide'); e.preventDefault(); }
+  else if (k === 'r' && app) { app.replay(); e.preventDefault(); }
+  else if (k === 's' && app) { app.savePNG(); e.preventDefault(); }
+});
+window.onerror = (m) => { document.getElementById('err').textContent = 'ERROR: ' + m; };
+setInterval(() => { if (app && app.stats) { const s = app.stats(); statEl.textContent = `${s.state} · ${(s.t * 100) | 0}% · ${s.plates}pl · ${s.kmPasses}KM · ${s.frameMs}ms @${s.dpr}x · seed ${s.seed}`; } }, 200);
 </script>
 </body>
 </html>
