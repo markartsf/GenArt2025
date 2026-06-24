@@ -13,21 +13,30 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- Docs current through: **2026-06-20** — SVG spine-import spike closed: importer
-  proven 1:1 (§4·3d, PATTERNS *SVG spine import*); Bend response param added (§3.1,
-  default `tame`, all three shipped); p5.brush runtime-resize corruption logged.
-  Prior 06-19: mask A/B spike closed (recipe scheme B); dry-brush KM (§4·3a);
-  composition-spike verdict (§4·3b).
+- Docs current through: **2026-06-23** — dense/perf spike CLOSED (all three verdicts);
+  retina perf measured on Apple-M2 GPU, M4 modulation bound to **single-layer**.
+  Prior 06-20: SVG spine-import spike closed: importer proven 1:1 (§4·3d, PATTERNS
+  *SVG spine import*); Bend response param added (§3.1, default `tame`); p5.brush
+  runtime-resize corruption logged. 06-19: mask A/B spike closed (recipe scheme B);
+  dry-brush KM (§4·3a); composition-spike verdict (§4·3b).
 - **Mask-channel convention: recipe scheme (B) adopted 2026-06-19, folded into
   PATTERNS. Tuft rewrite unblocked.**
+- **Dense/perf spike CLOSED 2026-06-23** (`dense-perf-spike.html`, throwaway record in
+  `dense-perf-spike-VERDICT.md`). Architecture confirmed faithful: p5 host → own
+  canvas2D recipe-B mask → raw-WebGL2 KM via FBO plate-cache. Verdicts:
+  1. **LOOK ✅** — bezier-eased reveal reads correctly at `?d=2` retina, no artifacts.
+  2. **PERF** (2880×1800, M2): rest = **0 KM passes / 0 ms** (cache delivers free
+     resting frames); one warm KM pass ≈ **3.5–4.4 ms** sparse / **4.5–5.7 ms** dense
+     (coverage-dependent); reveal = 1 pass regardless of plate count; present ~0.14 ms.
+  3. **MODULATION SCOPE** — whole-stack (N passes) blows budget at retina (6pl 23.6 ms
+     sparse / 41 dense; 12pl 47.8 / 88); single-layer (1 pass) flat ~4–6 ms. **→ M4
+     must scope per-frame modulation to a SINGLE (dirty/top) layer.** The plate-cache's
+     dirty-only recomposite *is* the M4 reactivity architecture; whole-stack survives
+     only as an occasional one-off re-settle. Budget: one layer, per-frame, 60fps.
+  **Unblocks: multi-plate composition + wash; M4 reactivity bound (single-layer).**
 - **Decisions pending doc-commit** (clear each when its amendment lands):
   - 2026-06-18 grain / weathering overlay: fine-scale + knockout — **DIRECTION**,
     needs a spike (see PATTERNS → *Brushstroke — draw-on / append-only render*).
-  - 2026-06-19 dense/perf spike (IN PROGRESS): combined draw-on + recipe-B engine =
-    **p5 hosts canvas/loop/pixelDensity2** (no p5.brush — can't emit channel codes),
-    own canvas2D stamps the recipe mask, raw-WebGL2 KM via an **FBO plate-cache**
-    (settled plates cached as textures; only dirty plates recomposited; rest = 0 KM
-    passes). Awaiting look verdict + perf table + whole-stack-vs-single-layer answer.
 - Seeds retained: `tuft-shader-spike.html`, `drawon-spike.html`,
   `svg-spine-spike.html` (importer reference for the upcoming feature; spine inlined
   so it runs standalone — ground PNGs removed, re-copy from

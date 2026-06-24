@@ -285,14 +285,33 @@ fringe). Proven end-to-end on real Tuft geometry in `tuft-shader-spike.html`.
   - `setAttributes()` must be called **once in `setup()`, after `createCanvas`**; a
     runtime call freezes the loop in instance mode — drive attribute changes by
     page reload, not a live call.
-  - **Owed:** the user's by-eye check at **pixelDensity 2 in a real browser**
-    (Claude Preview corrupts WebGL at density 2 / heavy overdraw — see *brush-lab
-    pixelDensity gate*); plus a **real-browser dense-generator perf pass** (native
-    rAF, a real Tuft/Bloom stamped incrementally at the target slow reveal) before
-    committing draw-on to dense generators — the spike's ~0.1 ms numbers were
-    sandbox `setInterval`-driven on 8 trivial strokes and do not prove dense
-    throughput. Append's "cost scales with new marks/frame, not total accumulated"
-    is what makes that pass likely to pass, but it must be measured, not assumed.
+  - **Owed → SETTLED 2026-06-23** by the dense/perf spike (`dense-perf-spike.html`).
+    The pigment path there is the **owned** engine (p5 host → own canvas2D recipe-B
+    mask → raw-WebGL2 KM, FBO plate-cache), not p5.brush, but the draw-on/append
+    economics are the same and now measured at retina on an Apple-M2 GPU
+    (**2880×1800**, real Chrome):
+    - **rest = 0 KM passes = 0 ms.** The plate-cache never re-touches settled plates;
+      resting frames are physically free. Append's "cost scales with dirty plates, not
+      total accumulated" is confirmed, not assumed.
+    - **one warm KM pass ≈ 3.5–4.4 ms** (sparse, the quiet-grounds regime) to
+      **4.5–5.7 ms** (dense). Cost is **coverage-dependent** — the KM fragment shader
+      early-outs on near-zero coverage, so denser stamping costs more per pass.
+    - **reveal = exactly 1 pass regardless of plate count** → dense draw-on at retina
+      is cheap. Present (`drawImage` WebGL→P2D) ~0.14 ms, negligible.
+    - **Measuring WebGL frame cost: a trailing `gl.readPixels(1×1)` is mandatory** to
+      force GPU execution into the timer — without it `performance.now()`/`drawImage`
+      capture only CPU command submission and every cell falsely reads ~0.1 ms (this
+      is *why* the earlier draw-on spike's 0.1 ms numbers were meaningless). Batch
+      repeats per sample to beat Chrome's ~0.1 ms timer clamp; take the **median**.
+  - **M4 reactivity budget (the modulation-scope rule).** Modulating palette/grain
+    globally forces a recomposite. **Whole-stack (N passes) is NOT affordable at
+    retina** — 6 plates ≈ 23.6 ms sparse / 41 ms dense, 12 plates ≈ 47.8 / 88 ms,
+    blowing 60 fps by 6 plates and 30 fps by ~8. **Single-layer (1 pass) is flat
+    ~4–6 ms** regardless of plate count. **→ M4 must scope per-frame modulation to one
+    (dirty/top) layer**; the plate-cache's dirty-only recomposite *is* the reactivity
+    architecture. Whole-stack survives only as an occasional one-off re-settle. To move
+    several layers at once: drop to 30 fps + ≤6 plates, or round-robin one dirty plate
+    per frame so per-frame cost stays at 1 pass.
 - **Grain / weathering overlay — DIRECTION, not yet spiked.** A global
   paper-grain/weathering pass should be **fine-scale** (the first pass rendered too
   large) and **participate in knockout** (carve into the generator marks below
