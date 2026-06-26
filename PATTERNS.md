@@ -406,6 +406,15 @@ served over HTTP — `npx vite project-brushstroke/render --port 8091`, or
   (not in SPEC, unrequested). The reference plates' see-through dry-media texture is the
   separate, still-deferred global grain/weathering overlay (below) — distinct from both
   in-mark grain and any per-element stipple.
+- **Layering verdict (2026-06-25, by-eye at retina): stacking plates reads as translucency.**
+  A wash plate + multiple Tuft fields (each own scale/seed/palette-offset) through the cached
+  KM compositor give the breathed-on, see-through quality — **compositional translucency,
+  never per-mark alpha.** Technique-level and seed-independent. It **muddies when dense**; open
+  space carries the read, so favour it (companion to 30–40 bpm ambient). Grain size ≤ 1.5
+  standing; grain amount stays open (drives the faded look). The per-plate generator opts that
+  stage a stack (`tuftGenerator` scaleMul/idOffset/count/seed/dx-dy, `washGenerator` seed/dx-dy)
+  are kept as groundwork for the deferred `brushstroke.composition` save model; the throwaway
+  multi-plate stub itself was retired (commit `0d82eaf`).
 
 ---
 

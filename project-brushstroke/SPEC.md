@@ -13,12 +13,16 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- Docs current through: **2026-06-24** — **§4·3b composition staging BUILT** (committed;
+- Docs current through: **2026-06-25** — **§4·3b composition staging BUILT** (committed;
   Mark's by-eye verdict: pleased). Multi-plate plate-cache compositor + composition host
   graduated from the spike into `project-brushstroke/render/`; plate stack **Ground → Wash
   → Tuft hero**; full live control surface; in-mark grain (mask.G) made **finer + scale-
   locked** to the element; the accent stipple layer was removed (not in SPEC, unrequested).
   Commits `2dc1bbc` → `0038a3a`. See §4·3b.
+  06-25: **layering verdict** — stacking plates reads as translucency (signed off, retina);
+  §4·3b(c) refined (open-space default, grain size ≤ 1.5); `brushstroke.composition`
+  save-recipe intent recorded. Layering stub retired, per-plate generator opts kept as
+  schema groundwork (commit `0d82eaf`).
   Prior 06-23: dense/perf spike CLOSED (all three verdicts); retina perf measured on
   Apple-M2 GPU, M4 modulation bound to **single-layer**.
   Prior 06-20: SVG spine-import spike closed: importer proven 1:1 (§4·3d, PATTERNS
@@ -565,6 +569,24 @@ without them load at their default).
      (`brushstroke.composition`), other generator conversions (Bloom/Burst/Fan… fold in by
      the same emit-marks → mask seam), the global grain/weathering overlay spike,
      modularization / app integration (standalone for this build).
+     - **`brushstroke.composition` — what it captures (intent; schema still deferred):** the
+       **full recipe**, so a finished composition reproduces exactly — the ordered plate list;
+       per plate the generator + opts (scale, seed, idOffset/palette-rotation, position dx/dy,
+       count, wash strength/colour); plus palette, grain (amount + size), and ground
+       (noise/contrast or image ref). The **seed lives inside the recipe, never saved bare.**
+       *Open question (decide at build, not now):* plates **reference** saved
+       `brushstroke.preset/1` files (§1.5 dec. 4 — composition consumes presets; DRY/edit-once)
+       vs **inline** opts (self-contained, exact freeze). Lean: reference + an **embedded
+       snapshot at save** — frozen copy reproduces exactly, ref kept as provenance for re-link.
+   - **Layering verdict — translucency CONFIRMED (2026-06-25, by-eye at retina).** Multi-plate
+     layering reads as translucency, signed off. A wash plate + multiple Tuft fields (each at
+     its own scale / seed / palette-offset) through the cached KM compositor produce the
+     breathed-on, see-through Enfantines quality. Confirms the doctrine in practice:
+     translucency is **compositional** — opaque plates through cached KM, never per-mark alpha.
+     **Technique-level and seed-independent** (holds across seeds, not one arrangement; for the
+     record only, "seed 78" is a real reproducible seed via the seed×7+1 reseed, 11→78, with no
+     special status). It **muddies when dense** — open space carries the read (see (c)
+     refinement). Unblocks the composition save model (`brushstroke.composition`).
 
    **(c) Aesthetic direction — CONFIRMED 2026-06-18.** Restraint and negative space
    are the default; **density is the audio-reactive lever** — a calm/slow ambient
@@ -575,6 +597,14 @@ without them load at their default).
    *generatively produced*, not hand-placed, and the work is the motion toward it —
    "authoring the destination" is the composition's seed, not a contradiction of
    emergence.
+
+   **Refinement (2026-06-25, from the layering verdict — the 06-18 confirmation above stands).**
+   Open space is the **default, not an edge case** — these compositions companion 30–40 bpm
+   ambient tracks; layering reads translucent when open and muddies when dense, so avoid dense
+   as a rule. Scale is **heterogeneous and per-composition** — typically 1–3 large elements
+   (revealing slowly) plus smaller ones; no canonical scale or density value, both stay free
+   authoring dials. **Grain size ≤ 1.5** is a standing constraint (sane default / ceiling);
+   **grain amount stays fully open** — it drives the faded look, wanted in some pieces, not others.
 
    **(d) Spine import — PROVEN (2026-06-20, `svg-spine-spike.html`).** A hand-drawn
    Affinity SVG `<path>` flattens to a polyline and registers **1:1 over its ground
