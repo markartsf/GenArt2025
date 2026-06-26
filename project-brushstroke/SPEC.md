@@ -576,8 +576,24 @@ without them load at their default).
        (noise/contrast or image ref). The **seed lives inside the recipe, never saved bare.**
        *Open question (decide at build, not now):* plates **reference** saved
        `brushstroke.preset/1` files (§1.5 dec. 4 — composition consumes presets; DRY/edit-once)
-       vs **inline** opts (self-contained, exact freeze). Lean: reference + an **embedded
-       snapshot at save** — frozen copy reproduces exactly, ref kept as provenance for re-link.
+       vs **inline** opts (self-contained, exact freeze). Reference is the lean; its one cost is
+       the exact-freeze guarantee (a referenced preset can drift). Likely resolution: reference +
+       an **embedded snapshot at save** — frozen copy reproduces exactly, ref kept as provenance
+       for deliberate re-link.
+     - **Compose host (authoring environment) — deferred M3 build.** The tool that *authors* a
+       Composition. Imports saved `brushstroke.preset/1` files as plates; exposes the per-plate
+       levers (plate order/depth, scaleMul, seed, idOffset/palette-rotation, position dx/dy,
+       count) plus ground and wash settings as interactive controls; renders the layered
+       cached-KM stack at retina for by-eye judgment; saves the arrangement as a
+       `brushstroke.composition` recipe. It is the convergence of three already-tracked pieces,
+       previously implied across all of them but never owned: the **save/load build**
+       (persistence), the **per-plate generator opts** (data-level controls), and the
+       **`composition.html` staging host** (shell). The render-stack spikes — weathering
+       overlay, reveal system, ground-plate generator — feed it as additional authoring
+       choices, not prerequisites. *Deferred to build time, not settled here:* host topology
+       (extend `brush-lab` vs separate host) and reference-vs-inline plate storage. **The
+       recipe is the freeze line** — compositions are authored and frozen with no audio in the
+       loop; M4 modulates a saved recipe only.
    - **Layering verdict — translucency CONFIRMED (2026-06-25, by-eye at retina).** Multi-plate
      layering reads as translucency, signed off. A wash plate + multiple Tuft fields (each at
      its own scale / seed / palette-offset) through the cached KM compositor produce the
