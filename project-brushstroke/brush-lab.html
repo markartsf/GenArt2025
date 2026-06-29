@@ -770,7 +770,7 @@ function drawLinework(idx){
 // organic coral texture. Pen/rotring read too thin to register as a fan
 // against the Ground; spray loses the radiating-line geometry.
 const GENERATORS = {
-  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker'],      biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawRibbon     },
+  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawRibbon     },
   burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'none',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawBurst      },
   bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawBloom      },
   fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFan        },

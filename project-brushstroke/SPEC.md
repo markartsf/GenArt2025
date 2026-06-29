@@ -101,6 +101,12 @@ together. (For the *object* model — Brush / Generator / Preset / Composition �
 see §1.5; the three layers above are about *what we build when*, the four tiers
 are about *how the app is structured*.)
 
+> **Ribbon brush roster widened (2026-06-27).** Ribbon's `allowedBrushes` now spans the
+> dry-media set — `pen, marker, charcoal, 2B, HB, 2H, cpencil, pastel, crayon` (was
+> `pen`/`marker` only). Rationale: dry media read as the *Enfantines* comb texture at small
+> mark scale — graphite/colour pencils give fine grainy teeth (the V1.0 default), charcoal
+> the bolder strokes. Auditioned by eye in `brush-lab.html`; V1.0's ribbon plan leans pencil.
+
 ---
 
 ## 1. Core taxonomy (the nouns)
