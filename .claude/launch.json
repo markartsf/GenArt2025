@@ -25,6 +25,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "project-brushstroke/render", "--port", "8091", "--strictPort"],
       "port": 8091
+    },
+    {
+      "name": "v1 (static)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "project-brushstroke/v1", "--port", "8092", "--strictPort"],
+      "port": 8092
     }
   ]
 }

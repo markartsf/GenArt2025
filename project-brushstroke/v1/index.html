@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Project Brushstroke — V1.0 (native · static frame)</title>
+<!--
+  ============================================================================
+  PROJECT BRUSHSTROKE · V1.0 — ship-now NATIVE piece.  Build spec: V1-SCOPE.md.
+  STEP 1 (this file, for now): the STATIC FINAL FRAME only. Ribbon + Burst stamp
+  natively through p5.brush onto a WEBGL canvas; house palette on cream ground;
+  small marks relative to frame (DESIGN #7); seed + reseed (seed×7+1). No audio,
+  no reveal yet — just the look, for Mark to sign off by eye before any motion.
+
+  The generator engine below is PORTED VERBATIM from brush-lab.html (the tuned
+  native Ribbon/Burst) per V1-SCOPE §2 ("consumes them; does not re-implement").
+  The only new code is the COMPOSITION DRIVER + minimal frame UI at the bottom.
+
+  Hard constraints honoured (V1-SCOPE §6 / PATTERNS):
+    · pixelDensity(2) ONCE at setup (1 inside Claude Preview per the brush-lab gate);
+      never resize a p5.brush WEBGL canvas at runtime.
+    · Bend Field is the only wiggle (native vector flow field) — no jitter/sine.
+    · Native blend only — no KM, no owned mask, no plate-cache.
+
+  RUN from project-brushstroke/v1/:  npx vite --port 8092   (or python3 -m http.server)
+       judge at retina in a REAL browser — Claude Preview forces pixelDensity 1.
+  ============================================================================
+-->
+<script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5.brush@2.1.9-beta/dist/p5.brush.min.js"></script>
+<style>
+  :root{ --ink:#2a2622; --muted:#8a8278; --acc:#9a5b34; --panel:#1b1b20; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:#23211d; color:#e9e2d4;
+    font-family:ui-monospace,Menlo,monospace; }
+  #wrap{ display:flex; min-height:100%; align-items:flex-start; justify-content:center;
+    gap:18px; padding:18px; }
+  #canvas-holder{ line-height:0; }
+  canvas{ box-shadow:0 8px 40px rgba(0,0,0,.45); border-radius:2px;
+    max-width:calc(100vw - 270px); height:auto; }   /* display-only fit; backing store unchanged */
+  #panel{ width:210px; flex:0 0 auto; padding:14px; background:rgba(0,0,0,.25);
+    border:1px solid #3a352c; border-radius:10px; position:sticky; top:18px; }
+  #panel h1{ font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--acc); margin:0 0 2px; }
+  #panel .sub{ font-size:10.5px; color:var(--muted); margin:0 0 12px; }
+  .seedrow{ display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+  .seedrow .seedval{ flex:1; text-align:center; background:var(--panel);
+    border-radius:7px; padding:6px 0; font-weight:600; }
+  button{ font:inherit; font-size:11px; color:#e9e2d4; background:#2c2a24;
+    border:1px solid #4a443a; border-radius:7px; padding:6px 8px; cursor:pointer; }
+  button:hover{ background:#37342c; }
+  button.primary{ background:var(--acc); border-color:var(--acc); color:#1b140e; font-weight:600; }
+  .btnrow{ display:flex; gap:6px; margin-bottom:8px; }
+  .btnrow button{ flex:1; }
+  .hint{ font-size:10px; color:var(--muted); line-height:1.5; margin-top:10px; }
+  #err{ color:#e8896b; font-size:11px; white-space:pre-wrap; margin-top:10px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="canvas-holder"></div>
+  <div id="panel">
+    <h1>Brushstroke V1.0</h1>
+    <p class="sub">native · static frame</p>
+    <div class="seedrow">
+      <button id="seedPrev" title="seed − 1">‹</button>
+      <div class="seedval" id="seedval">1</div>
+      <button id="seedNext" title="seed + 1">›</button>
+    </div>
+    <button class="primary" id="reseed" style="width:100%;margin-bottom:8px;">Reseed (seed×7+1)</button>
+    <div class="btnrow">
+      <button id="rand">Random</button>
+      <button id="save">Save PNG</button>
+    </div>
+    <p class="hint">Step 1: the look only — no audio, no reveal. Judge at retina in a
+      real browser. Reseed walks the seed×7+1 chain; Save freezes a frame you like.</p>
+    <div id="err"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+//  PARAMETERS  (house palette + cream ground — V1-SCOPE §3; small marks §2/DESIGN #7)
+// ============================================================================
+const GROUND  = '#efe7d8';
+const PALETTE = ['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'];
+
+// fixed frame — sized ONCE; never resized at runtime (V1-SCOPE §6)
+const FRAME_W = 1100, FRAME_H = 850;
+
+let seed = 1;
+let activeBrush = 'marker';     // set per-mark by the driver (replaces brush-lab's DOM read)
+let availableBrushes = [];
+
+// shared draw params; per-mark fields are overwritten by applyMark() before each draw
+let P = {
+  ctrl:5, spacing:11, width:120, weight:1.2,
+  anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, colormode:'random',
+  handTremor:0, handGate:0, handChaos:0,
+  field:'none', fieldAmount:0.5, strokeLen:1.0,
+  palette:PALETTE,
+};
+
+const BRUSH_REGISTRY = {
+  'pen':      { baseWeight: 1.0,  vibration: 0.1 },
+  'marker':   { baseWeight: 2.5,  vibration: 0.2 },
+  'rotring':  { baseWeight: 0.8,  vibration: 0.05 },
+  'charcoal': { baseWeight: 4.0,  vibration: 0.8 },
+  'spray':    { baseWeight: 8.0,  vibration: 1.0 },
+  'default':  { baseWeight: 2.0,  vibration: 0.3 }
+};
+
+const showErr = e => { document.getElementById('err').textContent = e ? ('ERR: ' + (e.message||e)) : ''; };
+window.onerror = m => showErr(m);
+
+// ============================================================================
+//  >>> P5.BRUSH ADAPTER <<<  (ported from brush-lab.html — the only library code)
+// ============================================================================
+function discoverBrushes(){
+  try { if (typeof brush.box === 'function'){ const b=brush.box(); if(Array.isArray(b)&&b.length) return b; } }
+  catch(e){}
+  return ['marker','pen','rotring','2B','HB','2H','cpencil','pastel','crayon','charcoal','spray'];
+}
+function useBrush(name, hex, weight){ brush.set(name, hex, weight); }
+function stamp(ax, ay, bx, by){ brush.line(ax, ay, bx, by); }
+function currentBrush(){ return activeBrush || availableBrushes[0] || 'marker'; }
+
+// ---- spline math (Catmull-Rom) — spine geometry (brush-lab verbatim) --------
+function catmullRom(p0,p1,p2,p3,t){
+  const t2=t*t, t3=t2*t;
+  return {
+    x:0.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+    y:0.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3)
+  };
+}
+function samplePolyline(pts, stepsPer=24){
+  const out=[];
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||pts[i+1];
+    for(let s=0;s<stepsPer;s++) out.push(catmullRom(p0,p1,p2,p3,s/stepsPer));
+  }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+function placeStations(poly, spacing){
+  const stations=[]; let total=0; const segLen=[];
+  for(let i=1;i<poly.length;i++){ const d=dist(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y); segLen.push(d); total+=d; }
+  let target=0, run=0;
+  for(let i=1;i<poly.length;i++){
+    const a=poly[i-1], b=poly[i], L=segLen[i-1]||0.0001;
+    while(run+L>=target){
+      const f=(target-run)/L;
+      const x=a.x+(b.x-a.x)*f, y=a.y+(b.y-a.y)*f;
+      let tx=b.x-a.x, ty=b.y-a.y; const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m;
+      const uPos = total ? target/total : 0;
+      stations.push({x:x, y:y, nx:-ty, ny:tx, u:uPos});
+      target+=spacing;
+    }
+    run+=L;
+  }
+  return stations;
+}
+function makeControlPoints(n){
+  const pad=120, pts=[];
+  let x=random(pad,width-pad), y=random(pad,height-pad);
+  let ang=random(TWO_PI);
+  for(let i=0;i<n;i++){
+    pts.push({x,y});
+    ang+=random(-0.9,0.9);
+    const step=random(120,260);
+    x=constrain(x+cos(ang)*step,pad,width-pad);
+    y=constrain(y+sin(ang)*step,pad,height-pad);
+  }
+  return pts;
+}
+function pickColor(i, ribbonOffset){
+  const pal=P.palette;
+  if(P.colormode==='sequential') return pal[(i+ribbonOffset)%pal.length];
+  if(P.colormode==='runs')      return pal[(floor(i/5)+ribbonOffset)%pal.length];
+  return pal[floor(random(pal.length))];
+}
+// Shared tooth renderer (brush-lab verbatim)
+function drawTeeth(stations, colorOffset){
+  const activeBrushName = currentBrush();
+  const brushConfig = BRUSH_REGISTRY[activeBrushName] || BRUSH_REGISTRY['default'];
+  const finalWeight = P.weight * brushConfig.baseWeight;
+  for(let i=0;i<stations.length;i++){
+    const s=stations[i];
+    if (P.handGate > 0){ const g=noise(s.x*0.008, s.y*0.008, 17.3); if(g<P.handGate) continue; }
+    let cx=s.x, cy=s.y;
+    if (P.handTremor > 0){
+      const amp=P.handTremor*(P.width*0.5)*0.36;
+      const w=(noise(s.x*0.012, s.y*0.012, 5.1)-0.5)*2*amp;
+      cx=s.x+s.nx*w; cy=s.y+s.ny*w;
+    }
+    const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
+    const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
+    let halfLen=envLen;
+    if (P.handChaos > 0){
+      const nL=noise(i*0.45, 91.7);
+      const chaosLen=(P.width*0.5)*(0.25+nL*nL*1.35);
+      halfLen=lerp(envLen, chaosLen, P.handChaos);
+    }
+    halfLen *= P.strokeLen;
+    const j=radians(random(-P.anglej,P.anglej));
+    const nx=s.nx*cos(j)-s.ny*sin(j);
+    const ny=s.nx*sin(j)+s.ny*cos(j);
+    const shift=P.bias*halfLen;
+    const offset=random(0,P.radialoffset)*halfLen;
+    const push=shift+offset;
+    const ax=cx-nx*halfLen+nx*push, ay=cy-ny*halfLen+ny*push;
+    const bx=cx+nx*halfLen+nx*push, by=cy+ny*halfLen+ny*push;
+    useBrush(activeBrushName, pickColor(i,colorOffset), finalWeight);
+    stamp(ax,ay,bx,by);
+  }
+}
+// RIBBON — teeth along an open spine (brush-lab verbatim)
+function drawRibbon(markIndex){
+  const cps=makeControlPoints(P.ctrl);
+  const poly=samplePolyline(cps);
+  const stations=placeStations(poly, P.spacing);
+  drawTeeth(stations, markIndex*3);
+}
+// BURST — stations spread by angle around a centre (brush-lab verbatim)
+function makeBurstStations(cx, cy){
+  const R0=P.width*0.55;
+  const count=max(3, round(TWO_PI*R0/P.spacing));
+  const out=[];
+  for(let i=0;i<count;i++){
+    const a=(i/count)*TWO_PI; const dx=cos(a), dy=sin(a);
+    out.push({ x:cx+dx*R0, y:cy+dy*R0, nx:dx, ny:dy, u:0.5 });
+  }
+  return out;
+}
+function drawBurst(markIndex){
+  const pad=170;
+  const cx=random(pad,width-pad), cy=random(pad,height-pad);
+  const stations=makeBurstStations(cx,cy);
+  drawTeeth(stations, markIndex*3);
+}
+
+// per-generator native defaults (from brush-lab GENERATORS table, V1 subset)
+const GENERATORS = {
+  ribbon: { allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, draw:drawRibbon },
+  burst:  { allowedBrushes:null,             biasDefault:1.0, fieldDefault:'none', fieldAmountDefault:0.5, draw:drawBurst  },
+};
+
+// ============================================================================
+//  COMPOSITION DRIVER  (new V1 code — builds an ordered mark plan, draws the frame)
+// ============================================================================
+// A deterministic plan of marks, independent of the p5 placement RNG so that
+// "draw marks 0..K" is stable as K grows (sets up the append-only reveal in step 3).
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function pick(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+
+let plan = [];
+function buildPlan(){
+  const rng = mulberry32(seed*2654435761 >>> 0);
+  const out = [];
+  // small marks, ground leading (V1-SCOPE §2 / DESIGN #7): short woven combs + small
+  // rosettes, airier spacing, no spray haze over the cream.
+  const N_RIBBON = 9, N_BURST = 18;
+  for(let i=0;i<N_RIBBON;i++){
+    // dry-media ribbon (SPEC §0 widened roster): pencil-leaning but with thicker teeth so
+    // the small ribbons don't read wispy; pastel in the mix at low weight (soft, ≤1.2);
+    // charcoal for the occasional bold one. Auditioned in brush-lab on Ribbon.
+    const r = rng();
+    let rbrush, rweight;
+    if (r < 0.60)      { rbrush = pick(rng, ['2B','HB','cpencil']); rweight = 1.5; }
+    else if (r < 0.80) { rbrush = 'pastel';                         rweight = 1.15; }
+    else               { rbrush = 'charcoal';                       rweight = 1.0; }
+    out.push({ gen:'ribbon', brush: rbrush, weight: rweight,
+      width: 42 + rng()*34, ctrl: 4 + Math.floor(rng()*2), spacing: 11,
+      field: rng() < 0.5 ? 'hand' : 'none' });
+  }
+  for(let i=0;i<N_BURST;i++){
+    // burst cog-rosettes: marker/charcoal only (pen dropped — too thin), thicker weight
+    out.push({ gen:'burst', brush: pick(rng, ['marker','charcoal']), weight: 1.8,
+      width: 26 + rng()*30, spacing: 11, radialoffset: rng()*0.3 });
+  }
+  // interleave so depth reads layered rather than all-ribbons-then-all-bursts
+  for(let i=out.length-1;i>0;i--){ const k=Math.floor(rng()*(i+1)); [out[i],out[k]]=[out[k],out[i]]; }
+  return out;
+}
+
+function applyMark(m){
+  activeBrush = m.brush;
+  const g = GENERATORS[m.gen];
+  P.weight = m.weight ?? 1.2;
+  P.width = m.width;
+  P.spacing = m.spacing;
+  P.ctrl = m.ctrl ?? P.ctrl;
+  P.bias = g.biasDefault;
+  P.radialoffset = m.radialoffset ?? 0;
+  P.field = m.field ?? g.fieldDefault;
+  P.fieldAmount = g.fieldAmountDefault;
+  // activate the per-mark field (Bend Field — the only sanctioned wiggle)
+  try {
+    if (P.field && P.field !== 'none' && typeof brush.field === 'function'){ brush.field(P.field); }
+    else if (typeof brush.noField === 'function'){ brush.noField(); }
+  } catch(e){ try{ brush.noField(); }catch(_){} }
+}
+
+// draw the first `upto` marks of the plan into the (cleared) frame.
+// step 1 calls renderFrame(plan.length) for the full static look; the reveal
+// loop (step 3) will grow `upto` over time on a NON-clearing canvas.
+function renderFrame(upto){
+  randomSeed(seed); noiseSeed(seed);
+  try { if (typeof brush.seed === 'function') brush.seed(seed); } catch(e){}
+  background(GROUND);
+  push();
+  translate(-width/2, -height/2);                 // WEBGL origin → top-left screen coords
+  const n = Math.min(upto, plan.length);
+  for(let i=0;i<n;i++){ applyMark(plan[i]); GENERATORS[plan[i].gen].draw(i); }
+  pop();
+}
+
+// ============================================================================
+//  p5 LIFECYCLE  (global mode, mirrors brush-lab)
+// ============================================================================
+function setup(){
+  const c = createCanvas(FRAME_W, FRAME_H, WEBGL);
+  c.parent('canvas-holder');
+  // retina sharp in real browsers; drop to 1x only inside Claude Preview's Chromium
+  // (Electron/ANGLE-Metal corrupts p5.brush at high overdraw). Set ONCE — never toggle.
+  const inClaudePreview = /Claude\/.*Electron/.test(navigator.userAgent);
+  pixelDensity(inClaudePreview ? 1 : 2);
+  try { if (typeof brush.load === 'function') brush.load(); } catch(e){}
+  try { if (typeof brush.scaleBrushes === 'function') brush.scaleBrushes(1); } catch(e){}
+  availableBrushes = discoverBrushes();
+  noLoop();
+  wireUI();
+  regenerate(seed);
+}
+
+// static frame: draw the whole plan at once (no motion yet)
+function draw(){
+  plan = buildPlan();
+  renderFrame(plan.length);
+}
+
+function regenerate(s){
+  if(s!==undefined) seed=s;
+  document.getElementById('seedval').textContent = seed;
+  showErr('');
+  redraw();
+}
+
+function wireUI(){
+  const $ = id => document.getElementById(id);
+  $('seedPrev').addEventListener('click', ()=> regenerate(Math.max(0, seed-1)));
+  $('seedNext').addEventListener('click', ()=> regenerate(seed+1));
+  $('reseed').addEventListener('click',  ()=> regenerate(seed*7+1));     // the seed×7+1 chain
+  $('rand').addEventListener('click',    ()=> regenerate(Math.floor(Math.random()*1e6)));
+  $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed, 'png'));
+}
+</script>
+</body>
+</html>
