@@ -13,6 +13,27 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
+- **2026-06-27 — native→composition conversion route RESOLVED (§4·3a).** Textured strokes
+  render **natively through p5.brush → rasterize to a transparent buffer → composite into the
+  KM stack as a normal-alpha raster plate**. KM owns grounds/washes/plate stacking; **no stroke
+  is re-synthesized.** Owned tip-synthesis **abandoned for textured strokes** (owned-vibration
+  spike: lossy — marker→pen, charcoal→stipple). Validated by eye (`raster-plate-spike.html`):
+  charcoal composites clean (true colour, honest grain edge, no matte); marker keeps real
+  translucency (wash shows through); coloured overlap is normal-alpha, not KM-subtractive —
+  fine for sparse compositions. **Edge:** a transparent-buffer plate carries a premultiplied-
+  alpha white matte (pale edge ring); production fix must be **colour-agnostic** (so near-white/
+  cream marks aren't over-keyed) — `premultipliedAlpha:false` is the candidate but the spike's
+  `setAttributes` route **blanked the brush**, so impl is still open (the spike proved removal
+  via white-matte keying, which is colour-dependent and not the production answer). Raster plate
+  must composite **on the next animation frame** (WebGL flush).
+  **Policy (2026-06-27, owned-mask seam RESOLVED):** native-raster is the **standing render +
+  composite path for ALL textured-stroke generators**. The **owned-mask pipeline (a) / §4·3b
+  Tuft hero is retired as a route** — superseded by native-raster, retained as historical record
+  (not deleted); reopen owned-mask only for true KM pigment-mixing at saturated crossings (not
+  expected, sparse comps). The pending **Tuft rewrite is confirmed onto native-raster.** The
+  compositor / plate-cache / ground + wash machinery is route-agnostic and stands.
+  **Open for build:** per-plate (maybe per-mark) opacity via the plate path — verify against
+  brush-lab's original opacity constraint. Spike files throwaway, uncommitted.
 - Docs current through: **2026-06-25** — **§4·3b composition staging BUILT** (committed;
   Mark's by-eye verdict: pleased). Multi-plate plate-cache compositor + composition host
   graduated from the spike into `project-brushstroke/render/`; plate stack **Ground → Wash
@@ -30,7 +51,8 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
   runtime-resize corruption logged. 06-19: mask A/B spike closed (recipe scheme B);
   dry-brush KM (§4·3a); composition-spike verdict (§4·3b).
 - **Mask-channel convention: recipe scheme (B) adopted 2026-06-19, folded into
-  PATTERNS. Tuft rewrite unblocked.**
+  PATTERNS.** *(Belongs to the owned-mask route — superseded by native-raster 2026-06-27;
+  retained as record. The Tuft rewrite is now unblocked via **native-raster**, not the mask scheme.)*
 - **Dense/perf spike CLOSED 2026-06-23** (`dense-perf-spike.html`, throwaway record in
   `dense-perf-spike-VERDICT.md`). Architecture confirmed faithful: p5 host → own
   canvas2D recipe-B mask → raw-WebGL2 KM via FBO plate-cache. Verdicts:
@@ -489,17 +511,51 @@ without them load at their default).
    by m3, not a missing opacity lever. Owned Spectral.js shader parked at m2
    close; **reopened for M3** — see §1 and item 3 (p5.blender remains ruled out).
    Evidence: presets/ (m2 set).
-3. **Composition (m3).** Four strands; (a) is proven and is the milestone's bulk,
-   (b) is **BUILT and judged by eye (2026-06-24)**, (c) is the confirmed direction,
-   (d) is the spine-import path proven 2026-06-20.
+3. **Composition (m3).** Four strands; (a) was proven but is **SUPERSEDED as a route**
+   (native-raster policy, 2026-06-27 — see §4·3a callout); (b) is **BUILT** but on the
+   superseded owned-mask path; (c) is the confirmed direction; (d) is the spine-import
+   path proven 2026-06-20.
 
-   **(a) Owned pigment pipeline — PROVEN.** Every Generator stops emitting colour
+   **(a) Owned pigment pipeline — PROVEN, then SUPERSEDED AS A ROUTE (2026-06-27).**
+   > Retired in favour of native-raster (the resolved conversion route + policy above);
+   > retained as historical record per the project's superseded-record convention. The
+   > owned mask is **not** the standing path — reopen only for true KM pigment-mixing at
+   > saturated crossings (not expected; sparse compositions). *Text preserved below.*
+
+   Every Generator stops emitting colour
    via p5.brush and instead writes stamps into a shared **mask buffer**; one
    Spectral.js KM shader composites the whole mask (generator-agnostic — the shader
    only ever sees the mask, never a generator). Proven end-to-end on real Tuft
    geometry (`tuft-shader-spike.html`). Sequence: **convert Tuft first** —
    generator→mask→shader — then convert the rest by the same pattern. Mechanism
    detail in §1 and PATTERNS → *Owned pigment pipeline (M3)*.
+
+   **Native→composition conversion route — RESOLVED (2026-06-27, `raster-plate-spike.html`).**
+   This supersedes the owned tip-synthesis / scatter-port plan **for textured strokes** and
+   closes the hybrid fork below. Textured strokes are **not re-synthesized into the owned mask**;
+   they render **natively through p5.brush, rasterize to a transparent buffer, and composite into
+   the KM stack as a normal-alpha raster plate.** KM still owns grounds, washes, and plate-on-
+   plate stacking — it just stacks a finished raster instead of re-deriving the stroke.
+   - **Validated by eye:** charcoal (dry) composites clean over a KM wash — true colour, honest
+     grain edge, no matte. Marker (wet) preserves **real translucency** (the wash shows through;
+     confirmed on checker — the rasterized plate carries genuine straight-alpha, not binary).
+     Coloured overlap is **normal-alpha, not KM-subtractive** — acceptable for *sparse* coloured
+     compositions (no pigment mixing at crossings; blue-over-ochre stays legible, not muddy).
+   - **Edge handling (white matte).** A transparent-buffer plate carries a **premultiplied-alpha
+     white matte** — the brush's soft edges bake to a pale ring (measured: the raw buffer is
+     binary-alpha, α=0/255, softness living in RGB→white). The spike removed it by **white-matte
+     keying** (`α = 255 − min(rgb)`, then unmultiply), which both kills the ring and recovers real
+     translucency — **but that is colour-dependent** (it over-keys near-white / cream marks) and
+     is therefore **not the production answer.** Production must use a **colour-agnostic** fix:
+     `premultipliedAlpha:false` on the offscreen context is the candidate, **but unproven** — the
+     spike's `setAttributes('premultipliedAlpha', false)` (post-creation) **blanked the brush**
+     (it depends on premultiplied compositing). Open build task: get a colour-agnostic fix working
+     (attribute at context *creation*, or an alternative).
+   - **Flush timing.** The p5 WEBGL buffer isn't flushed until the draw cycle ends, so the raster
+     plate must be composited **on the next animation frame** (a `drawImage` inside `draw` reads an
+     empty buffer). Defer the composite via `requestAnimationFrame`.
+   - **Open for build:** per-plate (possibly per-mark) **opacity** may be available via the plate
+     path — verify against brush-lab's original opacity constraint before relying on it.
 
    **Dry band proven (2026-06-19, `drybrush-km-spike.html`).** Dry-media brushes
    (charcoal/2H/pastel) blend fringe-free through the KM path — the white fringe on
@@ -513,9 +569,18 @@ without them load at their default).
    is unavailable in the owned path (it lives in p5.brush's renderer; bridging it
    needs the `loadPixels` capture that originally parked the shader — see §1). To get
    a pixel-faithful match, **port p5.brush's scatter math into the mask-stamping**
-   (copy the formula, never capture pixels). Wet brushes (marker/spray) blend
-   fringe-free natively, so a hybrid (native wet + owned-KM dry) remains a possible
-   fork if exact native Vibration on wet marks is wanted.
+   (copy the formula, never capture pixels).
+   > **Superseded for textured strokes (2026-06-27).** The scatter-port plan and the
+   > "hybrid (native wet + owned-KM dry)" fork are **closed** by the resolved native→
+   > rasterize route above: textured strokes render natively (p5.brush's own Vibration
+   > comes for free in the raster) and stack as plates — no scatter-port, no owned grain
+   > to match. *This paragraph stays as the record of the owned-grain investigation.*
+   > **RESOLVED (2026-06-27, policy).** **Native-raster is the standing render + composite
+   > path for ALL textured-stroke generators.** The owned-mask pipeline (a) / §4·3b is
+   > **retired as a route** — superseded by native-raster, retained as historical record
+   > (not deleted). Reconsider owned-mask **only** if a concrete need for true KM pigment-
+   > mixing at *saturated* crossings arises — not expected given sparse compositions. The
+   > pending **Tuft rewrite is confirmed onto the native-raster route.**
 
    **(b) Composition staging.** Model a piece as an ordered array of Presets drawn in
    draw-order (= depth): layered-plate richness (stipple under bold strokes, multiple
@@ -539,7 +604,15 @@ without them load at their default).
    - **Q4 (audio cohabitation)** not exercised — needs a real user gesture; deferred to M4.
 
    **BUILT — composition staging renderer (2026-06-24, committed; Mark's by-eye verdict:
-   pleased).** The proven multi-plate compositor + FBO plate-cache from `dense-perf-spike.html`
+   pleased).**
+   > **Route SUPERSEDED (2026-06-27).** This build's **Tuft hero renders on the owned-mask
+   > pipeline (a)**, which is retired as a route by the native-raster policy (§4·3a callout).
+   > The compositor / FBO plate-cache / dirty-only economics / ground + wash machinery below
+   > are **route-agnostic and stand** — only the hero's *mark source* changes (owned mask →
+   > native-rasterized plate). The pending **Tuft rewrite is confirmed onto native-raster**, not
+   > a further owned-mask conversion. Retained as historical record; not deleted.
+
+   The proven multi-plate compositor + FBO plate-cache from `dense-perf-spike.html`
    is graduated into the committed renderer (`project-brushstroke/render/`, ES modules; entry
    `composition.html`). A real composition renders end-to-end through the cached multi-plate KM:
    - **Plate stack, bottom→top: Ground → Wash → Tuft hero.** Ground is a swappable quiet
