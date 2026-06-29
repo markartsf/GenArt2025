@@ -52,6 +52,13 @@
   button.primary{ background:var(--acc); border-color:var(--acc); color:#1b140e; font-weight:600; }
   .btnrow{ display:flex; gap:6px; margin-bottom:8px; }
   .btnrow button{ flex:1; }
+  .herobox{ display:flex; flex-direction:column; gap:7px; margin:4px 0 2px; padding:9px;
+    border:1px solid #3a352c; border-radius:8px; }
+  .herobox label{ display:flex; flex-direction:column; gap:4px; font-size:10.5px; color:var(--muted); }
+  .herobox .val{ color:#e9e2d4; font-weight:600; }
+  .herobox input[type=range]{ width:100%; }
+  .herobox select{ font:inherit; font-size:11px; color:#e9e2d4; background:#2c2a24;
+    border:1px solid #4a443a; border-radius:6px; padding:4px; }
   .hint{ font-size:10px; color:var(--muted); line-height:1.5; margin-top:10px; }
   #err{ color:#e8896b; font-size:11px; white-space:pre-wrap; margin-top:10px; }
 </style>
@@ -72,8 +79,12 @@
       <button id="rand">Random</button>
       <button id="save">Save PNG</button>
     </div>
-    <p class="hint">Step 1: the look only — no audio, no reveal. Judge at retina in a
-      real browser. Reseed walks the seed×7+1 chain; Save freezes a frame you like.</p>
+    <div class="herobox">
+      <label>hero × <span class="val" id="hcval">1</span><input id="hcount" type="range" min="0" max="3" step="1" value="1"></label>
+      <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="either">either</option></select></label>
+    </div>
+    <p class="hint">Render 2: composition + hero. Procedural, seed-driven. Reseed/Random
+      to curate; Save freezes a frame. Hero = bold charcoal anchor(s) in the focal region.</p>
     <div id="err"></div>
   </div>
 </div>
@@ -265,6 +276,10 @@ let CUR = null;                 // mark currently being drawn (carries its assig
 const EDGE = 40;                // keep marks (and their reach) off the frame edges — no clipping
 const COVERAGE_CAP = 0.36;      // marks occupy ≤ this fraction of the frame (disc-area proxy) → ground leads
 
+// hero knob — a few bold charcoal anchors biased into the focal region (UI-toggled)
+let HERO_COUNT = 1;             // 0–3
+let HERO_TYPE  = 'burst';       // 'burst' (default, strongest anchor) | 'ribbon' | 'either'
+
 // build one ribbon-mark spec (size/brush only; centre assigned at placement)
 function ribbonSpec(rng){
   const r = rng();
@@ -321,7 +336,7 @@ function buildPlan(){
     return true;
   }
 
-  placeHeroes(rng, tryAdd, focal);   // no-op until the hero-knob pass
+  placeHeroes(rng, tryAdd);          // bold focal anchors first (HERO_COUNT / HERO_TYPE)
 
   // regular marks: build the roster, shuffle for layered depth, then place with breathing room
   const reg=[]; const N_RIBBON=7, N_BURST=14;
@@ -333,8 +348,27 @@ function buildPlan(){
   return out;
 }
 
-// extended by the hero-knob pass; placement commit ships it as a no-op so the two are separable
-function placeHeroes(rng, tryAdd, focal){}
+// HERO marks: HERO_COUNT bold charcoal anchors, scaled 1.8–2.5× base, placed FIRST with a
+// strong pull into the focal region so the eye has a resolved anchor. Burst (cog-rosette) is
+// the default — the most-resolved shape by eye; ribbon gives the spike's big charcoal stroke.
+// Exempt from the coverage budget (they anchor), but still respect anti-clump spacing.
+function placeHeroes(rng, tryAdd){
+  const tight = Math.min(FRAME_W, FRAME_H) * 0.10;
+  for(let i=0;i<HERO_COUNT;i++){
+    const type = HERO_TYPE==='either' ? (rng()<0.5 ? 'burst' : 'ribbon') : HERO_TYPE;
+    const scale = 1.8 + rng()*0.7;   // 1.8–2.5×
+    let m;
+    if(type==='burst'){
+      const w = (26 + rng()*30) * scale;
+      m = { gen:'burst', brush:'charcoal', weight:1.5, width:w, spacing:11, radialoffset:rng()*0.22, hero:true };
+    } else {
+      const w = (42 + rng()*34) * scale;
+      m = { gen:'ribbon', brush:'charcoal', weight:1.0, width:w, extent:w*1.7,
+            ctrl:4+Math.floor(rng()*2), spacing:11, field:rng()<0.5?'hand':'none', hero:true };
+    }
+    tryAdd(m, 0.9, tight);
+  }
+}
 
 function applyMark(m){
   CUR = m;
@@ -406,7 +440,9 @@ function wireUI(){
   $('seedNext').addEventListener('click', ()=> regenerate(seed+1));
   $('reseed').addEventListener('click',  ()=> regenerate(seed*7+1));     // the seed×7+1 chain
   $('rand').addEventListener('click',    ()=> regenerate(Math.floor(Math.random()*1e6)));
-  $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed, 'png'));
+  $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0], 'png'));
+  $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; redraw(); });
+  $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; redraw(); });
 }
 </script>
 </body>
