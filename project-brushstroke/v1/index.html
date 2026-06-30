@@ -274,7 +274,7 @@ let CUR = null;                 // mark currently being drawn (carries its assig
 
 // placement knobs (the render-2 composition pass)
 const EDGE = 40;                // keep marks (and their reach) off the frame edges — no clipping
-const COVERAGE_CAP = 0.36;      // marks occupy ≤ this fraction of the frame (disc-area proxy) → ground leads
+const COVERAGE_CAP = 0.40;      // regular marks occupy ≤ this fraction of the frame (disc-area proxy) → ground leads
 
 // hero knob — a few bold charcoal anchors biased into the focal region (UI-toggled)
 let HERO_COUNT = 1;             // 0–3
@@ -319,7 +319,7 @@ function buildPlan(){
 
   // effective radius (reach) — for spacing/coverage/margin. A ribbon is a linear comb, not a
   // solid disc, so it packs a bit tighter than its full extent.
-  function radiusFor(m){ return m.gen==='burst' ? m.width*1.0 : (m.extent*0.7 + m.width*0.4); }
+  function radiusFor(m){ return m.gen==='burst' ? m.width*1.0 : (m.extent*0.55 + m.width*0.35); }   // ribbons are sparse linear combs → pack tighter so more of them fit
 
   // ANTI-CLUMP: rejection-sample a centre ≥ (r_i+r_j) from every placed mark, inside the edge
   // margin, biased toward focal by (pFocal, sigma). Candidate positions drawn from the caller's rng.
@@ -342,14 +342,16 @@ function buildPlan(){
     const c = placeCentre(rng, r, pFocal, sigma);
     if(!c) return false;
     m.cx=c.x; m.cy=c.y; m.r=r;
-    placed.push({cx:c.x, cy:c.y, r}); usedArea+=area; out.push(m);
+    placed.push({cx:c.x, cy:c.y, r});
+    if(!m.hero) usedArea += area;   // heroes anchor — they must NOT eat the regular-mark budget
+    out.push(m);
     return true;
   }
 
   placeHeroes(heroRng, tryAdd);          // big focal anchors first, from the independent hero stream
 
   // regular marks (regRng): build roster, shuffle for layered depth, place with breathing room
-  const reg=[]; const N_RIBBON=7, N_BURST=14;
+  const reg=[]; const N_RIBBON=12, N_BURST=9;   // ribbon-leaning roster (Mark: want more ribbons, fewer all-burst seeds)
   for(let i=0;i<N_RIBBON;i++) reg.push(ribbonSpec(regRng));
   for(let i=0;i<N_BURST;i++)  reg.push(burstSpec(regRng));
   for(let i=reg.length-1;i>0;i--){ const k=Math.floor(regRng()*(i+1)); [reg[i],reg[k]]=[reg[k],reg[i]]; }
