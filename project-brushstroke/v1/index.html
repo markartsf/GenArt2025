@@ -295,7 +295,7 @@ function ribbonSpec(rng){
   else if (r < 0.80) { brush = 'pastel';                         weight = 1.35; }
   else               { brush = 'charcoal';                       weight = 1.0; }
   const w = 42 + rng()*34;
-  return { gen:'ribbon', brush, weight, width:w, extent:w*2.3,   // longer spine even when small → complete comb, not a fragment
+  return { gen:'ribbon', brush, weight, width:w, extent:w*3.1,   // longer spine (~1.35x) → reads as a flowing comb at any size
     ctrl: 4 + Math.floor(rng()*2), spacing:8, field: rng()<0.5?'hand':'none' };
 }
 function burstSpec(rng){
@@ -375,7 +375,7 @@ function placeHeroes(heroRng, tryAdd){
       m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w, spacing:11, radialoffset:heroRng()*0.20, hero:true };
     } else {
       const w = 84 + heroRng()*42;    // big charcoal ribbon (the spike's bold contained stroke)
-      m = { gen:'ribbon', brush:'charcoal', weight:1.2, width:w, extent:w*2.3,
+      m = { gen:'ribbon', brush:'charcoal', weight:1.2, width:w, extent:w*3.1,
             ctrl:5+Math.floor(heroRng()*2), spacing:8, field:heroRng()<0.5?'hand':'none', hero:true };
     }
     tryAdd(mulberry32(((seed*374761393) ^ ((i+1)*0x9E3779B9)) >>> 0), m, 0.9, tight);   // per-hero placement stream
