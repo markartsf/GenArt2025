@@ -3,18 +3,20 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Project Brushstroke — V1.0 (native · static frame)</title>
+<title>Project Brushstroke — V1.0 (native · reveal loop)</title>
 <!--
   ============================================================================
   PROJECT BRUSHSTROKE · V1.0 — ship-now NATIVE piece.  Build spec: V1-SCOPE.md.
-  STEP 1 (this file, for now): the STATIC FINAL FRAME only. Ribbon + Burst stamp
-  natively through p5.brush onto a WEBGL canvas; house palette on cream ground;
-  small marks relative to frame (DESIGN #7); seed + reseed (seed×7+1). No audio,
-  no reveal yet — just the look, for Mark to sign off by eye before any motion.
+  STEP 3 (this file now): the APPEND-ONLY REVEAL. The static frame still curates
+  (seed / hero), and a "Reveal ▶" runs marks accreting onto a NON-clearing canvas
+  toward that exact frame — ground painted once, preserveDrawingBuffer, per-mark
+  deterministic seed, only the newly-revealed marks stamped each frame. Fixed-rate
+  clock (one knob); NO AUDIO yet — the rate carries an inert `revealEnergy` seam the
+  audio step will drive with FFT energy. Verdict this builds on: accumulation-spike §8.
 
   The generator engine below is PORTED VERBATIM from brush-lab.html (the tuned
   native Ribbon/Burst) per V1-SCOPE §2 ("consumes them; does not re-implement").
-  The only new code is the COMPOSITION DRIVER + minimal frame UI at the bottom.
+  The only new code is the COMPOSITION DRIVER + REVEAL loop + minimal frame UI.
 
   Hard constraints honoured (V1-SCOPE §6 / PATTERNS):
     · pixelDensity(2) ONCE at setup (1 inside Claude Preview per the brush-lab gate);
@@ -68,7 +70,7 @@
   <div id="canvas-holder"></div>
   <div id="panel">
     <h1>Brushstroke V1.0</h1>
-    <p class="sub">native · static frame</p>
+    <p class="sub">native · reveal loop</p>
     <div class="seedrow">
       <button id="seedPrev" title="seed − 1">‹</button>
       <div class="seedval" id="seedval">1</div>
@@ -83,8 +85,16 @@
       <label>hero × <span class="val" id="hcval">1</span><input id="hcount" type="range" min="0" max="3" step="1" value="1"></label>
       <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="either">either</option></select></label>
     </div>
-    <p class="hint">Render 2: composition + hero. Procedural, seed-driven. Reseed/Random
-      to curate; Save freezes a frame. Hero = bold charcoal anchor(s) in the focal region.</p>
+    <div class="herobox">
+      <button class="primary" id="reveal" style="width:100%;">Reveal ▶</button>
+      <label>rate <span class="val" id="rrateval">2.5</span> marks/s
+        <input id="rrate" type="range" min="0.5" max="8" step="0.1" value="2.5"></label>
+      <label>revealed <span class="val" id="rprog">0 / 0</span></label>
+      <label>reveal fps <span class="val" id="rfps">—</span></label>
+    </div>
+    <p class="hint">Curate the frame (Reseed/Random/hero), then Reveal ▶ to watch marks
+      accrete toward it — append-only, plan order (heroes arrive first). Ends on the exact
+      static frame. Save freezes a frame. Audio drives the rate in the next step.</p>
     <div id="err"></div>
   </div>
 </div>
@@ -401,18 +411,54 @@ function applyMark(m){
   } catch(e){ try{ brush.noField(); }catch(_){} }
 }
 
-// draw the first `upto` marks of the plan into the (cleared) frame.
-// step 1 calls renderFrame(plan.length) for the full static look; the reveal
-// loop (step 3) will grow `upto` over time on a NON-clearing canvas.
-function renderFrame(upto){
-  randomSeed(seed); noiseSeed(seed);
-  try { if (typeof brush.seed === 'function') brush.seed(seed); } catch(e){}
-  background(GROUND);
+// Paint the cream ground. Called ONCE at the start of a reveal (and on each static
+// re-render for curation) — never mid-reveal: background() clears settled marks and
+// races p5.brush's end-of-frame composite → flicker (accumulation-spike §8 verdict).
+function paintGround(){ background(GROUND); }
+
+// Draw marks [from, to) of the frozen plan. PER-MARK deterministic seed so mark i renders
+// identically whether stamped in one full pass or one-at-a-time during the reveal — this is
+// what lets the append-only accretion rebuild the static frame 1:1 (accumulation-spike §8;
+// PATTERNS → draw-on). Placement (cx/cy/size/hero) comes from independent mulberry32 streams
+// in buildPlan(), so it's unaffected; only per-mark texture/colour draws from this seed. The
+// ·9973 stride just decorrelates neighbouring marks' streams.
+function drawMarks(from, to){
   push();
   translate(-width/2, -height/2);                 // WEBGL origin → top-left screen coords
-  const n = Math.min(upto, plan.length);
-  for(let i=0;i<n;i++){ applyMark(plan[i]); GENERATORS[plan[i].gen].draw(i); }
+  const n = Math.min(to, plan.length);
+  for(let i=from;i<n;i++){
+    randomSeed(seed + i*9973); noiseSeed(seed + i*9973);
+    try { if (typeof brush.seed === 'function') brush.seed(seed + i); } catch(e){}
+    applyMark(plan[i]); GENERATORS[plan[i].gen].draw(i);
+  }
   pop();
+}
+
+// Full static frame (curation): freeze a plan, clear to ground, stamp it all at once.
+function renderStatic(){ plan = buildPlan(); paintGround(); drawMarks(0, plan.length); }
+
+// ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
+// Fixed-rate clock for now — NO AUDIO this step. Rate is the one exposed knob.
+// AUDIO SEAM (do NOT wire audio here): revealRate() scales a base rate by `revealEnergy`
+// (0..1). The audio step swaps the hardcoded energy for FFT band energy and adds the
+// gesture-gated AudioContext — a drop-in against this seam, not a rewrite.
+let REVEAL_RATE  = 2.5;       // marks per second — the single pacing knob (slider-exposed)
+let revealEnergy = 1.0;       // 0..1 · INERT audio seam; hardcoded to the fixed clock for now
+function revealRate(){ return REVEAL_RATE * revealEnergy; }   // marks/sec
+
+let running     = false;      // reveal in progress (loop() running); false = static resting
+let revealCount = 0;          // float — marks revealed so far (grows on the clock)
+let lastDrawn   = 0;          // integer high-water mark of marks already stamped
+let revealFps   = 0;          // measured throughput during the reveal (frameRate())
+
+// Begin an append-only reveal from the current seed/hero settings.
+function startReveal(){
+  plan = buildPlan();                 // freeze the plan being revealed
+  revealCount = 0; lastDrawn = 0; revealFps = 0;
+  paintGround();                      // ground painted ONCE; never cleared again until reset
+  running = true;
+  loop();                             // draw() now appends newly-revealed marks each frame
+  updateRevealUI();
 }
 
 // ============================================================================
@@ -425,6 +471,9 @@ function setup(){
   // (Electron/ANGLE-Metal corrupts p5.brush at high overdraw). Set ONCE — never toggle.
   const inClaudePreview = /Claude\/.*Electron/.test(navigator.userAgent);
   pixelDensity(inClaudePreview ? 1 : 2);
+  // Append-only reveal needs the WEBGL backbuffer to persist across frames. Set ONCE here;
+  // toggling preserveDrawingBuffer at runtime freezes the loop (same class as no-resize).
+  try { setAttributes('preserveDrawingBuffer', true); } catch(e){ showErr(e); }
   try { if (typeof brush.load === 'function') brush.load(); } catch(e){}
   try { if (typeof brush.scaleBrushes === 'function') brush.scaleBrushes(1); } catch(e){}
   availableBrushes = discoverBrushes();
@@ -433,17 +482,33 @@ function setup(){
   regenerate(seed);
 }
 
-// static frame: draw the whole plan at once (no motion yet)
 function draw(){
-  plan = buildPlan();
-  renderFrame(plan.length);
+  if(!running){
+    // STATIC (curation): one full frame, then rest. No accretion.
+    renderStatic();
+    updateRevealUI();
+    noLoop();
+    return;
+  }
+  // REVEAL (append-only): advance the clock, stamp only the newly-revealed marks.
+  // Clamp dt: the first reveal frame's deltaTime spans all the idle time since the last
+  // static draw() (the clock ran through noLoop), and a tab-away stalls it too — an
+  // unclamped spike would dump the whole plan in one frame. 100 ms cap = ≤ rate·0.1 marks/frame.
+  const dt = Math.min(deltaTime, 100) / 1000;              // seconds-this-frame, spike-guarded
+  revealCount += revealRate() * dt;                         // marks/sec × seconds-this-frame
+  const target = Math.min(Math.floor(revealCount), plan.length);
+  if(target > lastDrawn){ drawMarks(lastDrawn, target); lastDrawn = target; }   // never redraw settled marks
+  revealFps = frameRate();                                  // real throughput (NOT in-draw readPixels)
+  updateRevealUI();
+  if(lastDrawn >= plan.length){ running = false; noLoop(); }   // fully accreted → matches the static frame 1:1
 }
 
 function regenerate(s){
   if(s!==undefined) seed=s;
+  running = false;                    // any in-flight reveal is abandoned; back to static curation
   document.getElementById('seedval').textContent = seed;
   showErr('');
-  redraw();
+  redraw();                           // forces one static frame even if a prior reveal had noLoop'd
 }
 
 function wireUI(){
@@ -453,8 +518,19 @@ function wireUI(){
   $('reseed').addEventListener('click',  ()=> regenerate(seed*7+1));     // the seed×7+1 chain
   $('rand').addEventListener('click',    ()=> regenerate(Math.floor(Math.random()*1e6)));
   $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0], 'png'));
-  $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; redraw(); });
-  $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; redraw(); });
+  $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; running=false; redraw(); });
+  $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; running=false; redraw(); });
+  // reveal controls
+  $('reveal').addEventListener('click',  ()=> startReveal());
+  $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE.toFixed(1); });
+  updateRevealUI();
+}
+
+function updateRevealUI(){
+  const $ = id => document.getElementById(id);
+  const n = plan.length || 0;
+  $('rprog').textContent = Math.min(lastDrawn, n) + ' / ' + n;
+  $('rfps').textContent  = running ? revealFps.toFixed(0) : '—';
 }
 </script>
 </body>
