@@ -285,6 +285,20 @@ fringe). Proven end-to-end on real Tuft geometry in `tuft-shader-spike.html`.
   - `setAttributes()` must be called **once in `setup()`, after `createCanvas`**; a
     runtime call freezes the loop in instance mode — drive attribute changes by
     page reload, not a live call.
+  - **Append needs PER-MARK deterministic seeding (V1 native, `accumulation-spike.html`
+    2026-06-27).** Confirmed C holds for the V1 ship-piece's native **global-mode** +
+    `pixelDensity` setup (prior spike was KM/instance). The catch: a mark drawn *one-at-a-
+    time* during the reveal only reproduces its full-static-pass appearance if its RNG is
+    reseeded per mark — `randomSeed(seed + i)` (and `noiseSeed`) before drawing mark `i`,
+    **not** one `randomSeed(seed)` for the whole pass. With it, append rebuilds the static
+    frame 1:1; without it, incremental order changes each mark. Measured: append idle
+    ~60 fps / no flicker; re-stamp-all (`background()`+redraw 0..K each frame) ~10 fps at
+    K=15 **and** flickers → rejected. Reveal loop = preserveDrawingBuffer, ground once,
+    never clear, per-mark seed, draw only `[lastDrawn, revealCount)` each frame; audio
+    energy drives how fast `revealCount` grows.
+  - **Measuring append cost: `frameRate()`, not in-`draw()` `readPixels`.** p5.brush defers
+    its composite to end-of-frame, so a `readPixels` inside `draw()` captures only CPU
+    submission and under-reads the real per-frame cost — trust the frame rate.
   - **Owed → SETTLED 2026-06-23** by the dense/perf spike (`dense-perf-spike.html`).
     The pigment path there is the **owned** engine (p5 host → own canvas2D recipe-B
     mask → raw-WebGL2 KM, FBO plate-cache), not p5.brush, but the draw-on/append
