@@ -13,7 +13,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
-- **2026-06-27 — V1.0 ship-now native piece scoped** — Ribbon + Burst, house palette, winterland2,
+- **2026-06-27 — V1.0 ship-now native piece scoped** — Ribbon + Burst, house palette, winterland,
   emergent accretion. Parallel to compositor; shares no KM machinery. See `V1-SCOPE.md`.
 - **2026-06-27 — native→composition conversion route RESOLVED (§4·3a).** Textured strokes
   render **natively through p5.brush → rasterize to a transparent buffer → composite into the
