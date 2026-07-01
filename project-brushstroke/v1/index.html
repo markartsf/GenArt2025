@@ -329,9 +329,10 @@ function buildPlan(){
   // solid disc, so it packs a bit tighter than its full extent.
   function radiusFor(m){ return m.gen==='burst' ? m.width*1.0 : (m.extent*0.55 + m.width*0.35); }   // ribbons are sparse linear combs → pack tighter so more of them fit
 
-  // ANTI-CLUMP: rejection-sample a centre ≥ (r_i+r_j) from every placed mark, inside the edge
-  // margin, biased toward focal by (pFocal, sigma). Candidate positions drawn from the caller's rng.
-  function placeCentre(rng, r, pFocal, sigma){
+  // ANTI-CLUMP: rejection-sample a centre ≥ (r_i+r_j)·sepFactor from every placed mark, inside
+  // the edge margin, biased toward focal by (pFocal, sigma). sepFactor tunes how far apart marks
+  // must sit (default 0.92); large ribbon heroes pass a looser value so several can interleave.
+  function placeCentre(rng, r, pFocal, sigma, sepFactor){
     const lo = EDGE + r;
     for(let t=0;t<64;t++){
       let x, y;
@@ -339,15 +340,15 @@ function buildPlan(){
       else { x = lo + rng()*(W-2*lo); y = lo + rng()*(H-2*lo); }
       x = Math.max(lo, Math.min(W-lo, x)); y = Math.max(lo, Math.min(H-lo, y));
       let ok = true;
-      for(const p of placed){ if(dist(x,y,p.cx,p.cy) < (r+p.r)*0.92){ ok=false; break; } }
+      for(const p of placed){ if(dist(x,y,p.cx,p.cy) < (r+p.r)*sepFactor){ ok=false; break; } }
       if(ok) return { x, y };
     }
     return null;   // too crowded — caller drops the mark (keeps negative space honest)
   }
-  function tryAdd(rng, m, pFocal, sigma){
+  function tryAdd(rng, m, pFocal, sigma, sepFactor=0.92){
     const r = radiusFor(m), area = Math.PI*r*r;
     if(!m.hero && usedArea + area > COVERAGE_CAP*frameArea) return false;
-    const c = placeCentre(rng, r, pFocal, sigma);
+    const c = placeCentre(rng, r, pFocal, sigma, sepFactor);
     if(!c) return false;
     m.cx=c.x; m.cy=c.y; m.r=r;
     placed.push({cx:c.x, cy:c.y, r});
@@ -374,19 +375,24 @@ function buildPlan(){
 // size) so the eye finds a clear object to focus on, placed FIRST with a strong focal pull.
 // Exempt from the coverage budget; still anti-clump spaced. Burst (cog-rosette) is the default.
 function placeHeroes(heroRng, tryAdd){
-  const tight = Math.min(FRAME_W, FRAME_H) * 0.10;
+  const minDim = Math.min(FRAME_W, FRAME_H);
   for(let i=0;i<HERO_COUNT;i++){
     const type = HERO_TYPE==='either' ? (heroRng()<0.5 ? 'burst' : 'ribbon') : HERO_TYPE;
-    let m;
+    let m, sigma, sep;
     if(type==='burst'){
       const w = 100 + heroRng()*55;   // 100–155 vs regular 26–56 → unmistakably the largest
       m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w, spacing:11, radialoffset:heroRng()*0.20, hero:true };
+      sigma = minDim*0.10; sep = 0.92;              // compact cogs cluster tight at focal (unchanged)
     } else {
       const w = 84 + heroRng()*42;    // big charcoal ribbon (the spike's bold contained stroke)
       m = { gen:'ribbon', brush:'charcoal', weight:1.2, width:w, extent:w*3.1,
             ctrl:5+Math.floor(heroRng()*2), spacing:8, field:heroRng()<0.5?'hand':'none', hero:true };
+      // ribbon heroes reach ~250px — with the tight cluster + 0.92 sep, a second one could never
+      // clear the first, so only ONE ever placed. Spread them wider and let the sparse linear combs
+      // interleave so 2–3 large ribbons actually appear as HERO_COUNT rises.
+      sigma = minDim*0.20; sep = 0.5;
     }
-    tryAdd(mulberry32(((seed*374761393) ^ ((i+1)*0x9E3779B9)) >>> 0), m, 0.9, tight);   // per-hero placement stream
+    tryAdd(mulberry32(((seed*374761393) ^ ((i+1)*0x9E3779B9)) >>> 0), m, 0.9, sigma, sep);   // per-hero placement stream
   }
 }
 
