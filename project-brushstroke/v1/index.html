@@ -7,12 +7,14 @@
 <!--
   ============================================================================
   PROJECT BRUSHSTROKE · V1.0 — ship-now NATIVE piece.  Build spec: V1-SCOPE.md.
-  STEP 3 (this file now): the APPEND-ONLY REVEAL. The static frame still curates
-  (seed / hero), and a "Reveal ▶" runs marks accreting onto a NON-clearing canvas
-  toward that exact frame — ground painted once, preserveDrawingBuffer, per-mark
-  deterministic seed, only the newly-revealed marks stamped each frame. Fixed-rate
-  clock (one knob); NO AUDIO yet — the rate carries an inert `revealEnergy` seam the
-  audio step will drive with FFT energy. Verdict this builds on: accumulation-spike §8.
+  STEP 3 (this file now): the APPEND-ONLY REVEAL, per-element. The static frame still
+  curates (seed / hero); "Reveal ▶" draws it onto a NON-clearing canvas ONE STROKE AT A
+  TIME — cog teeth and ribbon combs appear individually (v2 "drawing itself" feel), not
+  whole generators popping on. Ground painted once, preserveDrawingBuffer, plan compiled
+  to ordered stroke records with two-tier deterministic seeds, only newly-revealed strokes
+  stamped each frame (light frames → smooth at retina). Fixed-rate clock (one knob,
+  strokes/sec); NO AUDIO yet — the rate carries an inert `revealEnergy` seam the audio step
+  will drive with FFT energy. Verdict this builds on: accumulation-spike §8.
 
   The generator engine below is PORTED VERBATIM from brush-lab.html (the tuned
   native Ribbon/Burst) per V1-SCOPE §2 ("consumes them; does not re-implement").
@@ -87,14 +89,14 @@
     </div>
     <div class="herobox">
       <button class="primary" id="reveal" style="width:100%;">Reveal ▶</button>
-      <label>rate <span class="val" id="rrateval">2.5</span> marks/s
-        <input id="rrate" type="range" min="0.5" max="8" step="0.1" value="2.5"></label>
+      <label>rate <span class="val" id="rrateval">28</span> strokes/s
+        <input id="rrate" type="range" min="4" max="120" step="1" value="28"></label>
       <label>revealed <span class="val" id="rprog">0 / 0</span></label>
       <label>reveal fps <span class="val" id="rfps">—</span></label>
     </div>
-    <p class="hint">Curate the frame (Reseed/Random/hero), then Reveal ▶ to watch marks
-      accrete toward it — append-only, plan order (heroes arrive first). Ends on the exact
-      static frame. Save freezes a frame. Audio drives the rate in the next step.</p>
+    <p class="hint">Curate the frame (Reseed/Random/hero), then Reveal ▶ to watch it draw
+      itself — teeth/spokes appear one at a time, append-only, plan order (heroes arrive
+      first). Ends on the curated frame. Save freezes a frame. Audio drives the rate next.</p>
     <div id="err"></div>
   </div>
 </div>
@@ -204,50 +206,40 @@ function pickColor(i, ribbonOffset){
   if(P.colormode==='runs')      return pal[(floor(i/5)+ribbonOffset)%pal.length];
   return pal[floor(random(pal.length))];
 }
-// Shared tooth renderer (brush-lab verbatim)
-function drawTeeth(stations, colorOffset){
-  const activeBrushName = currentBrush();
-  const brushConfig = BRUSH_REGISTRY[activeBrushName] || BRUSH_REGISTRY['default'];
-  const finalWeight = P.weight * brushConfig.baseWeight;
-  for(let i=0;i<stations.length;i++){
-    const s=stations[i];
-    if (P.handGate > 0){ const g=noise(s.x*0.008, s.y*0.008, 17.3); if(g<P.handGate) continue; }
-    let cx=s.x, cy=s.y;
-    if (P.handTremor > 0){
-      const amp=P.handTremor*(P.width*0.5)*0.36;
-      const w=(noise(s.x*0.012, s.y*0.012, 5.1)-0.5)*2*amp;
-      cx=s.x+s.nx*w; cy=s.y+s.ny*w;
-    }
-    const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
-    const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
-    let halfLen=envLen;
-    if (P.handChaos > 0){
-      const nL=noise(i*0.45, 91.7);
-      const chaosLen=(P.width*0.5)*(0.25+nL*nL*1.35);
-      halfLen=lerp(envLen, chaosLen, P.handChaos);
-    }
-    halfLen *= P.strokeLen;
-    const j=radians(random(-P.anglej,P.anglej));
-    const nx=s.nx*cos(j)-s.ny*sin(j);
-    const ny=s.nx*sin(j)+s.ny*cos(j);
-    const shift=P.bias*halfLen;
-    const offset=random(0,P.radialoffset)*halfLen;
-    const push=shift+offset;
-    const ax=cx-nx*halfLen+nx*push, ay=cy-ny*halfLen+ny*push;
-    const bx=cx+nx*halfLen+nx*push, by=cy+ny*halfLen+ny*push;
-    useBrush(activeBrushName, pickColor(i,colorOffset), finalWeight);
-    stamp(ax,ay,bx,by);
+// Per-station tooth geometry → resolves ONE tooth into a stamp record (brush/colour/weight +
+// the two endpoints). PURE: no drawing, no field. Called under a per-STROKE seed at compile
+// time so each tooth is deterministic and independent of draw order — the property that lets
+// the reveal stamp teeth one-at-a-time and still match the static frame 1:1. Math is brush-lab
+// verbatim (hand* branches inert in V1 but kept faithful). Returns null if a gated station.
+function computeTooth(stations, k, colorOffset, finalWeight, brushName){
+  const s=stations[k];
+  if (P.handGate > 0){ const g=noise(s.x*0.008, s.y*0.008, 17.3); if(g<P.handGate) return null; }
+  let cx=s.x, cy=s.y;
+  if (P.handTremor > 0){
+    const amp=P.handTremor*(P.width*0.5)*0.36;
+    const w=(noise(s.x*0.012, s.y*0.012, 5.1)-0.5)*2*amp;
+    cx=s.x+s.nx*w; cy=s.y+s.ny*w;
   }
+  const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
+  const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
+  let halfLen=envLen;
+  if (P.handChaos > 0){
+    const nL=noise(k*0.45, 91.7);
+    const chaosLen=(P.width*0.5)*(0.25+nL*nL*1.35);
+    halfLen=lerp(envLen, chaosLen, P.handChaos);
+  }
+  halfLen *= P.strokeLen;
+  const j=radians(random(-P.anglej,P.anglej));
+  const nx=s.nx*cos(j)-s.ny*sin(j);
+  const ny=s.nx*sin(j)+s.ny*cos(j);
+  const shift=P.bias*halfLen;
+  const offset=random(0,P.radialoffset)*halfLen;
+  const pushv=shift+offset;
+  const ax=cx-nx*halfLen+nx*pushv, ay=cy-ny*halfLen+ny*pushv;
+  const bx=cx+nx*halfLen+nx*pushv, by=cy+ny*halfLen+ny*pushv;
+  return { brush:brushName, color:pickColor(k,colorOffset), weight:finalWeight, ax, ay, bx, by };
 }
-// RIBBON — teeth along a CONTAINED spine around the mark's assigned centre
-function drawRibbon(markIndex){
-  const m=CUR;
-  const cps=makeContainedControlPoints(m.cx, m.cy, m.extent, P.ctrl);
-  const poly=samplePolyline(cps);
-  const stations=placeStations(poly, P.spacing);
-  drawTeeth(stations, markIndex*3);
-}
-// BURST — stations spread by angle around a centre (brush-lab verbatim)
+// BURST — stations spread by angle around a centre (brush-lab verbatim; no RNG)
 function makeBurstStations(cx, cy){
   const R0=P.width*0.55;
   const count=max(3, round(TWO_PI*R0/P.spacing));
@@ -258,16 +250,22 @@ function makeBurstStations(cx, cy){
   }
   return out;
 }
-function drawBurst(markIndex){
-  const m=CUR;
-  const stations=makeBurstStations(m.cx, m.cy);
-  drawTeeth(stations, markIndex*3);
+// Stations (per-tooth anchors) for a mark. RIBBON: teeth along a CONTAINED spine (spine wander
+// uses random() → consumed under the MARK seed, as a mark-level property). BURST: angular
+// rosette. P.* must already be set by applyMark(m) before calling.
+function stationsFor(m){
+  if(m.gen==='ribbon'){
+    const cps=makeContainedControlPoints(m.cx, m.cy, m.extent, P.ctrl);
+    const poly=samplePolyline(cps);
+    return placeStations(poly, P.spacing);
+  }
+  return makeBurstStations(m.cx, m.cy);
 }
 
 // per-generator native defaults (from brush-lab GENERATORS table, V1 subset)
 const GENERATORS = {
-  ribbon: { allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, draw:drawRibbon },
-  burst:  { allowedBrushes:null,             biasDefault:1.0, fieldDefault:'none', fieldAmountDefault:0.5, draw:drawBurst  },
+  ribbon: { allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5 },
+  burst:  { allowedBrushes:null,             biasDefault:1.0, fieldDefault:'none', fieldAmountDefault:0.5 },
 };
 
 // ============================================================================
@@ -416,48 +414,97 @@ function applyMark(m){
 // races p5.brush's end-of-frame composite → flicker (accumulation-spike §8 verdict).
 function paintGround(){ background(GROUND); }
 
-// Draw marks [from, to) of the frozen plan. PER-MARK deterministic seed so mark i renders
-// identically whether stamped in one full pass or one-at-a-time during the reveal — this is
-// what lets the append-only accretion rebuild the static frame 1:1 (accumulation-spike §8;
-// PATTERNS → draw-on). Placement (cx/cy/size/hero) comes from independent mulberry32 streams
-// in buildPlan(), so it's unaffected; only per-mark texture/colour draws from this seed. The
-// ·9973 stride just decorrelates neighbouring marks' streams.
-function drawMarks(from, to){
+// ---- COMPILE: plan → flat, ordered list of single-STROKE records --------------------
+// The reveal unit is ONE tooth/spoke, not a whole generator — so cog teeth and ribbon combs
+// appear one at a time (the v2 "drawing itself" feel), and each frame does ~one line of work
+// (light frames → smooth at retina, rate knob controls speed across its whole range).
+// TWO-TIER SEED: a MARK seed drives the spine/station GEOMETRY (a mark-level property), then a
+// per-STROKE seed drives each tooth's jitter/colour AND its brush.line stamp. Every stroke
+// carries its own seed and is stamped in a fixed order, so the reveal reproduces the static
+// frame regardless of how strokes are split across frames — VISUALLY identical. (Bytes differ
+// only where teeth within a mark overlap: those blend across frames in the reveal vs within one
+// p5.brush frame in the static pass. Imperceptible — anti-clump spacing keeps marks apart; only
+// intra-mark tooth overlaps are affected. Byte-1:1 is impossible with per-tooth accretion.)
+let strokes    = [];          // flat, ORDERED stamp records: plan order, station order within a mark
+let markField  = [];          // per-mark resolved Bend-Field name (set before a mark's strokes)
+let curFieldMark = -1;        // which mark's field is currently active in drawStrokes()
+
+function compileStrokes(){
+  strokes = []; markField = [];
+  for(let i=0;i<plan.length;i++){
+    const m = plan[i];
+    randomSeed(seed + i*9973); noiseSeed(seed + i*9973);        // MARK seed → spine/station geometry
+    applyMark(m);                                               // sets P.* + resolves the mark's field
+    markField[i] = P.field;
+    const stations = stationsFor(m);
+    const brushConfig = BRUSH_REGISTRY[m.brush] || BRUSH_REGISTRY['default'];
+    const finalWeight = P.weight * brushConfig.baseWeight;
+    const colorOffset = i*3;
+    for(let k=0;k<stations.length;k++){
+      const sk = (seed + i*9973 + (k+1)*7919) >>> 0;            // per-STROKE seed (stored → reused at stamp)
+      randomSeed(sk); noiseSeed(sk);
+      const rec = computeTooth(stations, k, colorOffset, finalWeight, m.brush);
+      if(rec){ rec.mi = i; rec.seedK = sk; strokes.push(rec); }
+    }
+  }
+}
+
+// Paint the cream ground. Called ONCE at the start of a reveal (and on each static re-render
+// for curation) — never mid-reveal: background() clears settled strokes and races p5.brush's
+// end-of-frame composite → flicker (accumulation-spike §8 verdict).
+function paintGround(){ background(GROUND); }
+
+// Activate the Bend Field a mark wants (the only sanctioned wiggle).
+function setFieldFor(name){
+  try {
+    if (name && name !== 'none' && typeof brush.field === 'function') brush.field(name);
+    else if (typeof brush.noField === 'function') brush.noField();
+  } catch(e){ try{ brush.noField(); }catch(_){} }
+}
+
+// Stamp stroke records [from, to). Re-seed to each stroke's stored seed right before brush.line
+// so its texture is order-independent; (re)set the mark's field when the mark changes. Never
+// re-stamps a settled stroke — this is the append-only draw path for both reveal and static.
+function drawStrokes(from, to){
   push();
   translate(-width/2, -height/2);                 // WEBGL origin → top-left screen coords
-  const n = Math.min(to, plan.length);
+  const n = Math.min(to, strokes.length);
   for(let i=from;i<n;i++){
-    randomSeed(seed + i*9973); noiseSeed(seed + i*9973);
-    try { if (typeof brush.seed === 'function') brush.seed(seed + i); } catch(e){}
-    applyMark(plan[i]); GENERATORS[plan[i].gen].draw(i);
+    const rec = strokes[i];
+    if(rec.mi !== curFieldMark){ setFieldFor(markField[rec.mi]); curFieldMark = rec.mi; }
+    randomSeed(rec.seedK); noiseSeed(rec.seedK);
+    try { if (typeof brush.seed === 'function') brush.seed(rec.seedK); } catch(e){}
+    useBrush(rec.brush, rec.color, rec.weight);
+    stamp(rec.ax, rec.ay, rec.bx, rec.by);
   }
   pop();
 }
 
-// Full static frame (curation): freeze a plan, clear to ground, stamp it all at once.
-function renderStatic(){ plan = buildPlan(); paintGround(); drawMarks(0, plan.length); }
+// Full static frame (curation): freeze a plan, compile, clear to ground, stamp every stroke.
+function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); }
 
 // ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
 // Fixed-rate clock for now — NO AUDIO this step. Rate is the one exposed knob.
 // AUDIO SEAM (do NOT wire audio here): revealRate() scales a base rate by `revealEnergy`
 // (0..1). The audio step swaps the hardcoded energy for FFT band energy and adds the
 // gesture-gated AudioContext — a drop-in against this seam, not a rewrite.
-let REVEAL_RATE  = 2.5;       // marks per second — the single pacing knob (slider-exposed)
+let REVEAL_RATE  = 28;        // STROKES per second — the single pacing knob (slider-exposed)
 let revealEnergy = 1.0;       // 0..1 · INERT audio seam; hardcoded to the fixed clock for now
-function revealRate(){ return REVEAL_RATE * revealEnergy; }   // marks/sec
+function revealRate(){ return REVEAL_RATE * revealEnergy; }   // strokes/sec
 
 let running     = false;      // reveal in progress (loop() running); false = static resting
-let revealCount = 0;          // float — marks revealed so far (grows on the clock)
-let lastDrawn   = 0;          // integer high-water mark of marks already stamped
+let revealCount = 0;          // float — strokes revealed so far (grows on the clock)
+let lastDrawn   = 0;          // integer high-water mark of strokes already stamped
 let revealFps   = 0;          // measured throughput during the reveal (frameRate())
 
 // Begin an append-only reveal from the current seed/hero settings.
 function startReveal(){
   plan = buildPlan();                 // freeze the plan being revealed
-  revealCount = 0; lastDrawn = 0; revealFps = 0;
+  compileStrokes();                   // flatten it to ordered stroke records
+  revealCount = 0; lastDrawn = 0; revealFps = 0; curFieldMark = -1;
   paintGround();                      // ground painted ONCE; never cleared again until reset
   running = true;
-  loop();                             // draw() now appends newly-revealed marks each frame
+  loop();                             // draw() now appends newly-revealed strokes each frame
   updateRevealUI();
 }
 
@@ -490,17 +537,17 @@ function draw(){
     noLoop();
     return;
   }
-  // REVEAL (append-only): advance the clock, stamp only the newly-revealed marks.
+  // REVEAL (append-only): advance the clock, stamp only the newly-revealed strokes.
   // Clamp dt: the first reveal frame's deltaTime spans all the idle time since the last
-  // static draw() (the clock ran through noLoop), and a tab-away stalls it too — an
-  // unclamped spike would dump the whole plan in one frame. 100 ms cap = ≤ rate·0.1 marks/frame.
+  // static draw() (the clock ran through noLoop), and a tab-away stalls it too — an unclamped
+  // spike would dump the whole plan in one frame. 100 ms cap = ≤ rate·0.1 strokes/frame.
   const dt = Math.min(deltaTime, 100) / 1000;              // seconds-this-frame, spike-guarded
-  revealCount += revealRate() * dt;                         // marks/sec × seconds-this-frame
-  const target = Math.min(Math.floor(revealCount), plan.length);
-  if(target > lastDrawn){ drawMarks(lastDrawn, target); lastDrawn = target; }   // never redraw settled marks
+  revealCount += revealRate() * dt;                         // strokes/sec × seconds-this-frame
+  const target = Math.min(Math.floor(revealCount), strokes.length);
+  if(target > lastDrawn){ drawStrokes(lastDrawn, target); lastDrawn = target; }   // never redraw settled strokes
   revealFps = frameRate();                                  // real throughput (NOT in-draw readPixels)
   updateRevealUI();
-  if(lastDrawn >= plan.length){ running = false; noLoop(); }   // fully accreted → matches the static frame 1:1
+  if(lastDrawn >= strokes.length){ running = false; noLoop(); }   // fully accreted → the curated frame (visually identical; see compileStrokes overlap caveat)
 }
 
 function regenerate(s){
@@ -522,13 +569,13 @@ function wireUI(){
   $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; running=false; redraw(); });
   // reveal controls
   $('reveal').addEventListener('click',  ()=> startReveal());
-  $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE.toFixed(1); });
+  $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE; });
   updateRevealUI();
 }
 
 function updateRevealUI(){
   const $ = id => document.getElementById(id);
-  const n = plan.length || 0;
+  const n = strokes.length || 0;
   $('rprog').textContent = Math.min(lastDrawn, n) + ' / ' + n;
   $('rfps').textContent  = running ? revealFps.toFixed(0) : '—';
 }
