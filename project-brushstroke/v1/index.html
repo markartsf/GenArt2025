@@ -12,9 +12,12 @@
   TIME — cog teeth and ribbon combs appear individually (v2 "drawing itself" feel), not
   whole generators popping on. Ground painted once, preserveDrawingBuffer, plan compiled
   to ordered stroke records with two-tier deterministic seeds, only newly-revealed strokes
-  stamped each frame (light frames → smooth at retina). Fixed-rate clock (one knob,
-  strokes/sec); NO AUDIO yet — the rate carries an inert `revealEnergy` seam the audio step
-  will drive with FFT energy. Verdict this builds on: accumulation-spike §8.
+  stamped each frame (light frames → smooth at retina). AUDIO drives accretion density:
+  "▶ Play with audio" gesture-gates an AudioContext (PATTERNS → Safari AudioContext rules),
+  decodes winterland.mp3, and feeds smoothed FFT energy into `revealEnergy` so marks accrete
+  with the track (quiet = sparse, loud = dense — V1-SCOPE §4). "Reveal ▶ (manual)" keeps the
+  fixed-clock, no-sound preview (revealEnergy pinned to 1). Verdict this builds on:
+  accumulation-spike §8.
 
   The generator engine below is PORTED VERBATIM from brush-lab.html (the tuned
   native Ribbon/Burst) per V1-SCOPE §2 ("consumes them; does not re-implement").
@@ -88,15 +91,16 @@
       <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="either">either</option></select></label>
     </div>
     <div class="herobox">
-      <button class="primary" id="reveal" style="width:100%;">Reveal ▶</button>
-      <label>rate <span class="val" id="rrateval">28</span> strokes/s
-        <input id="rrate" type="range" min="4" max="120" step="1" value="28"></label>
+      <button class="primary" id="playaudio" style="width:100%;">▶ Play with audio</button>
+      <button id="reveal" style="width:100%;margin-top:6px;">Reveal ▶ (manual)</button>
+      <label>rate <span class="val" id="rrateval">16</span> strokes/s @ full energy
+        <input id="rrate" type="range" min="4" max="120" step="1" value="16"></label>
       <label>revealed <span class="val" id="rprog">0 / 0</span></label>
-      <label>reveal fps <span class="val" id="rfps">—</span></label>
+      <label>energy <span class="val" id="renergy">—</span> · fps <span class="val" id="rfps">—</span></label>
     </div>
-    <p class="hint">Curate the frame (Reseed/Random/hero), then Reveal ▶ to watch it draw
-      itself — teeth/spokes appear one at a time, append-only, plan order (heroes arrive
-      first). Ends on the curated frame. Save freezes a frame. Audio drives the rate next.</p>
+    <p class="hint">Curate the frame (Reseed/Random/hero), then ▶ Play with audio — marks
+      accrete with the track (quiet = sparse, loud = dense), teeth one at a time, append-only.
+      Reveal ▶ (manual) is a fixed-clock preview without sound. Save freezes a frame.</p>
     <div id="err"></div>
   </div>
 </div>
@@ -490,18 +494,20 @@ function drawStrokes(from, to){
 function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); }
 
 // ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
-// Fixed-rate clock for now — NO AUDIO this step. Rate is the one exposed knob.
-// AUDIO SEAM (do NOT wire audio here): revealRate() scales a base rate by `revealEnergy`
-// (0..1). The audio step swaps the hardcoded energy for FFT band energy and adds the
-// gesture-gated AudioContext — a drop-in against this seam, not a rewrite.
-let REVEAL_RATE  = 28;        // STROKES per second — the single pacing knob (slider-exposed)
-let revealEnergy = 1.0;       // 0..1 · INERT audio seam; hardcoded to the fixed clock for now
+// revealRate() = REVEAL_RATE (strokes/sec at full energy) × revealEnergy (0..1). In MANUAL
+// mode revealEnergy is pinned to 1 (a fixed clock for curation preview); in AUDIO mode it's
+// the smoothed FFT energy, so accretion tracks the track: quiet ⇒ sparse, loud ⇒ dense
+// (V1-SCOPE §4 — audio drives density/form). REVEAL_RATE at full energy is also calibrated so
+// the audio fill spans the build into the plateau (measured avg active energy ≈ 0.24).
+let REVEAL_RATE  = 16;        // STROKES per second at full energy — the single pacing knob (slider)
+let revealEnergy = 1.0;       // 0..1 — manual: pinned to 1; audio: smoothed FFT energy
 function revealRate(){ return REVEAL_RATE * revealEnergy; }   // strokes/sec
 
 let running     = false;      // reveal in progress (loop() running); false = static resting
 let revealCount = 0;          // float — strokes revealed so far (grows on the clock)
 let lastDrawn   = 0;          // integer high-water mark of strokes already stamped
 let revealFps   = 0;          // measured throughput during the reveal (frameRate())
+let audioDriven = false;      // true → revealEnergy comes from the FFT each frame
 
 // Begin an append-only reveal from the current seed/hero settings.
 function startReveal(){
@@ -513,6 +519,57 @@ function startReveal(){
   loop();                             // draw() now appends newly-revealed strokes each frame
   updateRevealUI();
 }
+
+// ---- AUDIO (gesture-gated; drives revealEnergy → accretion density) -----------------
+// AudioContext discipline: PATTERNS → "Safari AudioContext rules" (create the context
+// synchronously inside the gesture BEFORE any await; callback-style decodeAudioData).
+const AUDIO_SRC = 'winterland.mp3';
+let audioCtx=null, analyser=null, freqData=null, srcNode=null, decodedBuf=null, audioReady=false;
+
+// Build the context + analyser ONCE, synchronously — must run first thing in the click handler.
+function ensureAudioGraph(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;                 // 512 bins
+    analyser.smoothingTimeConstant = 0.8;
+    analyser.connect(audioCtx.destination);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+  }
+  audioCtx.resume();                          // Safari can start suspended even from a gesture
+}
+
+// Smoothed low/low-mid FFT energy (0..1) → overall loudness → accretion density.
+function audioEnergy(){
+  if(!analyser) return 0;
+  analyser.getByteFrequencyData(freqData);
+  let sum=0, n=0;
+  for(let i=1; i<96 && i<freqData.length; i++){ sum+=freqData[i]; n++; }   // bass..low-mid
+  return n ? sum/(n*255) : 0;
+}
+
+// Gesture handler: start the track and an audio-driven append-only reveal from frame 0.
+function playAudioReveal(){
+  ensureAudioGraph();                         // AudioContext created synchronously in the gesture
+  const begin = (buf)=>{
+    decodedBuf = buf;
+    stopAudioSource();
+    srcNode = audioCtx.createBufferSource();
+    srcNode.buffer = buf;
+    srcNode.connect(analyser);
+    srcNode.onended = ()=>{ running=false; audioDriven=false; audioReady=false; noLoop(); updateRevealUI(); };
+    audioReady = true; audioDriven = true; revealEnergy = 0;   // start silent ⇒ sparse open
+    startReveal();
+    srcNode.start();
+  };
+  if(decodedBuf){ begin(decodedBuf); return; }
+  fetch(AUDIO_SRC).then(r=>r.arrayBuffer()).then(ab=>{
+    audioCtx.decodeAudioData(ab, begin, (e)=> showErr(e || 'decodeAudioData failed'));
+  }).catch(showErr);
+}
+
+function stopAudioSource(){ if(srcNode){ try{ srcNode.onended=null; srcNode.stop(); }catch(e){} srcNode=null; } }
+function stopAudio(){ stopAudioSource(); audioDriven=false; audioReady=false; }
 
 // ============================================================================
 //  p5 LIFECYCLE  (global mode, mirrors brush-lab)
@@ -544,6 +601,9 @@ function draw(){
     return;
   }
   // REVEAL (append-only): advance the clock, stamp only the newly-revealed strokes.
+  // In AUDIO mode, revealEnergy is the smoothed FFT energy (density tracks the track);
+  // smoothing per PATTERNS → FFT mapping (lerp raw, 0.1–0.2). Manual mode leaves it at 1.
+  if(audioDriven && audioReady){ revealEnergy = lerp(revealEnergy, audioEnergy(), 0.15); }
   // Clamp dt: the first reveal frame's deltaTime spans all the idle time since the last
   // static draw() (the clock ran through noLoop), and a tab-away stalls it too — an unclamped
   // spike would dump the whole plan in one frame. 100 ms cap = ≤ rate·0.1 strokes/frame.
@@ -559,6 +619,7 @@ function draw(){
 function regenerate(s){
   if(s!==undefined) seed=s;
   running = false;                    // any in-flight reveal is abandoned; back to static curation
+  stopAudio();                        // curating a new frame stops the track
   document.getElementById('seedval').textContent = seed;
   showErr('');
   redraw();                           // forces one static frame even if a prior reveal had noLoop'd
@@ -571,11 +632,12 @@ function wireUI(){
   $('reseed').addEventListener('click',  ()=> regenerate(seed*7+1));     // the seed×7+1 chain
   $('rand').addEventListener('click',    ()=> regenerate(Math.floor(Math.random()*1e6)));
   $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0], 'png'));
-  $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; running=false; redraw(); });
-  $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; running=false; redraw(); });
-  // reveal controls
-  $('reveal').addEventListener('click',  ()=> startReveal());
+  $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; running=false; stopAudio(); redraw(); });
+  $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; running=false; stopAudio(); redraw(); });
+  // reveal controls — manual (fixed clock) preview vs audio-driven
+  $('reveal').addEventListener('click',  ()=>{ stopAudio(); audioDriven=false; revealEnergy=1.0; startReveal(); });
   $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE; });
+  $('playaudio').addEventListener('click', ()=> playAudioReveal());
   updateRevealUI();
 }
 
@@ -584,6 +646,7 @@ function updateRevealUI(){
   const n = strokes.length || 0;
   $('rprog').textContent = Math.min(lastDrawn, n) + ' / ' + n;
   $('rfps').textContent  = running ? revealFps.toFixed(0) : '—';
+  $('renergy').textContent = audioDriven ? revealEnergy.toFixed(2) : '—';
 }
 </script>
 </body>

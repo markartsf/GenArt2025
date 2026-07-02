@@ -11,7 +11,7 @@ deliberately shares none of its machinery.*
 A standalone audio-reactive piece: **Ribbon + Burst** generators rendering
 **natively through p5.brush**, accreting toward a final frame as the track plays,
 with **density driven by audio energy**. House palette, cream ground. One track:
-`winterland` (1:22).
+`winterland` (2:01).
 
 It is intentionally the *simple* path. It renders p5.brush marks straight to the
 canvas — **no KM compositor, no owned mask, no plate stack**. That is the whole
@@ -25,7 +25,7 @@ piece**. There is nothing to rasterize and re-composite here.
 
 - p5.js 2.x + **p5.brush 2.1.9-beta** (the p5 build — needs a **WEBGL** canvas).
 - **Built on disk**, served (`npx vite …` or `python3 -m http.server`), so it can
-  fetch the local `winterland.m4a` and run at real retina. This is *not* a
+  fetch the local `winterland.mp3` and run at real retina. This is *not* a
   Claude.ai chat artifact — the iframe Web-Audio/CDN constraints don't apply on disk.
   It can be packaged as a single standalone HTML later if we want a portable copy.
 - Audio routed/auditioned per README (BlackHole available; not required — the piece
@@ -63,10 +63,13 @@ blend; navy + brown are the darker placed-depth notes (sparse use — they colla
 in dense pile-ups, per m2). Ground stays quiet (DESIGN #8). Flowering Trees is a
 deliberate V1.x mood variant only — not the V1.0 default, and unverified for pigment.
 
-## 4. Audio & reactivity — `winterland` (1:22)
+## 4. Audio & reactivity — `winterland` (2:01)
 
-- **Energy arc** (measured): near-silent open → gradual build → peak ~32s → mid
-  plateau → fade over the final ~10s. The choreography rides this curve directly.
+- **Energy arc** (measured, corrected track 2026-07-01): quiet-ish open (~0.1–0.15
+  normalized RMS) → sustained mid-energy activity (avg active ≈ 0.31, busier
+  throughout than a single build/peak/fade shape) → highest activity late, around
+  ~84s → settles into the close. No single dramatic peak — density should track the
+  FFT energy continuously rather than assuming a fixed build/peak/fade timeline.
 - **Density is the primary — and for V1.0, the only required — audio lever**
   (DESIGN: audio drives *form*, not just brightness). Map audio energy → mark
   **accretion rate**: quiet ⇒ sparse, energy ⇒ more marks laid per unit time. The
