@@ -81,6 +81,21 @@ deliberate V1.x mood variant only — not the V1.0 default, and unverified for p
   gesture, before any `await`**; then `file.arrayBuffer()` → `decodeAudioData()` →
   `AudioBufferSourceNode`, with an `AnalyserNode` for the FFT. Gesture-gate playback
   (a click to start). Don't restate the rule in code comments — point to PATTERNS.
+- **Responsiveness beyond density** (2026-07-02, Mark's direction — audio should read
+  as reactive, not just "fills faster/slower"). All append-only / dry-media safe;
+  audio mode becomes emergent (not seed-reproducible), manual/static stay seed-only:
+  - **Energy → mark boldness/size — BUILT.** The stroke laid at each instant scales
+    weight + tooth-length with the current smoothed FFT energy (loud ⇒ bold/large,
+    quiet ⇒ faint/small), captured once at the stroke's birth. `audio → boldness`
+    slider (0 = off). Directly fulfils DESIGN's *audio drives form*.
+  - **Transient flurries — NEXT candidate** (onset/spectral-flux → release a cluster
+    of marks on hits). Note: this ambient track has few sharp transients.
+  - **Colour ↔ sound (synaesthesia) — V1.1/1.2 direction** (Mark's core app idea:
+    colour responding to energy/transients/spectral content). Deliberately deferred
+    past V1.0; the hardest and most conceptually central lever.
+  - Richer *moving* reactivity (a live layer that shimmers with the sound) stays
+    **M4 / compositor-track** work — dense-perf spike bound per-frame modulation to a
+    single dirty layer; V1 keeps "marks only ever arrive," never re-touched.
 
 ## 5. Reveal model — emergent accretion (NOT authored-endpoint)
 

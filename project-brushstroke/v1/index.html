@@ -12,12 +12,13 @@
   TIME — cog teeth and ribbon combs appear individually (v2 "drawing itself" feel), not
   whole generators popping on. Ground painted once, preserveDrawingBuffer, plan compiled
   to ordered stroke records with two-tier deterministic seeds, only newly-revealed strokes
-  stamped each frame (light frames → smooth at retina). AUDIO drives accretion density:
+  stamped each frame (light frames → smooth at retina). AUDIO drives both density AND form:
   "▶ Play with audio" gesture-gates an AudioContext (PATTERNS → Safari AudioContext rules),
-  decodes winterland.mp3, and feeds smoothed FFT energy into `revealEnergy` so marks accrete
-  with the track (quiet = sparse, loud = dense — V1-SCOPE §4). "Reveal ▶ (manual)" keeps the
-  fixed-clock, no-sound preview (revealEnergy pinned to 1). Verdict this builds on:
-  accumulation-spike §8.
+  decodes winterland.mp3, and feeds smoothed FFT energy into `revealEnergy`. That energy sets
+  the accretion rate (quiet = sparse, loud = dense) AND the boldness of each mark at its birth
+  (loud = heavier + larger strokes, quiet = faint + small) — V1-SCOPE §4. "Reveal ▶ (manual)"
+  keeps the fixed-clock, no-sound, seed-only preview (revealEnergy pinned to 1). Verdict this
+  builds on: accumulation-spike §8.
 
   The generator engine below is PORTED VERBATIM from brush-lab.html (the tuned
   native Ribbon/Burst) per V1-SCOPE §2 ("consumes them; does not re-implement").
@@ -95,6 +96,8 @@
       <button id="reveal" style="width:100%;margin-top:6px;">Reveal ▶ (manual)</button>
       <label>rate <span class="val" id="rrateval">16</span> strokes/s @ full energy
         <input id="rrate" type="range" min="4" max="120" step="1" value="16"></label>
+      <label>audio → boldness <span class="val" id="rboldval">0.80</span>
+        <input id="rbold" type="range" min="0" max="1.5" step="0.05" value="0.8"></label>
       <label>revealed <span class="val" id="rprog">0 / 0</span></label>
       <label>energy <span class="val" id="renergy">—</span> · fps <span class="val" id="rfps">—</span></label>
     </div>
@@ -475,7 +478,19 @@ function setFieldFor(name){
 // Stamp stroke records [from, to). Re-seed to each stroke's stored seed right before brush.line
 // so its texture is order-independent; (re)set the mark's field when the mark changes. Never
 // re-stamps a settled stroke — this is the append-only draw path for both reveal and static.
+//
+// AUDIO BOLDNESS (audio mode only): the stroke laid at THIS instant scales with the current
+// loudness — louder ⇒ heavier weight + slightly longer tooth, so the track's dynamics settle
+// permanently into the texture (V1-SCOPE §4 / DESIGN: audio drives *form*). Captured once at the
+// stroke's birth (append-only — never re-touched after). Manual/static keep seed weights (mul=1).
+function boldMuls(){
+  if(!audioDriven || AUDIO_BOLD<=0) return { w:1, l:1 };
+  const e = Math.min(1, revealEnergy / AUDIO_FULL);        // normalize: FULL band energy → 1
+  return { w: lerp(1 - AUDIO_BOLD*0.45, 1 + AUDIO_BOLD*0.80, e),
+           l: lerp(1 - AUDIO_BOLD*0.22, 1 + AUDIO_BOLD*0.40, e) };
+}
 function drawStrokes(from, to){
+  const { w:wMul, l:lMul } = boldMuls();                   // current-instant loudness (audio) or 1
   push();
   translate(-width/2, -height/2);                 // WEBGL origin → top-left screen coords
   const n = Math.min(to, strokes.length);
@@ -484,8 +499,12 @@ function drawStrokes(from, to){
     if(rec.mi !== curFieldMark){ setFieldFor(markField[rec.mi]); curFieldMark = rec.mi; }
     randomSeed(rec.seedK); noiseSeed(rec.seedK);
     try { if (typeof brush.seed === 'function') brush.seed(rec.seedK); } catch(e){}
-    useBrush(rec.brush, rec.color, rec.weight);
-    stamp(rec.ax, rec.ay, rec.bx, rec.by);
+    useBrush(rec.brush, rec.color, rec.weight * wMul);
+    if(lMul === 1){ stamp(rec.ax, rec.ay, rec.bx, rec.by); }
+    else {                                                  // scale tooth length around its midpoint
+      const mx=(rec.ax+rec.bx)/2, my=(rec.ay+rec.by)/2, hx=(rec.bx-rec.ax)/2, hy=(rec.by-rec.ay)/2;
+      stamp(mx-hx*lMul, my-hy*lMul, mx+hx*lMul, my+hy*lMul);
+    }
   }
   pop();
 }
@@ -502,6 +521,9 @@ function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1
 let REVEAL_RATE  = 16;        // STROKES per second at full energy — the single pacing knob (slider)
 let revealEnergy = 1.0;       // 0..1 — manual: pinned to 1; audio: smoothed FFT energy
 function revealRate(){ return REVEAL_RATE * revealEnergy; }   // strokes/sec
+
+const AUDIO_FULL = 0.45;      // FFT band energy that reads as "full" boldness (this track's loud bands ≈ 0.4–0.6)
+let   AUDIO_BOLD = 0.8;       // 0 = off (seed weights), 1 = strongest audio→boldness (slider)
 
 let running     = false;      // reveal in progress (loop() running); false = static resting
 let revealCount = 0;          // float — strokes revealed so far (grows on the clock)
@@ -637,6 +659,7 @@ function wireUI(){
   // reveal controls — manual (fixed clock) preview vs audio-driven
   $('reveal').addEventListener('click',  ()=>{ stopAudio(); audioDriven=false; revealEnergy=1.0; startReveal(); });
   $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE; });
+  $('rbold').addEventListener('input',   e=>{ AUDIO_BOLD=+e.target.value; $('rboldval').textContent=AUDIO_BOLD.toFixed(2); });
   $('playaudio').addEventListener('click', ()=> playAudioReveal());
   updateRevealUI();
 }
