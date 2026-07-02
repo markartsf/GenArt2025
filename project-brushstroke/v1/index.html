@@ -338,12 +338,17 @@ function burstWeight(brush, w){
 function ribbonSpec(rng){
   const r = rng();
   let brush, weight;
-  if (r < 0.60)      { brush = pick(rng, ['2B','HB','cpencil']); weight = 1.8; }   // not thin (Mark)
-  else if (r < 0.80) { brush = 'pastel';                         weight = 1.35; }
-  else               { brush = 'charcoal';                       weight = 1.0; }
+  if (r < 0.60)      { brush = pick(rng, ['2B','HB','cpencil']); weight = 1.05; }  // THINNER teeth (was 1.8) → more gap
+  else if (r < 0.80) { brush = 'pastel';                         weight = 0.9;  }  // was 1.35
+  else               { brush = 'charcoal';                       weight = 0.7;  }  // was 1.0
   const w = 42 + rng()*34;
-  return { gen:'ribbon', brush, weight, width:w, extent:w*3.1,   // longer spine (~1.35x) → reads as a flowing comb at any size
-    ctrl: 4 + Math.floor(rng()*2), spacing:8, field: rng()<0.5?'hand':'none' };
+  // ~30% of ribbons wander LONGER + windier (bigger extent, more control points); the rest stay
+  // the contained comb. Placement's radiusFor accounts for the reach, so long ones claim more room.
+  const long = rng() < 0.30;
+  const extentMul = long ? (4.6 + rng()*1.9) : 3.1;                 // long: 4.6–6.5× ; normal: 3.1×
+  const ctrl      = long ? (6 + Math.floor(rng()*3)) : (4 + Math.floor(rng()*2));
+  return { gen:'ribbon', brush, weight, width:w, extent:w*extentMul,
+    ctrl, spacing:10, field: rng()<0.5?'hand':'none', long };      // spacing 8→10: wider gaps between teeth
 }
 function burstSpec(rng){
   const brush = pick(rng, ['marker','charcoal']);
