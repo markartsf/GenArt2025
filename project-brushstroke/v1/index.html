@@ -147,8 +147,22 @@
 const GROUND  = '#efe7d8';
 const PALETTE = ['#e63946','#1d3557','#e9c46a','#2a9d8f','#c97fa8','#7d4f2a','#f1faee'];
 
-// fixed frame — sized ONCE; never resized at runtime (V1-SCOPE §6)
-const FRAME_W = 1100, FRAME_H = 850;
+// Frame sized ONCE at load to match the DISPLAY (so presentation/fullscreen fill it, crisp),
+// never resized at runtime (V1-SCOPE §6 — resizing corrupts p5.brush's framebuffer; reload to
+// re-fit a different display). SCALE keeps marks proportional to the frame — because both the
+// marks and the frame scale together, coverage/density stays constant across displays.
+let FRAME_W = 1280, FRAME_H = 720, SCALE = 1;
+function sizeFrameToDisplay(){
+  const dw = (window.screen && screen.width)  || window.innerWidth  || 1280;
+  const dh = (window.screen && screen.height) || window.innerHeight || 720;
+  const aspect = Math.max(0.6, Math.min(2.6, dw / dh));      // clamp pathological ratios
+  let W = dw, H = dh;
+  const MAXW = 2560, MAXH = 1600;                            // cap backing for perf; CSS upscales beyond
+  if(W > MAXW){ W = MAXW; H = Math.round(W / aspect); }
+  if(H > MAXH){ H = MAXH; W = Math.round(H * aspect); }
+  FRAME_W = Math.round(W); FRAME_H = Math.round(H);
+  SCALE   = Math.min(FRAME_W, FRAME_H) / 850;                // marks were tuned at 850px tall
+}
 
 let seed = 1;
 let activeBrush = 'marker';     // set per-mark by the driver (replaces brush-lab's DOM read)
@@ -347,13 +361,13 @@ function ribbonSpec(rng){
   const long = rng() < 0.30;
   const extentMul = long ? (4.6 + rng()*1.9) : 3.1;                 // long: 4.6–6.5× ; normal: 3.1×
   const ctrl      = long ? (6 + Math.floor(rng()*3)) : (4 + Math.floor(rng()*2));
-  return { gen:'ribbon', brush, weight, width:w, extent:w*extentMul,
-    ctrl, spacing:10, field: rng()<0.5?'hand':'none', long };      // spacing 8→10: wider gaps between teeth
+  return { gen:'ribbon', brush, weight, width:w*SCALE, extent:w*extentMul*SCALE,
+    ctrl, spacing:10*SCALE, field: rng()<0.5?'hand':'none', long };  // spacing 8→10: wider gaps between teeth
 }
 function burstSpec(rng){
   const brush = pick(rng, ['marker','charcoal']);
-  const w = 26 + rng()*30;
-  return { gen:'burst', brush, weight: burstWeight(brush, w), width:w, spacing:11, radialoffset: rng()*0.3 };
+  const w = 26 + rng()*30;                                          // reference units for burstWeight
+  return { gen:'burst', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, radialoffset: rng()*0.3 };
 }
 
 function buildPlan(){
@@ -363,6 +377,7 @@ function buildPlan(){
   const regRng  = mulberry32(seed*2654435761 >>> 0);
   const heroRng = mulberry32(((seed*0x9E3779B9) ^ 0x85EBCA6B) >>> 0);
   const W=FRAME_W, H=FRAME_H, frameArea=W*H;
+  const edge = EDGE*SCALE;                 // keep the edge margin proportional to the frame
   const out=[], placed=[]; let usedArea=0;
 
   // LOOSE FOCAL ARMATURE: off-centre rule-of-thirds focal region (from regRng → stable vs hero count).
@@ -377,7 +392,7 @@ function buildPlan(){
   // the edge margin, biased toward focal by (pFocal, sigma). sepFactor tunes how far apart marks
   // must sit (default 0.92); large ribbon heroes pass a looser value so several can interleave.
   function placeCentre(rng, r, pFocal, sigma, sepFactor){
-    const lo = EDGE + r;
+    const lo = edge + r;
     for(let t=0;t<64;t++){
       let x, y;
       if(rng() < pFocal){ x = focal.x + gauss(rng)*sigma; y = focal.y + gauss(rng)*sigma; }
@@ -424,13 +439,13 @@ function placeHeroes(heroRng, tryAdd){
     const type = HERO_TYPE==='either' ? (heroRng()<0.5 ? 'burst' : 'ribbon') : HERO_TYPE;
     let m, sigma, sep;
     if(type==='burst'){
-      const w = 100 + heroRng()*55;   // 100–155 vs regular 26–56 → unmistakably the largest
-      m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w, spacing:11, radialoffset:heroRng()*0.20, hero:true };
+      const w = 100 + heroRng()*55;   // 100–155 reference units vs regular 26–56 → unmistakably the largest
+      m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, radialoffset:heroRng()*0.20, hero:true };
       sigma = minDim*0.10; sep = 0.92;              // compact cogs cluster tight at focal (unchanged)
     } else {
       const w = 84 + heroRng()*42;    // big charcoal ribbon (the spike's bold contained stroke)
-      m = { gen:'ribbon', brush:'charcoal', weight:1.2, width:w, extent:w*3.1,
-            ctrl:5+Math.floor(heroRng()*2), spacing:8, field:heroRng()<0.5?'hand':'none', hero:true };
+      m = { gen:'ribbon', brush:'charcoal', weight:1.2, width:w*SCALE, extent:w*3.1*SCALE,
+            ctrl:5+Math.floor(heroRng()*2), spacing:8*SCALE, field:heroRng()<0.5?'hand':'none', hero:true };
       // ribbon heroes reach ~250px — with the tight cluster + 0.92 sep, a second one could never
       // clear the first, so only ONE ever placed. Spread them wider and let the sparse linear combs
       // interleave so 2–3 large ribbons actually appear as HERO_COUNT rises.
@@ -693,11 +708,25 @@ function recordAndPlay(){
   if(!supportsRecording()){ showErr('Video recording is not supported in this browser (try Chrome).'); return; }
   playAudioReveal(startRecording);            // record starts exactly when the reveal begins
 }
+// Record to a fixed 1920×1080 (HD) offscreen canvas regardless of the display's size/aspect:
+// each drawn frame the live canvas is letterboxed into recCanvas (pushRecFrame, called from
+// draw()), so the output is always exactly 1080p. captureStream(0) = frames only on requestFrame.
+let recCanvas=null, recCtx=null, recStream=null, recVideoTrack=null;
+function pushRecFrame(){
+  if(!recCtx) return;
+  const src = document.querySelector('canvas');
+  const s = Math.min(1920/src.width, 1080/src.height);       // fit, preserve aspect
+  const dw=src.width*s, dh=src.height*s, dx=(1920-dw)/2, dy=(1080-dh)/2;
+  recCtx.fillStyle = GROUND; recCtx.fillRect(0,0,1920,1080);  // ground-coloured letterbox bars
+  recCtx.drawImage(src, dx,dy,dw,dh);                         // preserveDrawingBuffer lets us read the WEBGL canvas
+  if(recVideoTrack && recVideoTrack.requestFrame) recVideoTrack.requestFrame();
+}
 function startRecording(){
   try{
-    const canvas = document.querySelector('canvas');
-    const vstream = canvas.captureStream(30);
-    const tracks = [...vstream.getVideoTracks(), ...(mediaDest ? mediaDest.stream.getAudioTracks() : [])];
+    if(!recCanvas){ recCanvas=document.createElement('canvas'); recCanvas.width=1920; recCanvas.height=1080; recCtx=recCanvas.getContext('2d'); }
+    recStream = recCanvas.captureStream(0);
+    recVideoTrack = recStream.getVideoTracks()[0];
+    const tracks = [recVideoTrack, ...(mediaDest ? mediaDest.stream.getAudioTracks() : [])];
     const stream = new MediaStream(tracks);
     const mime = recMime();
     mediaRec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond: 12_000_000 } : undefined);
@@ -705,7 +734,9 @@ function startRecording(){
     mediaRec.ondataavailable = e=>{ if(e.data && e.data.size) recChunks.push(e.data); };
     mediaRec.onstop = saveRecording;
     mediaRec.start();
-    recording = true; document.body.classList.add('recording'); updateRecUI();
+    recording = true; document.body.classList.add('recording');
+    pushRecFrame();                          // seed the first frame immediately
+    updateRecUI();
   }catch(e){ showErr(e); }
 }
 function stopRecording(){
@@ -727,12 +758,14 @@ function updateRecUI(){ const b=document.getElementById('btnRecord'); if(b) b.te
 //  p5 LIFECYCLE  (global mode, mirrors brush-lab)
 // ============================================================================
 function setup(){
+  sizeFrameToDisplay();                       // fit the canvas to this display (once; reload to re-fit)
   const c = createCanvas(FRAME_W, FRAME_H, WEBGL);
   c.parent('canvas-holder');
   // retina sharp in real browsers; drop to 1x only inside Claude Preview's Chromium
   // (Electron/ANGLE-Metal corrupts p5.brush at high overdraw). Set ONCE — never toggle.
+  // Density follows the display (capped at 2) so big low-DPI screens don't blow up the backing.
   const inClaudePreview = /Claude\/.*Electron/.test(navigator.userAgent);
-  pixelDensity(inClaudePreview ? 1 : 2);
+  pixelDensity(inClaudePreview ? 1 : Math.min(2, window.devicePixelRatio || 1));
   // Append-only reveal needs the WEBGL backbuffer to persist across frames. Set ONCE here;
   // toggling preserveDrawingBuffer at runtime freezes the loop (same class as no-resize).
   try { setAttributes('preserveDrawingBuffer', true); } catch(e){ showErr(e); }
@@ -770,7 +803,10 @@ function draw(){
   if(target > lastDrawn){ drawStrokes(lastDrawn, target); lastDrawn = target; }   // never redraw settled strokes
   revealFps = frameRate();                                  // real throughput (NOT in-draw readPixels)
   updateRevealUI();
-  if(lastDrawn >= strokes.length){ running = false; noLoop(); }   // fully accreted → the curated frame (visually identical; see compileStrokes overlap caveat)
+  if(recording) pushRecFrame();                             // feed the 1080p recording canvas this frame
+  // Fully accreted → rest. But while RECORDING, keep looping through the track's tail so the
+  // video holds the final frame (with audio) until the track ends and stops the recorder.
+  if(lastDrawn >= strokes.length && !recording){ running = false; noLoop(); }
 }
 
 function regenerate(s){
