@@ -99,6 +99,12 @@ deliberate V1.x mood variant only — not the V1.0 default, and unverified for p
   - Richer *moving* reactivity (a live layer that shimmers with the sound) stays
     **M4 / compositor-track** work — dense-perf spike bound per-frame modulation to a
     single dirty layer; V1 keeps "marks only ever arrive," never re-touched.
+- **Audio upload — BASIC BUILT** (2026-07-02, `6f5ef30`). "Load track…" plays the reveal
+  against any local file (overrides the baked `winterland.mp3`); everything downstream is
+  track-agnostic. Deliberately basic: **no per-track calibration yet** — the rate/boldness/
+  flurry mappings are tuned to winterland, so a very different track may need the sliders
+  hand-tuned. **V1.1: per-track auto-normalization** (analyze peak/avg energy on load →
+  scale the mappings so any track "just works"), bundled with the packaging/standalone pass.
 
 ## 5. Reveal model — emergent accretion (NOT authored-endpoint)
 
@@ -141,6 +147,21 @@ paths for the Code agent to settle before building the reveal loop:
     count climbs toward the dense plateau — the static-stack timing in SPEC §4·3b
     is a caution, though that was the KM path, not native).
 Pick by a quick spike; written finding only, not committed as a feature.
+
+## 8b. Packaging & delivery — BUILT (2026-07-02)
+
+- **Self-contained:** p5 (2.3.0) + p5.brush (2.1.9-beta) vendored to `v1/lib/`; no CDN
+  at runtime, no build step. `winterland.mp3` local.
+- **Presentation mode (P)** hides the panel, canvas fills the viewport (DISPLAY scale
+  only — backing store never resized). **Fullscreen (F)**. Both local + hosted.
+- **Video capture (R):** `MediaRecorder` records a playthrough as `.webm` — canvas
+  `captureStream(30)` muxed with the track's audio (analyser → `MediaStreamDestination`);
+  auto-downloads at track end. Chrome-best; graceful message where unsupported.
+- **Netlify:** repo-root `netlify.toml` publishes `project-brushstroke/v1` (static, no
+  build); deploy via drag-drop / CLI / git-connect — see `v1/README.md`. HTTPS satisfies
+  the Web-Audio-needs-HTTP constraint. Mark runs the actual deploy (needs his account).
+- **Deferred to V1.1:** per-track audio auto-normalization (so any uploaded track "just
+  works" without hand-tuning the rate/boldness/flurry sliders).
 
 ## 9. V1.x roadmap
 

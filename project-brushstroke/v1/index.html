@@ -35,8 +35,10 @@
        judge at retina in a REAL browser — Claude Preview forces pixelDensity 1.
   ============================================================================
 -->
-<script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/p5.brush@2.1.9-beta/dist/p5.brush.min.js"></script>
+<!-- vendored locally so the deployed site is self-contained (no CDN dependency at runtime):
+     p5 2.3.0 (p5@2) + p5.brush 2.1.9-beta UMD dist. Re-download from jsdelivr on a version bump. -->
+<script src="./lib/p5.min.js"></script>
+<script src="./lib/p5.brush.js"></script>
 <style>
   :root{ --ink:#2a2622; --muted:#8a8278; --acc:#9a5b34; --panel:#1b1b20; }
   *{ box-sizing:border-box; }

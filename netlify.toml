@@ -1,0 +1,11 @@
+# Netlify deploy config — Project Brushstroke V1.0 (static, self-contained piece).
+# The site is plain HTML + vendored p5/p5.brush + winterland.mp3; there is NO build step.
+# A git-connected Netlify site publishes the v1 folder as the site root.
+[build]
+  publish = "project-brushstroke/v1"
+
+# The vendored libraries are versioned in their path — safe to cache hard.
+[[headers]]
+  for = "/lib/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
