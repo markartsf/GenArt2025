@@ -16,9 +16,10 @@
   "▶ Play with audio" gesture-gates an AudioContext (PATTERNS → Safari AudioContext rules),
   decodes winterland.mp3, and feeds smoothed FFT energy into `revealEnergy`. That energy sets
   the accretion rate (quiet = sparse, loud = dense) AND the boldness of each mark at its birth
-  (loud = heavier + larger strokes, quiet = faint + small) — V1-SCOPE §4. "Reveal ▶ (manual)"
-  keeps the fixed-clock, no-sound, seed-only preview (revealEnergy pinned to 1). Verdict this
-  builds on: accumulation-spike §8.
+  (loud = heavier + larger strokes, quiet = faint + small). On top, spectral-flux ONSETS trigger
+  transient flurries — a note attack releases a bold cluster of strokes at once (V1-SCOPE §4).
+  "Reveal ▶ (manual)" keeps the fixed-clock, no-sound, seed-only preview (revealEnergy pinned to
+  1, no flurries). Verdict this builds on: accumulation-spike §8.
 
   The generator engine below is PORTED VERBATIM from brush-lab.html (the tuned
   native Ribbon/Burst) per V1-SCOPE §2 ("consumes them; does not re-implement").
@@ -98,6 +99,8 @@
         <input id="rrate" type="range" min="4" max="120" step="1" value="16"></label>
       <label>audio → boldness <span class="val" id="rboldval">0.80</span>
         <input id="rbold" type="range" min="0" max="1.5" step="0.05" value="0.8"></label>
+      <label>transient flurry <span class="val" id="rflurval">8</span> strokes/hit
+        <input id="rflur" type="range" min="0" max="30" step="1" value="8"></label>
       <label>revealed <span class="val" id="rprog">0 / 0</span></label>
       <label>energy <span class="val" id="renergy">—</span> · fps <span class="val" id="rfps">—</span></label>
     </div>
@@ -561,13 +564,42 @@ function ensureAudioGraph(){
   audioCtx.resume();                          // Safari can start suspended even from a gesture
 }
 
-// Smoothed low/low-mid FFT energy (0..1) → overall loudness → accretion density.
-function audioEnergy(){
-  if(!analyser) return 0;
-  analyser.getByteFrequencyData(freqData);
+// Low/low-mid FFT band energy (0..1) → overall loudness. Assumes freqData is already filled
+// this frame (draw() fetches it once); audioEnergy() is a self-contained wrapper for probes.
+function bandEnergy(){
   let sum=0, n=0;
   for(let i=1; i<96 && i<freqData.length; i++){ sum+=freqData[i]; n++; }   // bass..low-mid
   return n ? sum/(n*255) : 0;
+}
+function audioEnergy(){ if(!analyser) return 0; analyser.getByteFrequencyData(freqData); return bandEnergy(); }
+
+// ---- ONSET / TRANSIENT FLURRIES -----------------------------------------------------
+// Spectral flux = summed positive frame-to-frame change across the band; it spikes on note
+// ATTACKS even when overall loudness barely moves (right for ambient). On an onset we RELEASE
+// A CLUSTER — bump the reveal clock forward so drawStrokes lays several strokes at once; the
+// boldness feature makes them snap in bold, and since strokes[] is grouped by mark a flurry
+// tends to complete a whole cog/ribbon on the hit. Still append-only, still in order.
+let prevFreq=null, fluxAvg=0, lastFlurryMs=-1e9;
+let FLURRY_SIZE=8;                       // strokes released per onset (0 = flurries off) — slider
+const FLURRY_SENS=1.7;                   // fire when flux exceeds fluxAvg × SENS (+ floor)
+const FLURRY_FLOOR=0.010;                // min flux over baseline to count (ignores hiss)
+const FLURRY_REFRACTORY=140;             // ms min between flurries (no machine-gunning)
+function resetOnset(){ prevFreq=null; fluxAvg=0; lastFlurryMs=-1e9; }
+function spectralFlux(){                  // assumes freqData filled this frame
+  if(!prevFreq){ prevFreq=new Uint8Array(freqData.length); prevFreq.set(freqData); return 0; }
+  let flux=0, n=0;
+  for(let i=1; i<160 && i<freqData.length; i++){ const d=freqData[i]-prevFreq[i]; if(d>0) flux+=d; n++; }
+  prevFreq.set(freqData);
+  return n ? flux/(n*255) : 0;
+}
+function detectFlurry(){
+  const flux = spectralFlux();
+  fluxAvg = lerp(fluxAvg, flux, 0.10);    // adaptive baseline of recent flux
+  if(FLURRY_SIZE>0 && flux > fluxAvg*FLURRY_SENS + FLURRY_FLOOR && (millis()-lastFlurryMs)>FLURRY_REFRACTORY){
+    lastFlurryMs = millis();
+    const strength = Math.min(1, (flux-fluxAvg)/(fluxAvg+0.02));
+    revealCount += FLURRY_SIZE * (0.6 + 0.7*strength);   // release the cluster (scaled by onset strength)
+  }
 }
 
 // Gesture handler: start the track and an audio-driven append-only reveal from frame 0.
@@ -581,6 +613,7 @@ function playAudioReveal(){
     srcNode.connect(analyser);
     srcNode.onended = ()=>{ running=false; audioDriven=false; audioReady=false; noLoop(); updateRevealUI(); };
     audioReady = true; audioDriven = true; revealEnergy = 0;   // start silent ⇒ sparse open
+    resetOnset();                                              // fresh onset baseline for this play
     startReveal();
     srcNode.start();
   };
@@ -623,9 +656,14 @@ function draw(){
     return;
   }
   // REVEAL (append-only): advance the clock, stamp only the newly-revealed strokes.
-  // In AUDIO mode, revealEnergy is the smoothed FFT energy (density tracks the track);
-  // smoothing per PATTERNS → FFT mapping (lerp raw, 0.1–0.2). Manual mode leaves it at 1.
-  if(audioDriven && audioReady){ revealEnergy = lerp(revealEnergy, audioEnergy(), 0.15); }
+  // In AUDIO mode: read the FFT once, smooth into revealEnergy (envelope → rate + boldness,
+  // per PATTERNS → FFT mapping lerp 0.1–0.2), and detect onsets → transient flurries. Manual
+  // mode leaves revealEnergy at 1 and never flurries.
+  if(audioDriven && audioReady && analyser){
+    analyser.getByteFrequencyData(freqData);
+    revealEnergy = lerp(revealEnergy, bandEnergy(), 0.15);
+    detectFlurry();
+  }
   // Clamp dt: the first reveal frame's deltaTime spans all the idle time since the last
   // static draw() (the clock ran through noLoop), and a tab-away stalls it too — an unclamped
   // spike would dump the whole plan in one frame. 100 ms cap = ≤ rate·0.1 strokes/frame.
@@ -660,6 +698,7 @@ function wireUI(){
   $('reveal').addEventListener('click',  ()=>{ stopAudio(); audioDriven=false; revealEnergy=1.0; startReveal(); });
   $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE; });
   $('rbold').addEventListener('input',   e=>{ AUDIO_BOLD=+e.target.value; $('rboldval').textContent=AUDIO_BOLD.toFixed(2); });
+  $('rflur').addEventListener('input',   e=>{ FLURRY_SIZE=+e.target.value; $('rflurval').textContent=FLURRY_SIZE; });
   $('playaudio').addEventListener('click', ()=> playAudioReveal());
   updateRevealUI();
 }

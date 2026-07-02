@@ -88,8 +88,11 @@ deliberate V1.x mood variant only — not the V1.0 default, and unverified for p
     weight + tooth-length with the current smoothed FFT energy (loud ⇒ bold/large,
     quiet ⇒ faint/small), captured once at the stroke's birth. `audio → boldness`
     slider (0 = off). Directly fulfils DESIGN's *audio drives form*.
-  - **Transient flurries — NEXT candidate** (onset/spectral-flux → release a cluster
-    of marks on hits). Note: this ambient track has few sharp transients.
+  - **Transient flurries — BUILT.** Spectral-flux onset detection (positive frame-to-
+    frame FFT change, adaptive baseline + refractory) → on a note attack, release a
+    cluster of strokes at once (bump the reveal clock), which snap in bold via the
+    boldness lever; `transient flurry` slider = strokes/hit (0 = off). Note: this ambient
+    track has few sharp transients, so flurries punctuate rather than dominate.
   - **Colour ↔ sound (synaesthesia) — V1.1/1.2 direction** (Mark's core app idea:
     colour responding to energy/transients/spectral content). Deliberately deferred
     past V1.0; the hardest and most conceptually central lever.
