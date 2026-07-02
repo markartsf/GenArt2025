@@ -93,6 +93,9 @@
       <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="either">either</option></select></label>
     </div>
     <div class="herobox">
+      <input type="file" id="audiofile" accept="audio/*" style="display:none">
+      <button id="loadtrack" style="width:100%;">Load track…</button>
+      <div id="trackname" style="font-size:10px;color:var(--muted);margin:5px 0 7px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">winterland.mp3 (default)</div>
       <button class="primary" id="playaudio" style="width:100%;">▶ Play with audio</button>
       <button id="reveal" style="width:100%;margin-top:6px;">Reveal ▶ (manual)</button>
       <label>rate <span class="val" id="rrateval">16</span> strokes/s @ full energy
@@ -104,9 +107,10 @@
       <label>revealed <span class="val" id="rprog">0 / 0</span></label>
       <label>energy <span class="val" id="renergy">—</span> · fps <span class="val" id="rfps">—</span></label>
     </div>
-    <p class="hint">Curate the frame (Reseed/Random/hero), then ▶ Play with audio — marks
-      accrete with the track (quiet = sparse, loud = dense), teeth one at a time, append-only.
-      Reveal ▶ (manual) is a fixed-clock preview without sound. Save freezes a frame.</p>
+    <p class="hint">Curate the frame (Reseed/Random/hero), optionally Load track… (else the
+      baked winterland.mp3), then ▶ Play with audio — marks accrete with the track (quiet =
+      sparse, loud = dense), bolder + flurrying on hits. Reveal ▶ (manual) is a silent
+      fixed-clock preview. Save freezes a frame.</p>
     <div id="err"></div>
   </div>
 </div>
@@ -548,8 +552,8 @@ function startReveal(){
 // ---- AUDIO (gesture-gated; drives revealEnergy → accretion density) -----------------
 // AudioContext discipline: PATTERNS → "Safari AudioContext rules" (create the context
 // synchronously inside the gesture BEFORE any await; callback-style decodeAudioData).
-const AUDIO_SRC = 'winterland.mp3';
-let audioCtx=null, analyser=null, freqData=null, srcNode=null, decodedBuf=null, audioReady=false;
+const AUDIO_SRC = 'winterland.mp3';   // baked default; a user-uploaded file overrides it (V1.1: per-track auto-normalize)
+let audioCtx=null, analyser=null, freqData=null, srcNode=null, decodedBuf=null, audioReady=false, userFile=null;
 
 // Build the context + analyser ONCE, synchronously — must run first thing in the click handler.
 function ensureAudioGraph(){
@@ -617,10 +621,11 @@ function playAudioReveal(){
     startReveal();
     srcNode.start();
   };
-  if(decodedBuf){ begin(decodedBuf); return; }
-  fetch(AUDIO_SRC).then(r=>r.arrayBuffer()).then(ab=>{
-    audioCtx.decodeAudioData(ab, begin, (e)=> showErr(e || 'decodeAudioData failed'));
-  }).catch(showErr);
+  if(decodedBuf){ begin(decodedBuf); return; }        // cached (same track) → replay without re-decoding
+  const decode = ab => audioCtx.decodeAudioData(ab, begin, (e)=> showErr(e || 'decodeAudioData failed'));
+  // a user-uploaded file overrides the baked track; otherwise fetch the default from disk
+  if(userFile) userFile.arrayBuffer().then(decode).catch(showErr);
+  else          fetch(AUDIO_SRC).then(r=>r.arrayBuffer()).then(decode).catch(showErr);
 }
 
 function stopAudioSource(){ if(srcNode){ try{ srcNode.onended=null; srcNode.stop(); }catch(e){} srcNode=null; } }
@@ -700,6 +705,15 @@ function wireUI(){
   $('rbold').addEventListener('input',   e=>{ AUDIO_BOLD=+e.target.value; $('rboldval').textContent=AUDIO_BOLD.toFixed(2); });
   $('rflur').addEventListener('input',   e=>{ FLURRY_SIZE=+e.target.value; $('rflurval').textContent=FLURRY_SIZE; });
   $('playaudio').addEventListener('click', ()=> playAudioReveal());
+  // load a user track (basic — V1.1 will add per-track auto-normalization). Selection just
+  // stores the file; the Play click is the gesture that creates/resumes the AudioContext.
+  $('loadtrack').addEventListener('click', ()=> $('audiofile').click());
+  $('audiofile').addEventListener('change', e=>{
+    const f = e.target.files && e.target.files[0]; if(!f) return;
+    userFile = f; decodedBuf = null;              // new source → force a re-decode on next Play
+    stopAudio(); running = false;
+    $('trackname').textContent = f.name;
+  });
   updateRevealUI();
 }
 
