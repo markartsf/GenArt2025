@@ -42,16 +42,19 @@ unless you gate it in Netlify.
 - **Curate:** Reseed (`seed×7+1`), ‹ › step, Random, hero count/type. **Save PNG** freezes a frame.
 - **Load track…** — play against any local audio file instead of the baked `winterland.mp3`
   (basic; per-track auto-normalization comes in V1.1).
-- **▶ Play with audio** — audio-driven reveal. **Reveal ▶ (manual)** — silent fixed-clock preview.
+- **▶ Play with audio** — audio-driven reveal; the same button becomes **■ Stop** while playing.
+  **Reveal ▶ (manual)** — silent fixed-clock preview.
 - Sliders: **rate** (strokes/s @ full energy), **audio → boldness**, **transient flurry** (strokes/hit).
 - **Stage controls** (top-right) / keys: **P** presentation mode (hide UI), **F** fullscreen,
-  **R** record a `.webm` video of the playthrough (canvas + the track's audio; keep the tab
-  visible while recording).
+  **R** record a video of the playthrough (canvas + the track's audio; keep the tab visible while
+  recording). The canvas already fits your display — you don't need to change your screen resolution.
 
 ## Notes / known limits
 
-- Video capture uses `MediaRecorder` (webm, vp9/opus preferred). Best in Chrome; some Safari
-  builds lack support and the Record button reports that gracefully.
+- Video capture uses `MediaRecorder`, preferring **MP4 (H.264/AAC)** so it plays natively on
+  macOS; falls back to `.webm` only if the browser can't mux mp4. Recorded full-frame at ~1080p
+  height matching the display aspect (no letterbox). Best in Chrome; some Safari builds lack
+  MediaRecorder and the Record button reports that gracefully.
 - The reveal loop uses `requestAnimationFrame`, so it pauses if the tab is backgrounded —
   keep it visible while playing or recording.
 - Canvas is sized once at setup and never resized at runtime (a p5.brush framebuffer

@@ -152,11 +152,15 @@ Pick by a quick spike; written finding only, not committed as a feature.
 
 - **Self-contained:** p5 (2.3.0) + p5.brush (2.1.9-beta) vendored to `v1/lib/`; no CDN
   at runtime, no build step. `winterland.mp3` local.
-- **Presentation mode (P)** hides the panel, canvas fills the viewport (DISPLAY scale
-  only — backing store never resized). **Fullscreen (F)**. Both local + hosted.
-- **Video capture (R):** `MediaRecorder` records a playthrough as `.webm` — canvas
-  `captureStream(30)` muxed with the track's audio (analyser → `MediaStreamDestination`);
-  auto-downloads at track end. Chrome-best; graceful message where unsupported.
+- **Canvas fits the display:** sized to the screen at load (`sizeFrameToDisplay`, reload
+  to re-fit — runtime resize forbidden); `SCALE` keeps marks proportional so density holds.
+  Presentation mode (P) hides the panel + fills; Fullscreen (F). Both local + hosted.
+- **Play ▶ doubles as ■ Stop** while a track plays (also stops on track end / Reseed).
+- **Video capture (R):** `MediaRecorder` records a playthrough — prefers **MP4 (H.264/AAC)**
+  so it plays natively on macOS, falls back to webm only if the browser can't mux mp4; file
+  named by real container. Offscreen record canvas matches the display aspect at ~1080p
+  height (full-frame, no letterbox), muxed with the track's audio; auto-downloads at track
+  end. Chrome-best; graceful message where unsupported.
 - **Netlify:** repo-root `netlify.toml` publishes `project-brushstroke/v1` (static, no
   build); deploy via drag-drop / CLI / git-connect — see `v1/README.md`. HTTPS satisfies
   the Web-Audio-needs-HTTP constraint. Mark runs the actual deploy (needs his account).

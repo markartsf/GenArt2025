@@ -663,11 +663,12 @@ function playAudioReveal(onStarted){
     srcNode = audioCtx.createBufferSource();
     srcNode.buffer = buf;
     srcNode.connect(analyser);
-    srcNode.onended = ()=>{ if(recording) stopRecording(); running=false; audioDriven=false; audioReady=false; noLoop(); updateRevealUI(); };
+    srcNode.onended = ()=>{ if(recording) stopRecording(); running=false; audioDriven=false; audioReady=false; noLoop(); updateRevealUI(); updatePlayUI(); };
     audioReady = true; audioDriven = true; revealEnergy = 0;   // start silent ⇒ sparse open
     resetOnset();                                              // fresh onset baseline for this play
     startReveal();
     srcNode.start();
+    updatePlayUI();                                            // button now reads ■ Stop
     if(typeof onStarted === 'function') onStarted();
   };
   if(decodedBuf){ begin(decodedBuf); return; }        // cached (same track) → replay without re-decoding
@@ -678,7 +679,14 @@ function playAudioReveal(onStarted){
 }
 
 function stopAudioSource(){ if(srcNode){ try{ srcNode.onended=null; srcNode.stop(); }catch(e){} srcNode=null; } }
-function stopAudio(){ stopAudioSource(); audioDriven=false; audioReady=false; }
+function stopAudio(){ stopAudioSource(); audioDriven=false; audioReady=false; updatePlayUI(); }
+
+// ▶ Play with audio doubles as ■ Stop while a track is playing.
+function togglePlay(){
+  if(audioReady && audioDriven){ if(recording) stopRecording(); stopAudio(); running=false; noLoop(); }
+  else { playAudioReveal(); }
+}
+function updatePlayUI(){ const b=document.getElementById('playaudio'); if(b) b.textContent = (audioReady && audioDriven) ? '■ Stop' : '▶ Play with audio'; }
 
 // ---- PRESENTATION / FULLSCREEN ------------------------------------------------------
 // Present mode hides the panel and lets the canvas fill the viewport via CSS only — the
@@ -696,34 +704,47 @@ function toggleFullscreen(){
 // ---- VIDEO CAPTURE (MediaRecorder — canvas video + the track's audio) ----------------
 let mediaRec=null, recChunks=[], recording=false;
 function supportsRecording(){ const c=document.querySelector('canvas'); return !!(window.MediaRecorder && c && c.captureStream); }
+// Prefer MP4 (H.264/AAC) so the file plays natively on macOS/QuickTime; fall back to webm only
+// if the browser's MediaRecorder can't mux mp4 (older Chrome). Recent Chrome + Safari do mp4.
 function recMime(){
-  const cands=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  const cands=[
+    'video/mp4;codecs=avc1.640029,mp4a.40.2',   // H.264 High + AAC-LC — Mac-native
+    'video/mp4;codecs=avc1,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
   for(const m of cands){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }
   return '';
 }
 // Record a full playthrough: starts the track + reveal, and records canvas+audio in lockstep;
 // auto-stops and downloads when the track ends (or on a second click / Stop).
 function recordAndPlay(){
-  if(recording){ stopRecording(); stopAudio(); running=false; noLoop(); return; }
+  if(recording){ stopRecording(); stopAudio(); running=false; noLoop(); updatePlayUI(); return; }
   if(!supportsRecording()){ showErr('Video recording is not supported in this browser (try Chrome).'); return; }
   playAudioReveal(startRecording);            // record starts exactly when the reveal begins
 }
-// Record to a fixed 1920×1080 (HD) offscreen canvas regardless of the display's size/aspect:
-// each drawn frame the live canvas is letterboxed into recCanvas (pushRecFrame, called from
-// draw()), so the output is always exactly 1080p. captureStream(0) = frames only on requestFrame.
+// Record to an offscreen canvas that matches the DISPLAY's aspect at ~1080p height (full-frame,
+// no letterbox bars — the video looks like what's on screen), independent of the display's pixel
+// resolution. Frame-accurate via captureStream(0)+requestFrame from draw().
 let recCanvas=null, recCtx=null, recStream=null, recVideoTrack=null;
+function ensureRecCanvas(){
+  const aspect = FRAME_W / FRAME_H;
+  let h = 1080, w = Math.round(h * aspect);
+  const MAXW = 2560; if(w > MAXW){ w = MAXW; h = Math.round(w / aspect); }
+  if(!recCanvas){ recCanvas = document.createElement('canvas'); recCtx = recCanvas.getContext('2d'); }
+  recCanvas.width = w; recCanvas.height = h;                  // same aspect as the live canvas
+}
 function pushRecFrame(){
   if(!recCtx) return;
   const src = document.querySelector('canvas');
-  const s = Math.min(1920/src.width, 1080/src.height);       // fit, preserve aspect
-  const dw=src.width*s, dh=src.height*s, dx=(1920-dw)/2, dy=(1080-dh)/2;
-  recCtx.fillStyle = GROUND; recCtx.fillRect(0,0,1920,1080);  // ground-coloured letterbox bars
-  recCtx.drawImage(src, dx,dy,dw,dh);                         // preserveDrawingBuffer lets us read the WEBGL canvas
+  recCtx.drawImage(src, 0, 0, recCanvas.width, recCanvas.height);  // same aspect → fills, no bars/distortion
   if(recVideoTrack && recVideoTrack.requestFrame) recVideoTrack.requestFrame();
 }
 function startRecording(){
   try{
-    if(!recCanvas){ recCanvas=document.createElement('canvas'); recCanvas.width=1920; recCanvas.height=1080; recCtx=recCanvas.getContext('2d'); }
+    ensureRecCanvas();
     recStream = recCanvas.captureStream(0);
     recVideoTrack = recStream.getVideoTracks()[0];
     const tracks = [recVideoTrack, ...(mediaDest ? mediaDest.stream.getAudioTracks() : [])];
@@ -745,10 +766,12 @@ function stopRecording(){
 }
 function saveRecording(){
   if(!recChunks.length) return;
-  const blob = new Blob(recChunks, { type: recChunks[0].type || 'video/webm' });
+  const type = (mediaRec && mediaRec.mimeType) || recChunks[0].type || 'video/webm';
+  const ext = type.indexOf('mp4') !== -1 ? 'mp4' : 'webm';   // name the file to match the real container
+  const blob = new Blob(recChunks, { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url;
-  a.download = 'brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0]+'.webm';
+  a.download = 'brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0]+'.'+ext;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 8000);
 }
@@ -832,7 +855,7 @@ function wireUI(){
   $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE; });
   $('rbold').addEventListener('input',   e=>{ AUDIO_BOLD=+e.target.value; $('rboldval').textContent=AUDIO_BOLD.toFixed(2); });
   $('rflur').addEventListener('input',   e=>{ FLURRY_SIZE=+e.target.value; $('rflurval').textContent=FLURRY_SIZE; });
-  $('playaudio').addEventListener('click', ()=> playAudioReveal());
+  $('playaudio').addEventListener('click', ()=> togglePlay());
   // load a user track (basic — V1.1 will add per-track auto-normalization). Selection just
   // stores the file; the Play click is the gesture that creates/resumes the AudioContext.
   $('loadtrack').addEventListener('click', ()=> $('audiofile').click());
