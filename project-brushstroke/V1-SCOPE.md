@@ -81,6 +81,13 @@ deliberate V1.x mood variant only — not the V1.0 default, and unverified for p
   gesture, before any `await`**; then `file.arrayBuffer()` → `decodeAudioData()` →
   `AudioBufferSourceNode`, with an `AnalyserNode` for the FFT. Gesture-gate playback
   (a click to start). Don't restate the rule in code comments — point to PATTERNS.
+  - **SAFARI GOTCHA (confirmed 2026-07-02, `7b8803f`):** two things silenced *speaker*
+    output while the FFT + recording tap still got signal (context "running", capture works,
+    speakers dead). (1) Autoplay: a running context can keep audible output muted until a
+    gesture actually plays a sound — kick it with a 1-sample silent buffer to `destination` in
+    the click. (2) A `MediaStreamAudioDestinationNode` connected alongside `destination`
+    **mutes the speakers on Safari** — connect the recording tap ONLY while recording,
+    disconnect on stop; plain playback stays a clean speaker-only graph.
 - **Responsiveness beyond density** (2026-07-02, Mark's direction — audio should read
   as reactive, not just "fills faster/slower"). All append-only / dry-media safe;
   audio mode becomes emergent (not seed-reproducible), manual/static stay seed-only:

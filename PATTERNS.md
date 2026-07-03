@@ -28,6 +28,13 @@ These have bitten me more than once. Treat as rules, not suggestions.
   ```js
   audioCtx.decodeAudioData(arrayBuffer, (buffer) => { /* success */ }, (err) => { /* fail */ });
   ```
+- **No *speaker* audio though the FFT/recording work? (Safari)** Two causes, both seen in Project Brushstroke (`7b8803f`). The tell: context is `running`, the analyser reads energy, a MediaRecorder capture has the sound — but the speakers are silent.
+  1. **Autoplay output stays muted** even on a "running" context until a gesture actually *plays* a sound. Kick it in the click: play a 1-sample silent buffer to `destination`.
+     ```js
+     const b = ctx.createBuffer(1, 1, ctx.sampleRate); const s = ctx.createBufferSource();
+     s.buffer = b; s.connect(ctx.destination); s.start(0);
+     ```
+  2. **A `MediaStreamAudioDestinationNode` connected alongside `ctx.destination` silences the speakers on Safari.** If you tap audio for recording/WebRTC, connect that tap **only while capturing** and `disconnect()` it after — keep normal playback a clean speaker-only graph.
 
 ### File serving
 
