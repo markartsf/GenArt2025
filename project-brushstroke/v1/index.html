@@ -624,12 +624,25 @@ function ensureAudioGraph(){
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 1024;                 // 512 bins
     analyser.smoothingTimeConstant = 0.8;
-    analyser.connect(audioCtx.destination);
-    mediaDest = audioCtx.createMediaStreamDestination();   // audio tap so video capture gets the track's sound
-    analyser.connect(mediaDest);
+    analyser.connect(audioCtx.destination);   // → speakers (the recording tap is added lazily, only while recording)
     freqData = new Uint8Array(analyser.frequencyBinCount);
   }
   audioCtx.resume();                          // Safari can start suspended even from a gesture
+  // Safari/autoplay: a context can be "running" (so the FFT + recording tap get signal) yet keep
+  // AUDIBLE output suppressed until a gesture actually plays something. Kick it with a silent tick.
+  try {
+    const b = audioCtx.createBuffer(1, 1, audioCtx.sampleRate || 44100);
+    const s = audioCtx.createBufferSource(); s.buffer = b; s.connect(audioCtx.destination); s.start(0);
+  } catch(e){}
+}
+// The video-capture tap. Kept OFF the graph during normal playback — on Safari a connected
+// MediaStreamDestination alongside the speaker output can silence the speakers. Connected only
+// while recording, disconnected on stop, so plain Play ▶ is a clean speaker-only graph.
+function ensureMediaDest(){
+  if(!audioCtx || !analyser) return;
+  if(!mediaDest) mediaDest = audioCtx.createMediaStreamDestination();
+  try { analyser.disconnect(mediaDest); } catch(e){}   // avoid a double connection
+  analyser.connect(mediaDest);
 }
 
 // Low/low-mid FFT band energy (0..1) → overall loudness. Assumes freqData is already filled
@@ -761,6 +774,7 @@ function pushRecFrame(){
 }
 function startRecording(){
   try{
+    ensureMediaDest();                         // connect the audio capture tap now (only while recording)
     ensureRecCanvas();
     recStream = recCanvas.captureStream(0);
     recVideoTrack = recStream.getVideoTracks()[0];
@@ -779,6 +793,7 @@ function startRecording(){
 }
 function stopRecording(){
   if(mediaRec && mediaRec.state !== 'inactive'){ try{ mediaRec.stop(); }catch(e){} }
+  try { if(mediaDest && analyser) analyser.disconnect(mediaDest); } catch(e){}   // restore clean speaker-only graph
   recording = false; document.body.classList.remove('recording'); updateRecUI();
 }
 function saveRecording(){
