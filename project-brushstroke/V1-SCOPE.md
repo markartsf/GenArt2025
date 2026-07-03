@@ -162,7 +162,7 @@ Pick by a quick spike; written finding only, not committed as a feature.
   height (full-frame, no letterbox), muxed with the track's audio; auto-downloads at track
   end. Chrome-best; graceful message where unsupported.
 - **Netlify:** repo-root `netlify.toml` publishes `project-brushstroke/v1` (static, no
-  build); deploy via drag-drop / CLI / git-connect — see `v1/README.md`. HTTPS satisfies
+  build); deploy via drag-drop / CLI / git-connect — see `v1/v1.0-README.md`. HTTPS satisfies
   the Web-Audio-needs-HTTP constraint. Mark runs the actual deploy (needs his account).
 - **Deferred to V1.1:** per-track audio auto-normalization (so any uploaded track "just
   works" without hand-tuning the rate/boldness/flurry sliders).
