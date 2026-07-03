@@ -120,6 +120,15 @@ host, not here. V1.0 trades authored control for speed and emergence.
 - One seed drives the whole piece; expose seed + reseed (the `seed×7+1` convention)
   and a save-seed affordance.
 - `pixelDensity(2)` and canvas size are set **once at setup**.
+- **Reveal order = ENTRANCE order** (DECIDED 2026-07-02, Mark + planning agent; built
+  `<pending>`). Marks reveal in generation-index order — **no authored/directed sequence**
+  (ground→midground→hero region-by-region rejected: reads as "slideshow assembling," cuts
+  against emergence). Regulars are shuffled → incidental interleave of regions/types.
+  Heroes are *placed* first (additive-hero property) but **interleaved into the reveal**
+  (`revealOrder()` inserts each hero at a deterministic 35–80% point) so the focal mark
+  emerges amid the fog, not announced first during the quiet opening. Marks seed by a
+  stable `id` (placement index), never by reveal position → look is fixed whenever a mark
+  enters, and the static frame is unaffected by the interleave.
 
 ## 6. Hard constraints (from PATTERNS / SPEC — do not rediscover)
 

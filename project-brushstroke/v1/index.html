@@ -427,7 +427,8 @@ function buildPlan(){
   // PER-MARK placement stream (seeded by mark index) → a mark's candidate positions don't depend
   // on how many rejections earlier marks had, so adding a hero can't cascade-reshuffle the rest.
   reg.forEach((m, i) => tryAdd(mulberry32(((seed*2246822519) ^ ((i+1)*2654435761)) >>> 0), m, 0.30, sig));
-  return out;
+  out.forEach((m, i) => { m.id = i; });   // STABLE identity (= placement order) — seeds a mark by this,
+  return out;                              // so its look is fixed no matter WHEN it reveals (see revealOrder)
 }
 
 // HERO marks: HERO_COUNT bold charcoal anchors, RELIABLY LARGE (well above any regular mark's
@@ -494,22 +495,38 @@ let strokes    = [];          // flat, ORDERED stamp records: plan order, statio
 let markField  = [];          // per-mark resolved Bend-Field name (set before a mark's strokes)
 let curFieldMark = -1;        // which mark's field is currently active in drawStrokes()
 
+// ENTRANCE ORDER (V1-SCOPE §5): marks reveal in generation order — no authored/directed
+// sequence. Heroes are PLACED first (for the additive-hero property) but INTERLEAVED into the
+// reveal so the focal mark emerges amid the fog rather than being drawn first — each hero lands
+// at a deterministic 35–80% point among the regulars. Regular order (their shuffled placement
+// order) is untouched, so hero count stays additive. Seeding is by m.id, not reveal position,
+// so a mark looks identical whenever it enters (and the static frame is unaffected).
+function revealOrder(){
+  const order = plan.filter(m => !m.hero);                      // regulars, in placement order
+  plan.filter(m => m.hero).forEach((h, j) => {
+    const f = mulberry32(((seed*2654435761) ^ ((j+1)*40503)) >>> 0)();
+    const pos = Math.round((0.35 + 0.45*f) * order.length);
+    order.splice(Math.max(0, Math.min(order.length, pos)), 0, h);
+  });
+  return order;
+}
+
 function compileStrokes(){
   strokes = []; markField = [];
-  for(let i=0;i<plan.length;i++){
-    const m = plan[i];
-    randomSeed(seed + i*9973); noiseSeed(seed + i*9973);        // MARK seed → spine/station geometry
+  for(const m of revealOrder()){
+    const id = m.id;                                            // STABLE identity → seed by this, not reveal position
+    randomSeed(seed + id*9973); noiseSeed(seed + id*9973);      // MARK seed → spine/station geometry
     applyMark(m);                                               // sets P.* + resolves the mark's field
-    markField[i] = P.field;
+    markField[id] = P.field;
     const stations = stationsFor(m);
     const brushConfig = BRUSH_REGISTRY[m.brush] || BRUSH_REGISTRY['default'];
     const finalWeight = P.weight * brushConfig.baseWeight;
-    const colorOffset = i*3;
+    const colorOffset = id*3;
     for(let k=0;k<stations.length;k++){
-      const sk = (seed + i*9973 + (k+1)*7919) >>> 0;            // per-STROKE seed (stored → reused at stamp)
+      const sk = (seed + id*9973 + (k+1)*7919) >>> 0;          // per-STROKE seed (stored → reused at stamp)
       randomSeed(sk); noiseSeed(sk);
       const rec = computeTooth(stations, k, colorOffset, finalWeight, m.brush);
-      if(rec){ rec.mi = i; rec.seedK = sk; strokes.push(rec); }
+      if(rec){ rec.mi = id; rec.seedK = sk; strokes.push(rec); }
     }
   }
 }
