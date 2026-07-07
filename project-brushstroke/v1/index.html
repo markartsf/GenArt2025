@@ -94,7 +94,7 @@
 <body>
 <div id="stage-controls">
   <span id="rec-dot" title="recording"></span>
-  <button id="btnRecord" title="Record a video of the piece playing (R)">● Record</button>
+  <button id="btnRecord" title="Record a video of the piece playing (R). Live capture — keep this window visible for the whole take (hiding the tab freezes the video).">● Record</button>
   <button id="btnPresent" title="Presentation mode — hide UI (P)">⛶ Present</button>
   <button id="btnFull" title="Fullscreen (F)">⤢ Fullscreen</button>
 </div>
@@ -113,9 +113,20 @@
       <button id="rand">Random</button>
       <button id="save">Save PNG</button>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);margin:2px 0 2px;">
+      <input type="checkbox" id="debuglabels"> debug: dot each mark's generator
+    </label>
+    <div id="debuglegend" style="font-size:9.5px;color:var(--muted);margin:0 0 6px;line-height:1.5;"></div>
+    <div style="font-size:9px;color:var(--muted);margin:0 0 6px;line-height:1.6;">
+      <span style="color:#000">● ribbon</span> &nbsp;
+      <span style="color:#ff00ff">● burst</span> &nbsp;
+      <span style="color:#00aaff">● bloom</span> &nbsp;
+      <span style="color:#ff8800">● fan</span> &nbsp;
+      <span style="color:#00cc44">● tuft</span>
+    </div>
     <div class="herobox">
       <label>hero × <span class="val" id="hcval">1</span><input id="hcount" type="range" min="0" max="3" step="1" value="1"></label>
-      <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="either">either</option></select></label>
+      <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="bloom">bloom</option><option value="fan">fan</option><option value="tuft">tuft</option><option value="either">either (any)</option></select></label>
     </div>
     <div class="herobox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
@@ -123,8 +134,8 @@
       <div id="trackname" style="font-size:10px;color:var(--muted);margin:5px 0 7px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">winterland.mp3 (default)</div>
       <button class="primary" id="playaudio" style="width:100%;">▶ Play with audio</button>
       <button id="reveal" style="width:100%;margin-top:6px;">Reveal ▶ (manual)</button>
-      <label>rate <span class="val" id="rrateval">16</span> strokes/s @ full energy
-        <input id="rrate" type="range" min="4" max="120" step="1" value="16"></label>
+      <label>rate <span class="val" id="rrateval">8</span> strokes/s @ full energy
+        <input id="rrate" type="range" min="2" max="120" step="1" value="8"></label>
       <label>audio → boldness <span class="val" id="rboldval">0.80</span>
         <input id="rbold" type="range" min="0" max="1.5" step="0.05" value="0.8"></label>
       <label>transient flurry <span class="val" id="rflurval">8</span> strokes/hit
@@ -303,22 +314,81 @@ function makeBurstStations(cx, cy){
   }
   return out;
 }
+// BLOOM — angular rosette like Burst, but radius + tooth-normal swirl modulated by 2D noise
+// so petals form (brush-lab verbatim math). Noise offset randomized per mark (under the mark
+// seed) so every bloom gets a distinct petal shape.
+function makeBloomStations(cx, cy, swirlDeg){
+  const R0=P.width*0.55;
+  const count=max(3, round(TWO_PI*R0/P.spacing));
+  const out=[];
+  const nOffX=random(1000), nOffY=random(1000);
+  const noiseScale=1.5;
+  const swirlAngle=radians(swirlDeg||0);
+  for(let i=0;i<count;i++){
+    const a=(i/count)*TWO_PI; const dx=cos(a), dy=sin(a);
+    const n=noise(nOffX+cos(a)*noiseScale, nOffY+sin(a)*noiseScale);
+    const r=R0*map(n,0.25,0.75,0.2,2.5);
+    const toothNx=cos(a+swirlAngle), toothNy=sin(a+swirlAngle);
+    const uVal=map(n,0.25,0.75,0,0.5);
+    out.push({ x:cx+dx*r, y:cy+dy*r, nx:toothNx, ny:toothNy, u:uVal });
+  }
+  return out;
+}
+// FAN — constrained cousin of Burst: teeth span a spreadDeg arc around a random base
+// orientation (per-mark, consumed under the mark seed) rather than the full circle.
+function makeFanStations(cx, cy, spreadDeg){
+  const R0=P.width*0.55;
+  const spreadRad=radians(spreadDeg);
+  const arc=spreadRad*R0;
+  const count=max(3, round(arc/P.spacing));
+  const out=[];
+  const baseRad=random(TWO_PI);
+  const a0=baseRad-spreadRad*0.5;
+  for(let i=0;i<count;i++){
+    const a=a0+spreadRad*(i/(count-1));
+    const dx=cos(a), dy=sin(a);
+    out.push({ x:cx+dx*R0, y:cy+dy*R0, nx:dx, ny:dy, u:0.5 });
+  }
+  return out;
+}
+// TUFT — a small radial cluster, same math as Burst/makeTuftStations but spreadFrac may be
+// <1 (an open arc rather than a closed ring), and it's placed as its own roster mark (V1
+// simplification of brush-lab's free-overlapping singleton scatter — see stationsFor note).
+function makeTuftStations(cx, cy, radius, spreadFrac){
+  const R0=radius;
+  const fullArc=TWO_PI*spreadFrac;
+  const count=max(3, round(fullArc*R0/P.spacing));
+  const out=[];
+  const a0=random(TWO_PI);
+  for(let i=0;i<count;i++){
+    const a=a0+(spreadFrac>=1 ? (i/count)*fullArc : (i/(count-1))*fullArc);
+    const dx=cos(a), dy=sin(a);
+    out.push({ x:cx+dx*R0, y:cy+dy*R0, nx:dx, ny:dy, u:0.5 });
+  }
+  return out;
+}
 // Stations (per-tooth anchors) for a mark. RIBBON: teeth along a CONTAINED spine (spine wander
-// uses random() → consumed under the MARK seed, as a mark-level property). BURST: angular
-// rosette. P.* must already be set by applyMark(m) before calling.
+// uses random() → consumed under the MARK seed, as a mark-level property). BURST/BLOOM/FAN/TUFT:
+// angular rosettes around the mark's placed centre. P.* must already be set by applyMark(m).
 function stationsFor(m){
   if(m.gen==='ribbon'){
     const cps=makeContainedControlPoints(m.cx, m.cy, m.extent, P.ctrl);
     const poly=samplePolyline(cps);
     return placeStations(poly, P.spacing);
   }
+  if(m.gen==='bloom') return makeBloomStations(m.cx, m.cy, m.swirl);
+  if(m.gen==='fan')   return makeFanStations(m.cx, m.cy, m.fanspread);
+  if(m.gen==='tuft')  return makeTuftStations(m.cx, m.cy, m.width*0.5, m.spreadFrac);
   return makeBurstStations(m.cx, m.cy);
 }
 
 // per-generator native defaults (from brush-lab GENERATORS table, V1 subset)
 const GENERATORS = {
   ribbon: { allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5 },
-  burst:  { allowedBrushes:null,             biasDefault:1.0, fieldDefault:'none', fieldAmountDefault:0.5 },
+  burst:  { allowedBrushes:null,             biasDefault:1.0, fieldDefault:'none',   fieldAmountDefault:0.5 },
+  bloom:  { allowedBrushes:null,             biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5 },
+  fan:    { allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5 },
+  tuft:   { allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5 },
 };
 
 // ============================================================================
@@ -339,7 +409,7 @@ const COVERAGE_CAP = 0.40;      // regular marks occupy ≤ this fraction of the
 
 // hero knob — a few bold charcoal anchors biased into the focal region (UI-toggled)
 let HERO_COUNT = 1;             // 0–3
-let HERO_TYPE  = 'burst';       // 'burst' (default, strongest anchor) | 'ribbon' | 'either'
+let HERO_TYPE  = 'burst';       // 'burst' (default, strongest anchor) | 'ribbon' | 'bloom' | 'fan' | 'tuft' | 'either' (any, random)
 
 // burst tooth weight SCALES WITH SIZE: small bursts get thinner strokes, large/hero bursts
 // keep the chunky weight (Mark). charcoal reads heavier than marker at the same value.
@@ -355,7 +425,12 @@ function ribbonSpec(rng){
   if (r < 0.60)      { brush = pick(rng, ['2B','HB','cpencil']); weight = 1.05; }  // THINNER teeth (was 1.8) → more gap
   else if (r < 0.80) { brush = 'pastel';                         weight = 0.9;  }  // was 1.35
   else               { brush = 'charcoal';                       weight = 0.7;  }  // was 1.0
-  const w = 42 + rng()*34;
+  // LARGE tier (~1 in 4): ribbons at burst-like presence in the composition, not only as heroes
+  // (Mark 2026-07-05 — regular ribbons read too small next to the bursts). rng() called
+  // unconditionally to keep the regRng stream deterministic.
+  const large = rng() < 0.25;
+  if(large) weight *= 1.35;                                         // thicker teeth so the big comb reads bold, not wispy
+  const w = large ? (68 + rng()*40) : (42 + rng()*34);              // large: 68–108 ; regular: 42–76
   // ~30% of ribbons wander LONGER + windier (bigger extent, more control points); the rest stay
   // the contained comb. Placement's radiusFor accounts for the reach, so long ones claim more room.
   const long = rng() < 0.30;
@@ -369,6 +444,24 @@ function burstSpec(rng){
   const w = 26 + rng()*30;                                          // reference units for burstWeight
   return { gen:'burst', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, radialoffset: rng()*0.3 };
 }
+function bloomSpec(rng){
+  const brush = pick(rng, ['marker','charcoal']);                   // same weight curve as burst (below)
+  const w = 30 + rng()*36;
+  const swirl = (rng()*2-1)*35;                                     // -35..35° petal twist
+  return { gen:'bloom', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, swirl };
+}
+function fanSpec(rng){
+  const brush = pick(rng, ['marker','charcoal']);                   // GENERATORS.fan allowedBrushes
+  const w = 40 + rng()*36;
+  const fanspread = 70 + rng()*50;                                  // 70–120°
+  return { gen:'fan', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, fanspread };
+}
+function tuftSpec(rng){
+  const brush = pick(rng, ['marker','charcoal','pen']);
+  const w = 20 + rng()*18;                                          // smaller than a regular burst
+  const spreadFrac = rng()<0.5 ? 1.0 : (0.45 + rng()*0.45);         // half: closed ring, half: open arc
+  return { gen:'tuft', brush, weight: burstWeight(brush==='pen'?'marker':brush, w), width:w*SCALE, spacing:9*SCALE, spreadFrac };
+}
 
 function buildPlan(){
   // TWO INDEPENDENT STREAMS so the hero count is ADDITIVE: changing HERO_COUNT consumes
@@ -380,13 +473,26 @@ function buildPlan(){
   const edge = EDGE*SCALE;                 // keep the edge margin proportional to the frame
   const out=[], placed=[]; let usedArea=0;
 
+  // PER-SEED DENSITY VARIANT (Mark 2026-07-05): ~35% of seeds render ~15% MORE small marks for a
+  // denser composition, the rest stay open. Decided on an INDEPENDENT stream so the choice doesn't
+  // shift the focal armature or hero placement — only the small-generator counts + coverage budget.
+  const densRng = mulberry32(((seed*0x27d4eb2f) ^ 0xC2B2AE35) >>> 0);
+  const densMul = densRng() < 0.35 ? 1.15 : 1.0;
+  const coverageCap = COVERAGE_CAP * densMul;   // denser seeds get a bigger fill budget so the extra marks fit
+
   // LOOSE FOCAL ARMATURE: off-centre rule-of-thirds focal region (from regRng → stable vs hero count).
   const fx = (regRng()<0.5 ? 1/3 : 2/3), fy = (regRng()<0.5 ? 1/3 : 2/3);
   const focal = { x: fx*W, y: fy*H };
 
   // effective radius (reach) — for spacing/coverage/margin. A ribbon is a linear comb, not a
   // solid disc, so it packs a bit tighter than its full extent.
-  function radiusFor(m){ return m.gen==='burst' ? m.width*1.0 : (m.extent*0.55 + m.width*0.35); }   // ribbons are sparse linear combs → pack tighter so more of them fit
+  function radiusFor(m){                                            // packing-radius estimate per generator shape
+    if(m.gen==='burst') return m.width*1.0;
+    if(m.gen==='bloom') return m.width*1.3;                         // petals can reach up to 2.5× R0
+    if(m.gen==='fan')   return m.width*0.75;                        // arc, not a full disc — packs tighter
+    if(m.gen==='tuft')  return m.width*0.5;                         // small cluster, radius IS the tooth radius
+    return (m.extent*0.55 + m.width*0.35);                          // ribbon: sparse linear comb → pack tighter
+  }
 
   // ANTI-CLUMP: rejection-sample a centre ≥ (r_i+r_j)·sepFactor from every placed mark, inside
   // the edge margin, biased toward focal by (pFocal, sigma). sepFactor tunes how far apart marks
@@ -406,7 +512,7 @@ function buildPlan(){
   }
   function tryAdd(rng, m, pFocal, sigma, sepFactor=0.92){
     const r = radiusFor(m), area = Math.PI*r*r;
-    if(!m.hero && usedArea + area > COVERAGE_CAP*frameArea) return false;
+    if(!m.hero && usedArea + area > coverageCap*frameArea) return false;
     const c = placeCentre(rng, r, pFocal, sigma, sepFactor);
     if(!c) return false;
     m.cx=c.x; m.cy=c.y; m.r=r;
@@ -419,9 +525,16 @@ function buildPlan(){
   placeHeroes(heroRng, tryAdd);          // big focal anchors first, from the independent hero stream
 
   // regular marks (regRng): build roster, shuffle for layered depth, place with breathing room
-  const reg=[]; const N_RIBBON=12, N_BURST=9;   // ribbon-leaning roster (Mark: want more ribbons, fewer all-burst seeds)
+  // ribbon-leaning roster (Mark: want more ribbons, fewer all-burst seeds). The SMALL generators
+  // scale by densMul on dense seeds (more little objects); ribbons stay fixed. coverageCap still
+  // throttles what actually lands, so the extra roster just fills a denser seed further.
+  const reg=[]; const N_RIBBON=12;
+  const N_BURST=Math.round(9*densMul), N_BLOOM=Math.round(4*densMul), N_FAN=Math.round(4*densMul), N_TUFT=Math.round(5*densMul);
   for(let i=0;i<N_RIBBON;i++) reg.push(ribbonSpec(regRng));
   for(let i=0;i<N_BURST;i++)  reg.push(burstSpec(regRng));
+  for(let i=0;i<N_BLOOM;i++)  reg.push(bloomSpec(regRng));
+  for(let i=0;i<N_FAN;i++)    reg.push(fanSpec(regRng));
+  for(let i=0;i<N_TUFT;i++)   reg.push(tuftSpec(regRng));
   for(let i=reg.length-1;i>0;i--){ const k=Math.floor(regRng()*(i+1)); [reg[i],reg[k]]=[reg[k],reg[i]]; }
   const sig = Math.min(W,H)*0.30;
   // PER-MARK placement stream (seeded by mark index) → a mark's candidate positions don't depend
@@ -434,23 +547,37 @@ function buildPlan(){
 // HERO marks: HERO_COUNT bold charcoal anchors, RELIABLY LARGE (well above any regular mark's
 // size) so the eye finds a clear object to focus on, placed FIRST with a strong focal pull.
 // Exempt from the coverage budget; still anti-clump spaced. Burst (cog-rosette) is the default.
+const HERO_TYPES = ['burst','ribbon','bloom','fan','tuft'];
+const HERO_SCALE = 1.2;          // heroes 20% larger across every generator (Mark 2026-07-05)
 function placeHeroes(heroRng, tryAdd){
   const minDim = Math.min(FRAME_W, FRAME_H);
   for(let i=0;i<HERO_COUNT;i++){
-    const type = HERO_TYPE==='either' ? (heroRng()<0.5 ? 'burst' : 'ribbon') : HERO_TYPE;
+    const type = HERO_TYPE==='either' ? pick(heroRng, HERO_TYPES) : HERO_TYPE;
     let m, sigma, sep;
     if(type==='burst'){
-      const w = 100 + heroRng()*55;   // 100–155 reference units vs regular 26–56 → unmistakably the largest
+      const w = (100 + heroRng()*55) * HERO_SCALE;   // 120–186 reference units vs regular 26–56 → unmistakably the largest
       m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, radialoffset:heroRng()*0.20, hero:true };
       sigma = minDim*0.10; sep = 0.92;              // compact cogs cluster tight at focal (unchanged)
-    } else {
-      const w = 84 + heroRng()*42;    // big charcoal ribbon (the spike's bold contained stroke)
-      m = { gen:'ribbon', brush:'charcoal', weight:1.2, width:w*SCALE, extent:w*3.1*SCALE,
+    } else if(type==='ribbon'){
+      const w = (110 + heroRng()*55) * HERO_SCALE;   // 132–198 — burst-hero band, +20% (Mark 2026-07-05)
+      m = { gen:'ribbon', brush:'charcoal', weight:1.55, width:w*SCALE, extent:w*3.1*SCALE,
             ctrl:5+Math.floor(heroRng()*2), spacing:8*SCALE, field:heroRng()<0.5?'hand':'none', hero:true };
       // ribbon heroes reach ~250px — with the tight cluster + 0.92 sep, a second one could never
       // clear the first, so only ONE ever placed. Spread them wider and let the sparse linear combs
       // interleave so 2–3 large ribbons actually appear as HERO_COUNT rises.
       sigma = minDim*0.20; sep = 0.5;
+    } else if(type==='bloom'){
+      const w = (95 + heroRng()*50) * HERO_SCALE;    // well above regular bloom's 30–66 range
+      m = { gen:'bloom', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, swirl:(heroRng()*2-1)*35, hero:true };
+      sigma = minDim*0.10; sep = 0.92;              // compact rosette like burst
+    } else if(type==='fan'){
+      const w = (90 + heroRng()*50) * HERO_SCALE;    // well above regular fan's 40–76 range
+      m = { gen:'fan', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, fanspread:80+heroRng()*40, hero:true };
+      sigma = minDim*0.14; sep = 0.7;                // arc, not a full disc — packs a bit tighter than burst
+    } else {   // tuft
+      const w = (70 + heroRng()*40) * HERO_SCALE;    // well above regular tuft's 20–38 range
+      m = { gen:'tuft', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:9*SCALE, spreadFrac: heroRng()<0.5?1.0:(0.6+heroRng()*0.4), hero:true };
+      sigma = minDim*0.10; sep = 0.92;
     }
     tryAdd(mulberry32(((seed*374761393) ^ ((i+1)*0x9E3779B9)) >>> 0), m, 0.9, sigma, sep);   // per-hero placement stream
   }
@@ -474,11 +601,6 @@ function applyMark(m){
     else if (typeof brush.noField === 'function'){ brush.noField(); }
   } catch(e){ try{ brush.noField(); }catch(_){} }
 }
-
-// Paint the cream ground. Called ONCE at the start of a reveal (and on each static
-// re-render for curation) — never mid-reveal: background() clears settled marks and
-// races p5.brush's end-of-frame composite → flicker (accumulation-spike §8 verdict).
-function paintGround(){ background(GROUND); }
 
 // ---- COMPILE: plan → flat, ordered list of single-STROKE records --------------------
 // The reveal unit is ONE tooth/spoke, not a whole generator — so cog teeth and ribbon combs
@@ -531,10 +653,80 @@ function compileStrokes(){
   }
 }
 
-// Paint the cream ground. Called ONCE at the start of a reveal (and on each static re-render
-// for curation) — never mid-reveal: background() clears settled strokes and races p5.brush's
-// end-of-frame composite → flicker (accumulation-spike §8 verdict).
-function paintGround(){ background(GROUND); }
+// hex "#rrggbb" + alpha 0..1 → "rgba(r,g,b,a)" so brush.set can stroke faintly (brush-lab verbatim).
+function hexAlpha(hex, a){
+  const h = hex.replace('#','');
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+// Wandering-path control points (brush-lab verbatim) — for Linework's drawn contours.
+function makeWanderingPath(n, wander){
+  const pad=120*SCALE, pts=[];
+  let x=random(pad,FRAME_W-pad), y=random(pad,FRAME_H-pad);
+  let ang=random(TWO_PI);
+  for(let i=0;i<n;i++){
+    pts.push({x,y});
+    ang+=random(-wander, wander);
+    const step=random(80,200)*SCALE;
+    x=constrain(x+cos(ang)*step,pad,FRAME_W-pad);
+    y=constrain(y+sin(ang)*step,pad,FRAME_H-pad);
+  }
+  return pts;
+}
+function strokePath(poly){
+  brush.beginShape(0);
+  for(const p of poly) brush.vertex(p.x, p.y);
+  brush.endShape();
+}
+
+// GROUND TEXTURE — Field Marks (faint diagonal hatch) + Linework (slow wandering contours),
+// brush-lab's two whole-canvas SINGLETON generators (SPEC §3): unlike Ribbon/Burst/Bloom/Fan/
+// Tuft, they have no discrete centre to place/anti-clump, so per the ground-layer decision they
+// paint ONCE, under every roster mark, as part of paintGround() — never part of the reveal plan.
+// Ground marks are THICKER now (Mark 2026-07-05 — the old wispy thin lines read as stray hairs;
+// bumped weight + alpha so they land as deliberate texture, not accidental threads). Linework also
+// thinned in COUNT so the bolder contours don't web the frame.
+const GROUND_FIELD_COUNT = Math.round(170 * SCALE * SCALE), GROUND_FIELD_SCALE = 0.003 / SCALE;
+const GROUND_FIELD_WEIGHT = 2.4, GROUND_FIELD_ALPHA = 0.6;         // was 0.7 weight / 0.55 alpha
+const GROUND_LINE_COUNT = 9, GROUND_LINE_SEGMENTS = 7, GROUND_LINE_WANDER = 0.9;  // was 14 lines
+const GROUND_LINE_WIDTH = 2.8 * SCALE, GROUND_LINE_ALPHA = 0.5;    // was 1.2 width / 0.4 alpha
+
+function drawFieldMarksGround(){
+  const brushName='pen', brushConfig=BRUSH_REGISTRY[brushName];
+  P.width = 18*SCALE; P.bias = 0; P.radialoffset = 0;              // slightly longer hatch dash too
+  const finalWeight = GROUND_FIELD_WEIGHT * brushConfig.baseWeight;
+  setFieldFor('seabed');
+  for(let i=0;i<GROUND_FIELD_COUNT;i++){
+    const x = random(FRAME_W), y = random(FRAME_H);
+    const a = noise(x*GROUND_FIELD_SCALE, y*GROUND_FIELD_SCALE) * TWO_PI;
+    const rec = computeTooth([{ x, y, nx:cos(a), ny:sin(a), u:0.5 }], 0, i*3, finalWeight, brushName);
+    if(rec){ useBrush(rec.brush, hexAlpha(rec.color, GROUND_FIELD_ALPHA), rec.weight); stamp(rec.ax, rec.ay, rec.bx, rec.by); }
+  }
+  setFieldFor('none');
+}
+function drawLineworkGround(){
+  const brushName='pen', brushConfig=BRUSH_REGISTRY[brushName];
+  const w = GROUND_LINE_WIDTH * brushConfig.baseWeight;
+  setFieldFor('waves');
+  for(let k=0;k<GROUND_LINE_COUNT;k++){
+    const poly = samplePolyline(makeWanderingPath(GROUND_LINE_SEGMENTS, GROUND_LINE_WANDER));
+    useBrush(brushName, hexAlpha(pickColor(k, k*7), GROUND_LINE_ALPHA), w);
+    strokePath(poly);
+  }
+  setFieldFor('none');
+}
+
+// Paint the cream ground + static texture layer. Called ONCE at the start of a reveal (and on
+// each static re-render for curation) — never mid-reveal: background() clears settled strokes
+// and races p5.brush's end-of-frame composite → flicker (accumulation-spike §8 verdict).
+function paintGround(){
+  background(GROUND);
+  push();
+  translate(-width/2, -height/2);           // WEBGL origin → top-left screen coords (matches drawStrokes)
+  drawFieldMarksGround();
+  // drawLineworkGround();                   // Linework (thin wandering contours) REMOVED per Mark 2026-07-06 — re-enable to restore
+  pop();
+}
 
 // Activate the Bend Field a mark wants (the only sanctioned wiggle).
 function setFieldFor(name){
@@ -554,7 +746,7 @@ function setFieldFor(name){
 // stroke's birth (append-only — never re-touched after). Manual/static keep seed weights (mul=1).
 function boldMuls(){
   if(!audioDriven || AUDIO_BOLD<=0) return { w:1, l:1 };
-  const e = Math.min(1, revealEnergy / AUDIO_FULL);        // normalize: FULL band energy → 1
+  const e = revealEnergy;                                  // already 0..1 — normalized per-track by autoGain
   return { w: lerp(1 - AUDIO_BOLD*0.45, 1 + AUDIO_BOLD*0.80, e),
            l: lerp(1 - AUDIO_BOLD*0.22, 1 + AUDIO_BOLD*0.40, e) };
 }
@@ -579,7 +771,27 @@ function drawStrokes(from, to){
 }
 
 // Full static frame (curation): freeze a plan, compile, clear to ground, stamp every stroke.
-function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); }
+// DEBUG: mark each mark's centre with a generator-coloured dot (plain p5, not brush — doesn't
+// touch brush state, same technique as drawSpineLine) so generator diversity can be verified by
+// eye, not guessed at from a screenshot. WEBGL text() needs a loaded font, so the legend is HTML
+// (#debuglegend) rather than on-canvas labels. Toggle via the "debug labels" checkbox.
+let DEBUG_LABELS = false;
+const GEN_DOT = { ribbon:'#000000', burst:'#ff00ff', bloom:'#00aaff', fan:'#ff8800', tuft:'#00cc44' };
+function drawDebugLabels(){
+  const counts = {};
+  push();
+  translate(-width/2, -height/2);
+  noStroke();
+  for(const m of plan){
+    counts[m.gen] = (counts[m.gen]||0) + 1;
+    fill(GEN_DOT[m.gen] || '#999999');
+    circle(m.cx, m.cy, 10*SCALE);
+  }
+  pop();
+  const el = document.getElementById('debuglegend');
+  if(el) el.textContent = 'placed: ' + Object.entries(counts).map(([g,n])=>g+'='+n).join('  ') + '  (total ' + plan.length + ')';
+}
+function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); if(DEBUG_LABELS) drawDebugLabels(); }
 
 // ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
 // revealRate() = REVEAL_RATE (strokes/sec at full energy) × revealEnergy (0..1). In MANUAL
@@ -587,11 +799,14 @@ function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1
 // the smoothed FFT energy, so accretion tracks the track: quiet ⇒ sparse, loud ⇒ dense
 // (V1-SCOPE §4 — audio drives density/form). REVEAL_RATE at full energy is also calibrated so
 // the audio fill spans the build into the plateau (measured avg active energy ≈ 0.24).
-let REVEAL_RATE  = 16;        // STROKES per second at full energy — the single pacing knob (slider)
-let revealEnergy = 1.0;       // 0..1 — manual: pinned to 1; audio: smoothed FFT energy
+let REVEAL_RATE  = 8;         // STROKES per second at full energy — the single pacing knob (slider).
+                              // Recalibrated 16→8 with auto-gain: normalized energy averages ~0.5
+                              // across a track (spans its own range) vs raw winterland's ≈0.24,
+                              // so 8 keeps the same wall-clock fill into the plateau.
+let revealEnergy = 1.0;       // 0..1 — manual: pinned to 1; audio: smoothed NORMALIZED energy (autoGain)
 function revealRate(){ return REVEAL_RATE * revealEnergy; }   // strokes/sec
 
-const AUDIO_FULL = 0.45;      // FFT band energy that reads as "full" boldness (this track's loud bands ≈ 0.4–0.6)
+const AUDIO_FULL = 0.45;      // legacy fixed ceiling — now only autoGain's fallback until the per-track window opens
 let   AUDIO_BOLD = 0.8;       // 0 = off (seed weights), 1 = strongest audio→boldness (slider)
 
 let running     = false;      // reveal in progress (loop() running); false = static resting
@@ -614,7 +829,7 @@ function startReveal(){
 // ---- AUDIO (gesture-gated; drives revealEnergy → accretion density) -----------------
 // AudioContext discipline: PATTERNS → "Safari AudioContext rules" (create the context
 // synchronously inside the gesture BEFORE any await; callback-style decodeAudioData).
-const AUDIO_SRC = 'winterland.mp3';   // baked default; a user-uploaded file overrides it (V1.1: per-track auto-normalize)
+const AUDIO_SRC = 'winterland.mp3';   // baked default; a user-uploaded file overrides it (per-track auto-normalize handles loudness)
 let audioCtx=null, analyser=null, freqData=null, srcNode=null, decodedBuf=null, audioReady=false, userFile=null, mediaDest=null;
 
 // Build the context + analyser ONCE, synchronously — must run first thing in the click handler.
@@ -653,6 +868,23 @@ function bandEnergy(){
   return n ? sum/(n*255) : 0;
 }
 function audioEnergy(){ if(!analyser) return 0; analyser.getByteFrequencyData(freqData); return bandEnergy(); }
+
+// ---- PER-TRACK AUTO-NORMALIZATION (adaptive gain) ------------------------------------
+// Raw band energy is absolute — an ambient track of chimes/piano sits far below the fixed
+// AUDIO_FULL ceiling and barely swings the visuals. Instead, track THIS track's own dynamic
+// range with a pair of envelope followers (floor creeps up / ceiling decays down at ~0.024/s,
+// each snapping outward instantly on a new extreme) and map current energy through that window.
+// Quietest-recent → 0 (sparse/faint), loudest-recent → 1 (dense/bold), whatever the genre.
+// Until the window opens (first few seconds), fall back to the fixed AUDIO_FULL mapping.
+let eFloor=1, eCeil=0;
+function resetAutoGain(){ eFloor=1; eCeil=0; }
+function autoGain(e){
+  eFloor = Math.min(eFloor + 0.0004, e);           // ~0.024/s creep at 60fps; snaps DOWN to a new quiet
+  eCeil  = Math.max(eCeil  - 0.0004, e);           // decays down; snaps UP to a new loud
+  const span = eCeil - eFloor;
+  if(span < 0.04) return Math.min(1, e / AUDIO_FULL);   // window not open yet → legacy fixed mapping
+  return Math.max(0, Math.min(1, (e - eFloor) / span));
+}
 
 // ---- ONSET / TRANSIENT FLURRIES -----------------------------------------------------
 // Spectral flux = summed positive frame-to-frame change across the band; it spikes on note
@@ -696,6 +928,7 @@ function playAudioReveal(onStarted){
     srcNode.onended = ()=>{ if(recording) stopRecording(); running=false; audioDriven=false; audioReady=false; noLoop(); updateRevealUI(); updatePlayUI(); };
     audioReady = true; audioDriven = true; revealEnergy = 0;   // start silent ⇒ sparse open
     resetOnset();                                              // fresh onset baseline for this play
+    resetAutoGain();                                           // fresh dynamic-range window for this track
     startReveal();
     srcNode.start();
     updatePlayUI();                                            // button now reads ■ Stop
@@ -758,6 +991,12 @@ function recordAndPlay(){
 // Record to an offscreen canvas that matches the DISPLAY's aspect at ~1080p height (full-frame,
 // no letterbox bars — the video looks like what's on screen), independent of the display's pixel
 // resolution. Frame-accurate via captureStream(0)+requestFrame from draw().
+// FOOTGUN — do NOT "simplify" this to glCanvas.captureStream() (capturing the WEBGL canvas directly):
+// that path stops emitting frames ~10–20s into a take under GPU pressure on macOS Safari/Chrome —
+// the video freezes mid-reveal while audio keeps recording (proven 2026-07-06: reproduced on real
+// takes across both tracks/seeds; direct capture never reproduced in the Electron preview, which is
+// why it slipped through). drawImage()-ing the live canvas into a plain 2D canvas and capturing THAT
+// is robust, and the 1080p downscale keeps the captured frames small. Keep the readback.
 let recCanvas=null, recCtx=null, recStream=null, recVideoTrack=null;
 function ensureRecCanvas(){
   const aspect = FRAME_W / FRAME_H;
@@ -796,6 +1035,15 @@ function stopRecording(){
   try { if(mediaDest && analyser) analyser.disconnect(mediaDest); } catch(e){}   // restore clean speaker-only graph
   recording = false; document.body.classList.remove('recording'); updateRecUI();
 }
+// LIVE-CAPTURE CONSTRAINT: the reveal advances on requestAnimationFrame, which a HIDDEN tab
+// pauses — the accretion would stall (the canvas still samples, so no hard freeze now, but a
+// dead segment). Guard: hidden mid-recording → stop cleanly (partial take saved) and say why.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && recording){
+    stopRecording(); stopAudio(); running=false;
+    showErr('Recording stopped: the window was hidden. The piece only advances while visible — keep this window on screen (Present/Fullscreen is fine) for the whole take.');
+  }
+});
 function saveRecording(){
   if(!recChunks.length) return;
   const type = (mediaRec && mediaRec.mimeType) || recChunks[0].type || 'video/webm';
@@ -827,6 +1075,14 @@ function setup(){
   try { if (typeof brush.load === 'function') brush.load(); } catch(e){}
   try { if (typeof brush.scaleBrushes === 'function') brush.scaleBrushes(1); } catch(e){}
   availableBrushes = discoverBrushes();
+  // Safety net: if the WEBGL context is ever lost (GPU reset), the draw loop would silently die.
+  // Stop any recording cleanly and surface it rather than leaving a frozen canvas + running audio.
+  try {
+    c.elt.addEventListener('webglcontextlost', (e)=>{
+      if(recording){ stopRecording(); stopAudio(); running=false; }
+      showErr('WEBGL context was lost (GPU reset). Reload the page to continue.');
+    });
+  } catch(e){}
   noLoop();
   wireUI();
   regenerate(seed);
@@ -846,7 +1102,7 @@ function draw(){
   // mode leaves revealEnergy at 1 and never flurries.
   if(audioDriven && audioReady && analyser){
     analyser.getByteFrequencyData(freqData);
-    revealEnergy = lerp(revealEnergy, bandEnergy(), 0.15);
+    revealEnergy = lerp(revealEnergy, autoGain(bandEnergy()), 0.15);   // NORMALIZED 0..1 vs this track's own range
     detectFlurry();
   }
   // Clamp dt: the first reveal frame's deltaTime spans all the idle time since the last
@@ -882,6 +1138,7 @@ function wireUI(){
   $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0], 'png'));
   $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; running=false; stopAudio(); redraw(); });
   $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; running=false; stopAudio(); redraw(); });
+  $('debuglabels').addEventListener('change', e=>{ DEBUG_LABELS=e.target.checked; running=false; stopAudio(); redraw(); });
   // reveal controls — manual (fixed clock) preview vs audio-driven
   $('reveal').addEventListener('click',  ()=>{ stopAudio(); audioDriven=false; revealEnergy=1.0; startReveal(); });
   $('rrate').addEventListener('input',   e=>{ REVEAL_RATE=+e.target.value; $('rrateval').textContent=REVEAL_RATE; });
