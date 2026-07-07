@@ -89,17 +89,6 @@
   body.present #panel{ display:none; }
   body.present #wrap{ padding:0; align-items:center; min-height:100vh; }
   body.present canvas{ max-width:100vw; max-height:100vh; box-shadow:none; border-radius:0; }
-
-  /* ===== DIAGNOSTICS overlay (FOOTGUN: telemetry only) — a DOM element, NOT canvas-drawn,
-     so it survives a dead canvas. Above everything incl. present mode; never eats clicks. */
-  #diag{ position:fixed; top:10px; left:10px; z-index:9999; display:none;
-    font:11px/1.5 ui-monospace,Menlo,monospace; background:rgba(10,10,12,.86); color:#7fe0c8;
-    border:1px solid #2a2a33; border-radius:6px; padding:8px 10px; max-width:60ch;
-    pointer-events:none; white-space:pre-wrap; }
-  #diag.diag-err{ border-color:#e8896b; background:rgba(60,16,10,.92); color:#ffd9cf; }
-  #diag #diag-flash{ color:#ff7a5c; font-weight:600; margin-bottom:4px; }
-  #diag #diag-flash:empty{ display:none; }
-  #diag #diag-hint{ color:#667; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -198,88 +187,7 @@ const BRUSH_REGISTRY = {
 };
 
 const showErr = e => { document.getElementById('err').textContent = e ? ('ERR: ' + (e.message||e)) : ''; };
-
-// ============================================================================
-//  ===== DIAGNOSTICS  (FOOTGUN: telemetry ONLY — no behavior change) =====
-// ----------------------------------------------------------------------------
-// Permanent recording-freeze instrumentation. In-browser recording intermittently freezes
-// the VIDEO at ~12–19s (audio keeps playing, canvas holds one frame). This block does not fix
-// anything; it lets ONE failing take name the failure class:
-//   (a) exception thrown in draw()      → caught by window.onerror / unhandledrejection below
-//   (b) WebGL context loss              → caught by the webglcontext* listeners (setup())
-//   (c) loop alive but capture stalled  → heartbeat keeps ticking while the pump log flatlines
-// The heartbeat is a DOM element (NOT drawn on the canvas) so it survives a dead canvas.
-// Toggle with `D`; auto-shows on any logged event. Every take auto-downloads a .txt log beside
-// the video (saveRecording), so a video+log pair pins down the cause. Remove this whole block
-// to strip diagnostics — nothing else depends on it.
-const DIAG = {
-  log: [], el: null, visible: false,
-  revealStartMs: 0, pumpCount: 0, lastPumpLogMs: 0,
-  t0: (typeof performance !== 'undefined' ? performance.now() : Date.now()),
-  now(){ return (typeof performance !== 'undefined' ? performance.now() : Date.now()); },
-  add(msg){ const t = ((this.now() - this.t0)/1000).toFixed(3); this.log.push('['+t+'s] '+msg); },
-  event(msg){ this.add(msg); this.show(); },                 // log + force overlay visible
-  error(msg){                                                // log + flash red
-    this.add('ERROR: ' + msg); this.show();
-    if(this.el){ this.el.classList.add('diag-err');
-      const f = this.el.querySelector('#diag-flash'); if(f) f.textContent = String(msg).split('\n')[0].slice(0,220); }
-  },
-  mount(){
-    if(this.el) return;
-    const d = document.createElement('div'); d.id = 'diag';
-    d.innerHTML = '<div id="diag-flash"></div><div id="diag-hb">diag armed — press D</div>'
-                + '<div id="diag-hint">D: toggle diagnostics · log downloads with each recording</div>';
-    document.body.appendChild(d); this.el = d;
-    this.add('diag mounted · UA=' + navigator.userAgent);
-  },
-  show(){ this.visible = true; if(this.el) this.el.style.display = 'block'; },
-  toggle(){ this.visible = !this.visible; if(this.el) this.el.style.display = this.visible ? 'block' : 'none'; },
-  heartbeat(){                                               // called from draw() each frame
-    if(!this.el) return;
-    const hb = this.el.querySelector('#diag-hb'); if(!hb) return;
-    const rev = this.revealStartMs ? ((this.now() - this.revealStartMs)/1000).toFixed(2)+'s' : '—';
-    hb.textContent = 'frame ' + frameCount + ' · reveal ' + rev
-      + ' · strokes ' + Math.min(lastDrawn, strokes.length) + '/' + strokes.length
-      + ' · draw@' + this.now().toFixed(0) + 'ms'
-      + ' · fps ' + (running ? revealFps.toFixed(0) : '—')
-      + (recording ? ' · REC pumped ' + this.pumpCount : '');
-  },
-  pump(){                                                    // called from pushRecFrame()
-    this.pumpCount++;
-    const n = this.now();
-    if(n - this.lastPumpLogMs >= 1000){                      // throttle to ~1/s so a stalled pump shows as a gap
-      this.add('pump: ' + this.pumpCount + ' frames pushed to recorder (cumulative)');
-      this.lastPumpLogMs = n;
-    }
-  },
-  export(){                                                  // auto-download the log beside the video
-    if(!this.log.length) return;
-    const stamp = new Date().toISOString().replace(/[:.]/g,'-');
-    const head = 'Brushstroke V1 — recording diagnostics\n'
-      + 'seed=' + seed + ' hero=' + HERO_COUNT + HERO_TYPE + '\n'
-      + 'exported=' + new Date().toISOString() + '\n\n';
-    const blob = new Blob([head + this.log.join('\n') + '\n'], { type:'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = 'brushstroke-diag-seed' + seed + '-' + stamp + '.txt';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 8000);
-  }
-};
-// window.onerror is load-bearing (it already fed showErr) — AUGMENT, don't clobber: keep the
-// on-screen ERR line, and also capture full message + stack to the diag log.
-window.onerror = function(msg, src, line, col, err){
-  showErr(msg);
-  DIAG.error((msg || 'onerror') + (err && err.stack ? '\n' + err.stack
-    : (src ? ' @' + src + ':' + line + ':' + col : '')));
-  return false;                                              // don't suppress the browser's own logging
-};
-window.addEventListener('unhandledrejection', e => {
-  const r = e.reason;
-  DIAG.error('unhandledrejection: ' + ((r && r.stack) || (r && r.message) || r));
-});
-//  ===== end DIAGNOSTICS block 1/3 (object + error capture) =====
-// ============================================================================
+window.onerror = m => showErr(m);
 
 // ============================================================================
 //  >>> P5.BRUSH ADAPTER <<<  (ported from brush-lab.html — the only library code)
@@ -697,8 +605,6 @@ function startReveal(){
   plan = buildPlan();                 // freeze the plan being revealed
   compileStrokes();                   // flatten it to ordered stroke records
   revealCount = 0; lastDrawn = 0; revealFps = 0; curFieldMark = -1;
-  DIAG.revealStartMs = DIAG.now();    // DIAGNOSTICS: wall-clock zero for the heartbeat's reveal timer
-  DIAG.event('reveal start · strokes=' + strokes.length + ' audio=' + audioDriven);
   paintGround();                      // ground painted ONCE; never cleared again until reset
   running = true;
   loop();                             // draw() now appends newly-revealed strokes each frame
@@ -865,7 +771,6 @@ function pushRecFrame(){
   const src = document.querySelector('canvas');
   recCtx.drawImage(src, 0, 0, recCanvas.width, recCanvas.height);  // same aspect → fills, no bars/distortion
   if(recVideoTrack && recVideoTrack.requestFrame) recVideoTrack.requestFrame();
-  DIAG.pump();                                                      // telemetry: throttled pump-rate log
 }
 function startRecording(){
   try{
@@ -878,19 +783,13 @@ function startRecording(){
     const mime = recMime();
     mediaRec = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond: 12_000_000 } : undefined);
     recChunks = [];
-    DIAG.pumpCount = 0; DIAG.lastPumpLogMs = 0;               // fresh pump counter for this take
-    DIAG.event('recorder created · mime=' + (mediaRec.mimeType||mime||'default')
-             + ' · recCanvas=' + recCanvas.width + 'x' + recCanvas.height);
-    mediaRec.ondataavailable = e=>{ if(e.data && e.data.size) recChunks.push(e.data);
-      DIAG.add('dataavailable · size=' + (e.data ? e.data.size : 0)); };   // telemetry (augmented)
-    mediaRec.onstart = ()=> DIAG.event('recorder onstart');
-    mediaRec.onerror = e=> DIAG.error('recorder onerror: ' + ((e && e.error && (e.error.message||e.error.name)) || e));
-    mediaRec.onstop  = ()=>{ DIAG.event('recorder onstop'); saveRecording(); };   // telemetry + existing save
+    mediaRec.ondataavailable = e=>{ if(e.data && e.data.size) recChunks.push(e.data); };
+    mediaRec.onstop = saveRecording;
     mediaRec.start();
     recording = true; document.body.classList.add('recording');
     pushRecFrame();                          // seed the first frame immediately
     updateRecUI();
-  }catch(e){ DIAG.error('startRecording threw: ' + (e.message||e)); showErr(e); }
+  }catch(e){ showErr(e); }
 }
 function stopRecording(){
   if(mediaRec && mediaRec.state !== 'inactive'){ try{ mediaRec.stop(); }catch(e){} }
@@ -898,8 +797,6 @@ function stopRecording(){
   recording = false; document.body.classList.remove('recording'); updateRecUI();
 }
 function saveRecording(){
-  DIAG.add('saveRecording · chunks=' + recChunks.length);
-  DIAG.export();                              // every take downloads a diag .txt beside the video
   if(!recChunks.length) return;
   const type = (mediaRec && mediaRec.mimeType) || recChunks[0].type || 'video/webm';
   const ext = type.indexOf('mp4') !== -1 ? 'mp4' : 'webm';   // name the file to match the real container
@@ -916,19 +813,9 @@ function updateRecUI(){ const b=document.getElementById('btnRecord'); if(b) b.te
 //  p5 LIFECYCLE  (global mode, mirrors brush-lab)
 // ============================================================================
 function setup(){
-  DIAG.mount();                               // DOM heartbeat overlay (telemetry only — see DIAGNOSTICS block)
   sizeFrameToDisplay();                       // fit the canvas to this display (once; reload to re-fit)
   const c = createCanvas(FRAME_W, FRAME_H, WEBGL);
   c.parent('canvas-holder');
-  // DIAGNOSTICS: listen for WebGL context loss on the p5.brush canvas — the silent killer.
-  // preventDefault() lets the browser attempt a restore; both edges are timestamped to the log.
-  try {
-    const cv = c.elt || document.querySelector('canvas');
-    if(cv){
-      cv.addEventListener('webglcontextlost', e=>{ e.preventDefault(); DIAG.error('WEBGL CONTEXT LOST'); }, false);
-      cv.addEventListener('webglcontextrestored', ()=> DIAG.event('WEBGL context restored'), false);
-    }
-  } catch(e){ DIAG.error('context-loss listener attach failed: ' + (e.message||e)); }
   // retina sharp in real browsers; drop to 1x only inside Claude Preview's Chromium
   // (Electron/ANGLE-Metal corrupts p5.brush at high overdraw). Set ONCE — never toggle.
   // Density follows the display (capped at 2) so big low-DPI screens don't blow up the backing.
@@ -950,7 +837,6 @@ function draw(){
     // STATIC (curation): one full frame, then rest. No accretion.
     renderStatic();
     updateRevealUI();
-    DIAG.heartbeat();                          // telemetry only
     noLoop();
     return;
   }
@@ -972,7 +858,6 @@ function draw(){
   if(target > lastDrawn){ drawStrokes(lastDrawn, target); lastDrawn = target; }   // never redraw settled strokes
   revealFps = frameRate();                                  // real throughput (NOT in-draw readPixels)
   updateRevealUI();
-  DIAG.heartbeat();                                         // telemetry only — proves the loop is alive
   if(recording) pushRecFrame();                             // feed the 1080p recording canvas this frame
   // Fully accreted → rest. But while RECORDING, keep looping through the track's tail so the
   // video holds the final frame (with audio) until the track ends and stops the recorder.
@@ -1024,7 +909,6 @@ function wireUI(){
     if(k==='p'){ togglePresent(); }
     else if(k==='f'){ toggleFullscreen(); }
     else if(k==='r'){ recordAndPlay(); }
-    else if(k==='d'){ DIAG.toggle(); }         // telemetry overlay toggle (see DIAGNOSTICS block)
     else if(k==='escape' && document.body.classList.contains('present') && !(document.fullscreenElement||document.webkitFullscreenElement)){ document.body.classList.remove('present'); }
   });
   updateRevealUI();
