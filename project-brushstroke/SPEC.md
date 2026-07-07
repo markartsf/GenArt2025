@@ -805,6 +805,14 @@ Three sanctioned routes; pick by piece type.
    `isTypeSupported` (prefer `video/mp4;codecs=avc1`, fall back to `video/webm`);
    if quality/codec disappoints, use route 2. Proven end-to-end in
    `capture-fullscreen-demo.html` (untracked reference, not a feature).
+   > **⚠️ Safari FOOTGUN (confirmed 2026-07-07, Project Brushstroke V1):** Safari's
+   > `canvas.captureStream` + `MediaRecorder` **stalls mid-recording** — the video freezes
+   > at a variable point (~10–25s) while audio and the render loop keep running.
+   > Seed/track/art-load independent; it is the browser, not our code (isolated with a
+   > temporary diagnostics overlay: in Chrome the frame pump ran unbroken — 13,175 frames,
+   > one clean `dataavailable`, no errors; Safari froze). **Record route 1 in Chrome.**
+   > Safari is fine for viewing, curation, and fullscreen — just not in-browser capture. No
+   > browser-detection guard in code (we deploy to Netlify and don't gate on browser).
 2. **Screen / window capture** — OBS or QuickTime capturing the display or
    browser window; system audio via BlackHole + an Audio MIDI Multi-Output Device
    (monitors AND routes to BlackHole). The route where true fullscreen matters,

@@ -441,6 +441,13 @@ served over HTTP — `npx vite project-brushstroke/render --port 8091`, or
 
 ## Recording & export
 
+- **Safari `captureStream` + `MediaRecorder` stalls mid-recording** (confirmed 2026-07-07,
+  Project Brushstroke V1): the **video** freezes at a variable point (~10–25s) while audio and
+  the render loop continue. Seed/track/art-load independent — it's the browser, not the code (a
+  diagnostics overlay showed Chrome's frame pump running unbroken, 13,175 frames, one clean
+  `dataavailable`, no errors; Safari froze). **Record in-browser (SPEC route 1) in Chrome.**
+  Safari is fine for viewing/curation/fullscreen, just not capture. No browser guard in code —
+  deploys to Netlify, not gating on browser.
 - OBS for screen recording; route audio through BlackHole + QuickTime if OBS audio gets weird.
 - For high-quality frame captures: render at 2x resolution, downsample in post.
 - FILM on Replicate for smooth interpolation between keyframe exports.
