@@ -126,7 +126,7 @@
     </div>
     <div class="herobox">
       <label>armature<select id="armature"><option value="dominant" selected>dominant + satellites</option><option value="diagonal">diagonal pair</option><option value="triangle">triangle of three</option><option value="auto">auto (by seed)</option></select></label>
-      <label>hero × <span class="val" id="hcval">1</span><input id="hcount" type="range" min="0" max="3" step="1" value="1"></label>
+      <label>hero max <span class="val" id="hcval">3</span><input id="hcount" type="range" min="0" max="3" step="1" value="3"></label>
       <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="bloom">bloom</option><option value="fan">fan</option><option value="tuft">tuft</option><option value="either">either (any)</option></select></label>
     </div>
     <div class="herobox">
@@ -265,6 +265,25 @@ function makeContainedControlPoints(cx, cy, extent, n){
   }
   return pts;
 }
+// FLOWING ribbon spine (Mark 2026-07-10): a LONG S-curved band — the Enfantines "worm" ribbon,
+// NOT a contained comb. Walks `reach` px total with a slowly-drifting heading PLUS a low-freq
+// counter-curve so it snakes (S-shape) instead of clamping inside a radius. Wander uses random()
+// under the MARK seed → reveal-stable. Starts back from the centre so the band drapes THROUGH it.
+function makeFlowingSpine(cx, cy, reach, n){
+  const pts=[];
+  let ang = random(TWO_PI);
+  const curl  = random(-0.30, 0.30);            // gentle overall drift of the heading
+  const swing = random(0.55, 1.15);             // amplitude of the S counter-curve
+  const phase = random(TWO_PI);
+  const step  = reach / Math.max(1, n-1);
+  let x = cx - cos(ang)*reach*0.45, y = cy - sin(ang)*reach*0.45;
+  for(let i=0;i<n;i++){
+    pts.push({x,y});
+    ang += curl + Math.sin(phase + i*0.9)*swing*0.35 + random(-0.15,0.15);
+    x += cos(ang)*step; y += sin(ang)*step;
+  }
+  return pts;
+}
 function pickColor(i, ribbonOffset){
   const pal=P.palette;
   if(P.colormode==='sequential') return pal[(i+ribbonOffset)%pal.length];
@@ -302,7 +321,14 @@ function computeTooth(stations, k, colorOffset, finalWeight, brushName){
   const pushv=shift+offset;
   const ax=cx-nx*halfLen+nx*pushv, ay=cy-ny*halfLen+ny*pushv;
   const bx=cx+nx*halfLen+nx*pushv, by=cy+ny*halfLen+ny*pushv;
-  return { brush:brushName, color:pickColor(k,colorOffset), weight:finalWeight, ax, ay, bx, by };
+  // WEIGHT VARIATION along the path (Mark 2026-07-10): coherent noise → some stretches read
+  // thicker (packed), others thinner (spaced), the Enfantines ribbon's non-uniform density.
+  let wgt = finalWeight;
+  if (P.weightVary > 0){
+    const wn = noise(s.x*0.010, s.y*0.010, 41.7);
+    wgt *= lerp(1 - P.weightVary*0.55, 1 + P.weightVary*0.75, wn);
+  }
+  return { brush:brushName, color:pickColor(k,colorOffset), weight:wgt, ax, ay, bx, by };
 }
 // BURST — stations spread by angle around a centre (brush-lab verbatim; no RNG)
 function makeBurstStations(cx, cy){
@@ -373,7 +399,8 @@ function makeTuftStations(cx, cy, radius, spreadFrac){
 // angular rosettes around the mark's placed centre. P.* must already be set by applyMark(m).
 function stationsFor(m){
   if(m.gen==='ribbon'){
-    const cps=makeContainedControlPoints(m.cx, m.cy, m.extent, P.ctrl);
+    const cps = m.flowing ? makeFlowingSpine(m.cx, m.cy, m.extent, P.ctrl)
+                          : makeContainedControlPoints(m.cx, m.cy, m.extent, P.ctrl);
     const poly=samplePolyline(cps);
     return placeStations(poly, P.spacing);
   }
@@ -409,7 +436,7 @@ const EDGE = 40;                // keep marks (and their reach) off the frame ed
 const COVERAGE_CAP = 0.40;      // regular marks occupy ≤ this fraction of the frame (disc-area proxy) → ground leads
 
 // hero knob — a few bold charcoal anchors biased into the focal region (UI-toggled)
-let HERO_COUNT = 1;             // 0–3
+let HERO_COUNT = 3;             // 0–3 — now a CAP on the armature's declared hero count (Mark 2026-07-10)
 let HERO_TYPE  = 'burst';       // 'burst' (default, strongest anchor) | 'ribbon' | 'bloom' | 'fan' | 'tuft' | 'either' (any, random)
 
 // burst tooth weight SCALES WITH SIZE: small bursts get thinner strokes, large/hero bursts
@@ -479,20 +506,32 @@ function tuftSpec(rng){
 //   · satellite  = where regular marks bias toward;  satSigma = spread of that bias
 //   · voids      = circular keep-clear regions (the breathing space)
 const ARMATURES = {
-  dominant: {   // one dominant hero upper-right third; mids trail lower-left; void lower-right
-    anchors: [ {x:0.64, y:0.34, tier:'hero'}, {x:0.44, y:0.56, tier:'mid'}, {x:0.30, y:0.74, tier:'mid'} ],
+  // `clusters` (Mark 2026-07-10): 2–3 bias centres the small/medium marks distribute AMONG, so mass
+  // spreads across the frame (grouped near the heroes + a counterweight) instead of piling at one
+  // point and leaving half the frame dead. Each {x,y,s} is normalized position + spread fraction.
+  // `heroes` (Mark 2026-07-10): the armature's NATURAL hero count — the hero× slider CAPS this,
+  // it doesn't force more. So dominant=1 large, diagonal=1 large+1 medium, triangle=1 large+2 medium
+  // (matching the sketch grammar). Extra anchors past `heroes` are unused for heroes.
+  dominant: {   // ONE dominant hero upper-right; mass diagonals toward lower-left; void lower-right
+    heroes: 1,
+    anchors: [ {x:0.62, y:0.36, tier:'hero'}, {x:0.44, y:0.56, tier:'mid'}, {x:0.30, y:0.74, tier:'mid'} ],
+    clusters: [ {x:0.58, y:0.38, s:0.12}, {x:0.38, y:0.60, s:0.15}, {x:0.24, y:0.40, s:0.12} ],
     satellite: {x:0.40, y:0.60}, satSigma:0.24,
-    voids: [ {x:0.84, y:0.80, r:0.26} ],
+    voids: [ {x:0.84, y:0.80, r:0.20} ],
   },
-  diagonal: {   // two elements on a diagonal; smalls bridge between; off-diagonal corners open
+  diagonal: {   // TWO elements on a diagonal; smalls bridge between; off-diagonal corners open
+    heroes: 2,
     anchors: [ {x:0.32, y:0.30, tier:'hero'}, {x:0.70, y:0.68, tier:'mid'}, {x:0.52, y:0.50, tier:'mid'} ],
+    clusters: [ {x:0.34, y:0.34, s:0.12}, {x:0.52, y:0.50, s:0.13}, {x:0.68, y:0.66, s:0.12} ],
     satellite: {x:0.50, y:0.50}, satSigma:0.22,
-    voids: [ {x:0.82, y:0.20, r:0.24}, {x:0.20, y:0.82, r:0.22} ],
+    voids: [ {x:0.82, y:0.20, r:0.19}, {x:0.20, y:0.82, r:0.18} ],
   },
-  triangle: {   // asymmetric triangle: one dominant + two subordinate; smalls inside; corners open
+  triangle: {   // THREE: one dominant + two subordinate; smalls near vertices; corners open
+    heroes: 3,
     anchors: [ {x:0.36, y:0.34, tier:'hero'}, {x:0.68, y:0.44, tier:'mid'}, {x:0.50, y:0.70, tier:'mid'} ],
+    clusters: [ {x:0.36, y:0.38, s:0.12}, {x:0.64, y:0.44, s:0.12}, {x:0.50, y:0.66, s:0.13} ],
     satellite: {x:0.51, y:0.50}, satSigma:0.20,
-    voids: [ {x:0.86, y:0.80, r:0.22}, {x:0.16, y:0.84, r:0.20} ],
+    voids: [ {x:0.86, y:0.80, r:0.18}, {x:0.16, y:0.84, r:0.17} ],
   },
 };
 const ARMATURE_KEYS = ['dominant','diagonal','triangle'];
@@ -531,7 +570,10 @@ function buildPlan(){
     if(m.gen==='bloom') return m.width*1.3;                         // petals can reach up to 2.5× R0
     if(m.gen==='fan')   return m.width*0.75;                        // arc, not a full disc — packs tighter
     if(m.gen==='tuft')  return m.width*0.5;                         // small cluster, radius IS the tooth radius
-    return (m.extent*0.55 + m.width*0.35);                          // ribbon: sparse linear comb → pack tighter
+    // ribbon: pack by BAND WIDTH, not spine length — a long ribbon is a thin curving band, so its
+    // collision footprint is its width (~tooth length), NOT its extent. Lets ribbons CROSS/interleave
+    // (Enfantines) and lets every hero land at its anchor instead of rejecting on the spine reach.
+    return m.width*0.55;
   }
 
   // ANTI-CLUMP: rejection-sample a centre ≥ (r_i+r_j)·sepFactor from every placed mark, inside
@@ -578,10 +620,19 @@ function buildPlan(){
   for(let i=0;i<N_FAN;i++)    reg.push(fanSpec(regRng));
   for(let i=0;i<N_TUFT;i++)   reg.push(tuftSpec(regRng));
   for(let i=reg.length-1;i>0;i--){ const k=Math.floor(regRng()*(i+1)); [reg[i],reg[k]]=[reg[k],reg[i]]; }
-  const sig = arm.satSigma*minDimP;      // regulars cluster around the armature's satellite centre
+  // DISTRIBUTED CLUSTERS (Mark 2026-07-10): each regular biases toward ONE of the armature's cluster
+  // centres (cycled by index so mass spreads evenly across them), grouped near the heroes + a
+  // counterweight — replaces the single-satellite blob that left half the frame dead. Fallback to
+  // the satellite if an armature has no clusters. pFocal 0.62 → mostly clustered, some free sprinkle.
+  const clusters = (arm.clusters && arm.clusters.length)
+    ? arm.clusters.map(c => ({ x:c.x*W, y:c.y*H, s:c.s*minDimP }))
+    : [ { x:satelliteCenter.x, y:satelliteCenter.y, s:arm.satSigma*minDimP } ];
   // PER-MARK placement stream (seeded by mark index) → a mark's candidate positions don't depend
   // on how many rejections earlier marks had, so adding a hero can't cascade-reshuffle the rest.
-  reg.forEach((m, i) => tryAdd(mulberry32(((seed*2246822519) ^ ((i+1)*2654435761)) >>> 0), m, 0.30, sig));
+  reg.forEach((m, i) => {
+    const cl = clusters[i % clusters.length];
+    tryAdd(mulberry32(((seed*2246822519) ^ ((i+1)*2654435761)) >>> 0), m, 0.62, cl.s, 0.92, { x:cl.x, y:cl.y });
+  });
   out.forEach((m, i) => { m.id = i; });   // STABLE identity (= placement order) — seeds a mark by this,
   return out;                              // so its look is fixed no matter WHEN it reveals (see revealOrder)
 }
@@ -593,7 +644,8 @@ const HERO_TYPES = ['burst','ribbon','bloom','fan','tuft'];
 const HERO_SCALE = 1.2;          // heroes 20% larger across every generator (Mark 2026-07-05)
 function placeHeroes(heroRng, tryAdd, arm){
   const minDim = Math.min(FRAME_W, FRAME_H);
-  for(let i=0;i<HERO_COUNT;i++){
+  const nHero = Math.min(HERO_COUNT, arm.heroes ?? arm.anchors.length);   // slider CAPS the armature's natural count
+  for(let i=0;i<nHero;i++){
     const anchor  = arm.anchors[Math.min(i, arm.anchors.length-1)];   // this hero's armature slot
     const tierMul = anchor.tier==='hero' ? 1.4 : 0.45;               // STRONG dominance: one towering focal, rest clearly subordinate
     const sizeMul = HERO_SCALE * tierMul;                             // replaces the flat HERO_SCALE in each branch
@@ -605,13 +657,18 @@ function placeHeroes(heroRng, tryAdd, arm){
       m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, radialoffset:heroRng()*0.20, hero:true };
       sigma = minDim*0.10; sep = 0.92;              // compact cogs cluster tight at focal (unchanged)
     } else if(type==='ribbon'){
-      const w = (110 + heroRng()*55) * sizeMul;   // 132–198 — burst-hero band, +20% (Mark 2026-07-05)
-      m = { gen:'ribbon', brush:'charcoal', weight:1.55, width:w*SCALE, extent:w*3.1*SCALE,
-            ctrl:5+Math.floor(heroRng()*2), spacing:8*SCALE, field:heroRng()<0.5?'hand':'none', hero:true };
-      // ribbon heroes reach ~250px — with the tight cluster + 0.92 sep, a second one could never
-      // clear the first, so only ONE ever placed. Spread them wider and let the sparse linear combs
-      // interleave so 2–3 large ribbons actually appear as HERO_COUNT rises.
-      sigma = minDim*0.20; sep = 0.5;
+      // LONG DECAYED S-BAND (Mark 2026-07-10, Enfantines ribbon references): a flowing worm, not a
+      // contained comb. Tooth-length (band width) is bold; the spine reaches several × that as an
+      // S-curve. Gestural modifiers ON → organic tremor + varied spacing (Gate) + uneven length
+      // (Chaos). Colour is the palette per tooth (charcoal = grainy texture, not monochrome).
+      const w        = (120 + heroRng()*70) * sizeMul;         // tooth-length / band width (bold)
+      const reachMul = 4.5 + heroRng()*1.8;                    // long S-band: spine ≈ 4.5–6.3× the band width
+      m = { gen:'ribbon', brush:'charcoal', weight:1.3, width:w*SCALE, extent:w*reachMul*SCALE,
+            ctrl:8+Math.floor(heroRng()*4), spacing:10*SCALE, field:'hand', flowing:true, hero:true,
+            handTremor:0.34+heroRng()*0.22, handGate:0.24+heroRng()*0.20, handChaos:0.40+heroRng()*0.22,
+            weightVary:0.55 };
+      // long flowing bands — spread wide + loose sep so 2–3 can interleave without one rejecting the next.
+      sigma = minDim*0.22; sep = 0.42;
     } else if(type==='bloom'){
       const w = (95 + heroRng()*50) * sizeMul;    // well above regular bloom's 30–66 range
       m = { gen:'bloom', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, swirl:(heroRng()*2-1)*35, hero:true };
@@ -641,6 +698,14 @@ function applyMark(m){
   P.ctrl = m.ctrl ?? P.ctrl;
   P.bias = g.biasDefault;
   P.radialoffset = m.radialoffset ?? 0;
+  // Gestural modifiers (Mark 2026-07-10): the organic/decayed/hand-tremor character from the
+  // Enfantines ribbon references. Per-mark (default 0 → clean), so a mark opts in. Tremor = position
+  // wander along the normal; Gate = coherent starve → varied spacing (packed vs spaced); Chaos =
+  // varied tooth length (uneven, decayed). Reset each mark since P is shared/mutated across marks.
+  P.handTremor = m.handTremor ?? 0;
+  P.handGate   = m.handGate ?? 0;
+  P.handChaos  = m.handChaos ?? 0;
+  P.weightVary = m.weightVary ?? 0;   // coherent thickness variation along the path (ribbons)
   P.field = m.field ?? g.fieldDefault;
   P.fieldAmount = g.fieldAmountDefault;
   // activate the per-mark field (Bend Field — the only sanctioned wiggle)
