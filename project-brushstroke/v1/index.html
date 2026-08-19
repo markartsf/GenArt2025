@@ -137,13 +137,13 @@
       <div id="trackname" style="font-size:10px;color:var(--muted);margin:5px 0 7px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">winterland.mp3 (default)</div>
       <button class="primary" id="playaudio" style="width:100%;">▶ Play with audio</button>
       <button id="reveal" style="width:100%;margin-top:6px;">Reveal ▶ (manual)</button>
-      <label>rate <span class="val" id="rrateval">8</span> strokes/s @ full energy
+      <label>manual rate <span class="val" id="rrateval">8</span> strokes/s (audio auto-paces)
         <input id="rrate" type="range" min="2" max="120" step="1" value="8"></label>
       <label>audio → boldness <span class="val" id="rboldval">0.80</span>
         <input id="rbold" type="range" min="0" max="1.5" step="0.05" value="0.8"></label>
       <label>transient flurry <span class="val" id="rflurval">8</span> strokes/hit
         <input id="rflur" type="range" min="0" max="30" step="1" value="8"></label>
-      <label>revealed <span class="val" id="rprog">0 / 0</span></label>
+      <label>revealed <span class="val" id="rprog">0 / 0</span> · <span class="val" id="rpace">—</span></label>
       <label>energy <span class="val" id="renergy">—</span> · fps <span class="val" id="rfps">—</span></label>
     </div>
     <p class="hint">Curate the frame (Reseed/Random/hero), optionally Load track… (else the
@@ -1210,12 +1210,35 @@ function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1
 // the smoothed FFT energy, so accretion tracks the track: quiet ⇒ sparse, loud ⇒ dense
 // (V1-SCOPE §4 — audio drives density/form). REVEAL_RATE at full energy is also calibrated so
 // the audio fill spans the build into the plateau (measured avg active energy ≈ 0.24).
-let REVEAL_RATE  = 8;         // STROKES per second at full energy — the single pacing knob (slider).
-                              // Recalibrated 16→8 with auto-gain: normalized energy averages ~0.5
-                              // across a track (spans its own range) vs raw winterland's ≈0.24,
-                              // so 8 keeps the same wall-clock fill into the plateau.
+let REVEAL_RATE  = 8;         // strokes/sec — the MANUAL-preview fixed clock only (slider). Audio
+                              // mode ignores this and AUTO-PACES from the track (see autoPacedRate).
 let revealEnergy = 1.0;       // 0..1 — manual: pinned to 1; audio: smoothed NORMALIZED energy (autoGain)
-function revealRate(){ return REVEAL_RATE * revealEnergy; }   // strokes/sec
+
+// AUTO-PACE (Mark 2026-08-18, experiment 1): the figure-body work ~doubled the stroke inventory
+// and it varies wildly per seed (one hero worm ≈ 300+ records), so a fixed strokes/sec rate no
+// longer lands the plan at the end of a track. Instead, in AUDIO mode derive the rate from the
+// track's OWN duration + this plan's stroke count so ANY ambient track completes ~COMPLETE_AT
+// through, and recordings always end on a finished frame. It's a SERVO, not a fixed rate:
+//   base = strokes-remaining / time-remaining-until-(COMPLETE_AT·duration)
+// recomputed every frame, so whatever the energy profile does, the plan still finishes on time
+// (a long quiet open just makes `base` climb to catch up later). Energy then only REDISTRIBUTES
+// density locally (quiet ⇒ sparse, loud ⇒ dense) via a factor centred ≈1 — it shapes WHEN strokes
+// land, not WHETHER the plan completes. Flurries (revealCount bumps) borrow from the future and
+// the servo re-levels. Manual mode keeps the fixed REVEAL_RATE clock.
+const COMPLETE_AT = 0.88;     // finish the plan ~88% through the track (12% tail buffer → clean recording end)
+let trackDuration   = 0;      // seconds of the decoded track (0 until decoded)
+let playStartCtxTime = 0;     // audioCtx.currentTime captured when playback began → elapsed
+function autoPacedRate(){
+  if(!audioDriven || !trackDuration || !strokes.length || !audioCtx) return REVEAL_RATE * revealEnergy;
+  const elapsed   = audioCtx.currentTime - playStartCtxTime;
+  const remainStk = Math.max(0, strokes.length - revealCount);
+  const remainT   = Math.max(0.5, COMPLETE_AT*trackDuration - elapsed);   // 0.5s floor → no end-of-track spike
+  const base      = remainStk / remainT;                                  // strokes/s to finish on time (self-correcting)
+  const eFactor   = 0.35 + 1.30*revealEnergy;                             // ~1 at avg energy; quiet sparse, loud dense
+  const nominal   = strokes.length / (COMPLETE_AT*trackDuration);         // even pace if energy were flat
+  return Math.min(base*eFactor, nominal*4.5);                             // cap catch-up so a quiet run never dumps
+}
+function revealRate(){ return audioDriven ? autoPacedRate() : REVEAL_RATE * revealEnergy; }   // strokes/sec
 
 const AUDIO_FULL = 0.45;      // legacy fixed ceiling — now only autoGain's fallback until the per-track window opens
 let   AUDIO_BOLD = 0.8;       // 0 = off (seed weights), 1 = strongest audio→boldness (slider)
@@ -1332,6 +1355,7 @@ function playAudioReveal(onStarted){
   ensureAudioGraph();                         // AudioContext created synchronously in the gesture
   const begin = (buf)=>{
     decodedBuf = buf;
+    trackDuration = buf.duration || 0;                        // auto-pace target: land the plan at COMPLETE_AT·duration
     stopAudioSource();
     srcNode = audioCtx.createBufferSource();
     srcNode.buffer = buf;
@@ -1342,6 +1366,7 @@ function playAudioReveal(onStarted){
     resetAutoGain();                                           // fresh dynamic-range window for this track
     startReveal();
     srcNode.start();
+    playStartCtxTime = audioCtx.currentTime;                   // clock zero for the auto-pace servo
     updatePlayUI();                                            // button now reads ■ Stop
     if(typeof onStarted === 'function') onStarted();
   };
@@ -1521,6 +1546,12 @@ function draw(){
   // spike would dump the whole plan in one frame. 100 ms cap = ≤ rate·0.1 strokes/frame.
   const dt = Math.min(deltaTime, 100) / 1000;              // seconds-this-frame, spike-guarded
   revealCount += revealRate() * dt;                         // strokes/sec × seconds-this-frame
+  // TAIL SNAP: the auto-pace servo approaches completion asymptotically (rate → 0 as strokes
+  // remain → 0), so the final stroke can trickle and never draw. Once we reach the planned
+  // completion time, finish the residual outright — guarantees a fully-drawn frame by COMPLETE_AT.
+  if(audioDriven && trackDuration && audioCtx && (audioCtx.currentTime - playStartCtxTime) >= COMPLETE_AT*trackDuration){
+    revealCount = strokes.length;
+  }
   const target = Math.min(Math.floor(revealCount), strokes.length);
   if(target > lastDrawn){ drawStrokes(lastDrawn, target); lastDrawn = target; }   // never redraw settled strokes
   revealFps = frameRate();                                  // real throughput (NOT in-draw readPixels)
@@ -1591,6 +1622,14 @@ function updateRevealUI(){
   $('rprog').textContent = Math.min(lastDrawn, n) + ' / ' + n;
   $('rfps').textContent  = running ? revealFps.toFixed(0) : '—';
   $('renergy').textContent = audioDriven ? revealEnergy.toFixed(2) : '—';
+  // auto-pace telemetry: how far into the track's fill-window we are vs how full the plan is —
+  // the two percentages should track each other if the servo is holding (finish ≈ COMPLETE_AT).
+  const pace = $('rpace'); if(!pace) return;
+  if(audioDriven && trackDuration && audioCtx){
+    const elapsed = audioCtx.currentTime - playStartCtxTime;
+    const timeFrac = Math.min(1, elapsed/(COMPLETE_AT*trackDuration));
+    pace.textContent = 'pace ' + Math.round(100*(n?lastDrawn/n:0)) + '% fill / ' + Math.round(100*timeFrac) + '% time';
+  } else pace.textContent = '—';
 }
 </script>
 </body>
