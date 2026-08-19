@@ -13,6 +13,16 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
+- **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
+  line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
+  anchor.type/anchor.s, cluster.gen, chain clusters via x2/y2 — a future sketch = one data
+  block). RAGGEDNESS slider (0 = finished, default): ragged figures keep the full contour but
+  abandon a contiguous fill run — deliberate incompleteness, toggled, seed-reproducible. EDGE
+  BLEED (from Campos refs): ~⅓ of seeds (mode some/off/all) upgrade one large anchor to a
+  1.6–2.1× giant cropped by the frame edge (authored bleed ≠ accidental clipping, which stays
+  fixed). Scope-drift RESOLVED via V1-SCOPE §2 amendment (Bloom/Fan/Tuft + auto-gain accepted
+  as V1.0 built scope; radial-geometry similarity logged as debt → generator-revision pass:
+  petal-outline bloom, ladder-leaf, fern). crystal-chime bundled (`1bb0c75`); tldraw-spike deleted.
 - **2026-08-18 — FIGURE BODIES adopted (V1 composition round, Mark's markup + Campos/sketch
   refs; committed with this line).** Every generator now draws an ENCLOSED body: worm (ribbon)
   = pointed-tip contour + rungs; burst/bloom/tuft = blob/ring outline, empty interior, teeth

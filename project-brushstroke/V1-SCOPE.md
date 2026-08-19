@@ -48,6 +48,17 @@ them; it does not re-implement them and does not embed a lab.
 Bloom / Fan / Field Marks / Linework are **V1.x**, added later as presets (see §10).
 **Tuft is out** until its native-raster rewrite lands on the compositor track.
 
+> **2026-08-18 amendment — built scope accepted.** Bloom, Fan, and Tuft shipped into V1
+> during the July composition rounds (roster + hero types) — accepted as V1.0 scope, native
+> render only (nothing here touches the compositor track; the Tuft above refers to the KM
+> raster-plate rewrite, which stays out). Also in: composition ARMATURES incl. four of Mark's
+> pencil sketches encoded as layouts, FIGURE BODIES (enclosed contours; SPEC banner 2026-08-18),
+> per-figure palette subsets, a RAGGEDNESS toggle (deliberate incompleteness, 0 = finished),
+> and per-track auto-gain (pulled forward from V1.1 — §4's "deferred" note is superseded).
+> Known debt: Bloom/Fan/Tuft geometry still reads similar despite distinct stroke characters —
+> a generator-revision pass (petal-outline bloom, ladder-leaf, fern; from Mark's sketches) is
+> the planned fix, alongside future new generators.
+
 ## 3. Palette — house set (proven, m2)
 
 The default baked into `brush-lab` and both bundled presets. Do not introduce a
