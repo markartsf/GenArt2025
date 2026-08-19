@@ -13,6 +13,16 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
+- **2026-08-18 — FIGURE BODIES adopted (V1 composition round, Mark's markup + Campos/sketch
+  refs; committed with this line).** Every generator now draws an ENCLOSED body: worm (ribbon)
+  = pointed-tip contour + rungs; burst/bloom/tuft = blob/ring outline, empty interior, teeth
+  outward; fan = open gear-comb arc. Radials differentiated by stroke character (burst=long
+  bold sun / bloom=many thin petals / fan=few chunky teeth / tuft=short chunky star, always
+  closed). Per-figure/family PALETTE SUBSETS of the house set (worms cycle theirs sequentially;
+  near-white excluded from teeth). Plan-overlay debug (true footprints + armature skeleton)
+  replaces the dot debug. Armature layouts remain PLACEHOLDERS — next: encode Mark's four
+  pencil sketches as armatures. Deliberate-incompleteness lever deferred (Mark wants to try).
+  V1-SCOPE §2/§7 scope drift (Bloom/Fan/Tuft in V1, auto-gain) still pending a docs decision.
 - **2026-06-27 — V1.0 ship-now native piece scoped** — Ribbon + Burst, house palette, winterland,
   emergent accretion. Parallel to compositor; shares no KM machinery. See `V1-SCOPE.md`.
 - **2026-06-27 — native→composition conversion route RESOLVED (§4·3a).** Textured strokes

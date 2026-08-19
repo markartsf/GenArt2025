@@ -114,7 +114,7 @@
       <button id="save">Save PNG</button>
     </div>
     <label style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);margin:2px 0 2px;">
-      <input type="checkbox" id="debuglabels"> debug: dot each mark's generator
+      <input type="checkbox" id="debuglabels"> debug: plan overlay (footprints + armature)
     </label>
     <div id="debuglegend" style="font-size:9.5px;color:var(--muted);margin:0 0 6px;line-height:1.5;"></div>
     <div style="font-size:9px;color:var(--muted);margin:0 0 6px;line-height:1.6;">
@@ -276,13 +276,45 @@ function makeFlowingSpine(cx, cy, reach, n){
   const swing = random(0.55, 1.15);             // amplitude of the S counter-curve
   const phase = random(TWO_PI);
   const step  = reach / Math.max(1, n-1);
-  let x = cx - cos(ang)*reach*0.45, y = cy - sin(ang)*reach*0.45;
+  let x = 0, y = 0;
   for(let i=0;i<n;i++){
     pts.push({x,y});
     ang += curl + Math.sin(phase + i*0.9)*swing*0.35 + random(-0.15,0.15);
     x += cos(ang)*step; y += sin(ang)*step;
   }
+  // recenter the walk so its CENTROID sits AT (cx,cy) — the ribbon stays on its armature anchor
+  // (was drifting off, so anchors weren't respected → all ribbons piled in one region).
+  let mx=0, my=0; for(const p of pts){ mx+=p.x; my+=p.y; } mx/=pts.length; my/=pts.length;
+  for(const p of pts){ p.x += cx-mx; p.y += cy-my; }
   return pts;
+}
+// Keep a spine (and its teeth) ON the frame (Mark 2026-07-10: no clipped/broken ribbons). Scales the
+// path down if it's bigger than the usable frame, then translates it inside the margins. `mrg` should
+// include the tooth half-length so the teeth don't hang off either. Mutates + returns pts.
+function fitPolylineToFrame(pts, mrg){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of pts){ if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x; if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y; }
+  const bw=maxX-minX, bh=maxY-minY, cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const availW=Math.max(1,FRAME_W-2*mrg), availH=Math.max(1,FRAME_H-2*mrg);
+  let s=1; if(bw>availW) s=Math.min(s,availW/bw); if(bh>availH) s=Math.min(s,availH/bh);
+  if(s<1){ for(const p of pts){ p.x=cx+(p.x-cx)*s; p.y=cy+(p.y-cy)*s; } }
+  minX=cx-bw*s/2; maxX=cx+bw*s/2; minY=cy-bh*s/2; maxY=cy+bh*s/2;
+  let dx=0, dy=0;
+  if(minX<mrg) dx=mrg-minX; else if(maxX>FRAME_W-mrg) dx=(FRAME_W-mrg)-maxX;
+  if(minY<mrg) dy=mrg-minY; else if(maxY>FRAME_H-mrg) dy=(FRAME_H-mrg)-maxY;
+  if(dx||dy){ for(const p of pts){ p.x+=dx; p.y+=dy; } }
+  return pts;
+}
+// PER-FIGURE PALETTES (Mark 2026-08-18): a figure (or a whole small-family) draws from a
+// SUBSET of the house palette — worm A leans red/gold while worm B leans teal/navy, and a
+// cluster's members share one subset (the Campos worms each own a limited palette). Near-white
+// is excluded from tooth subsets: on the cream ground it reads as a MISSING tooth (the "ghost/
+// incomplete figure" in Mark's red circles), not a colour.
+const TOOTH_PALETTE = PALETTE.filter(c => c !== '#f1faee');
+function paletteSubset(rng, k){
+  const pool = TOOTH_PALETTE.slice(), out = [];
+  for(let i=0;i<k && pool.length;i++) out.push(pool.splice(Math.floor(rng()*pool.length),1)[0]);
+  return out;
 }
 function pickColor(i, ribbonOffset){
   const pal=P.palette;
@@ -304,7 +336,9 @@ function computeTooth(stations, k, colorOffset, finalWeight, brushName){
     const w=(noise(s.x*0.012, s.y*0.012, 5.1)-0.5)*2*amp;
     cx=s.x+s.nx*w; cy=s.y+s.ny*w;
   }
-  const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
+  // BODIED ribbons (Mark 2026-08-18): teeth are RUNGS spanning the worm's drawn body, so the
+  // half-length envelope IS the body's half-width at this station (pointed tips → rungs shrink).
+  const env = P.bodied ? bodyEnv(s.u) : (1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6));
   const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
   let halfLen=envLen;
   if (P.handChaos > 0){
@@ -346,7 +380,10 @@ function makeBurstStations(cx, cy){
 // seed) so every bloom gets a distinct petal shape.
 function makeBloomStations(cx, cy, swirlDeg){
   const R0=P.width*0.55;
-  const count=max(3, round(TWO_PI*R0/P.spacing));
+  // count follows the AVERAGE petal radius (~1.35×R0 under the noise map below), not the base
+  // ring — stations at base density spread thin over the stretched blob and the bloom read as
+  // sparse/incomplete (Mark 2026-08-18: figures must render whole).
+  const count=max(3, round(TWO_PI*R0*1.35/P.spacing));
   const out=[];
   const nOffX=random(1000), nOffY=random(1000);
   const noiseScale=1.5;
@@ -402,6 +439,9 @@ function stationsFor(m){
     const cps = m.flowing ? makeFlowingSpine(m.cx, m.cy, m.extent, P.ctrl)
                           : makeContainedControlPoints(m.cx, m.cy, m.extent, P.ctrl);
     const poly=samplePolyline(cps);
+    // margin = worst-case rung reach past the spine: chaos stretches a rung to ~0.8×width and
+    // tremor/wobble add a little more (was 0.6× — worms still clipped the frame edge).
+    fitPolylineToFrame(poly, EDGE*SCALE + P.width*0.95);  // keep the whole worm (+ rungs) on-frame
     return placeStations(poly, P.spacing);
   }
   if(m.gen==='bloom') return makeBloomStations(m.cx, m.cy, m.swirl);
@@ -443,8 +483,17 @@ let HERO_TYPE  = 'burst';       // 'burst' (default, strongest anchor) | 'ribbon
 // keep the chunky weight (Mark). charcoal reads heavier than marker at the same value.
 function burstWeight(brush, w){
   const t = Math.max(0, Math.min(1, (w - 26) / 30));   // 0 at smallest regular (26) → 1 at largest (56); clamps for heroes
-  return brush==='charcoal' ? (0.95 + t*0.58) : (1.15 + t*0.65);   // charcoal 0.95→1.53 ; marker 1.15→1.8
+  // floors raised 2026-08-18 (Mark: small figures rendered ghost-faint → read as incomplete)
+  return brush==='charcoal' ? (1.10 + t*0.55) : (1.35 + t*0.60);   // charcoal 1.10→1.65 ; marker 1.35→1.95
 }
+
+// RADIAL CHARACTER (Mark 2026-08-18: "bloom, tuft and fan appear too similar") — each radial
+// generator now has its OWN stroke character via weight × count(spacing) × length(strokeLen):
+//   · burst = the SUN/COG: bold medium-count teeth, the longest rays (focal figure)
+//   · bloom = the FLOWER: MANY THIN petals (half weight, ~⅔ spacing → nearly 2× the strokes)
+//   · fan   = the GEAR-COMB: FEW CHUNKY parallel teeth on an open arc
+//   · tuft  = the STAR: few chunky SHORT spokes on a small closed ring (always complete —
+//     the old open-arc tufts read as half-drawn figures, Mark's red circles img2)
 
 // build one ribbon-mark spec (size/brush only; centre assigned at placement)
 function ribbonSpec(rng){
@@ -476,22 +525,21 @@ function burstSpec(rng){
   return { gen:'burst', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, radialoffset: rng()*0.3 };
 }
 function bloomSpec(rng){
-  const brush = pick(rng, ['marker','charcoal']);                   // same weight curve as burst (below)
+  const brush = pick(rng, ['marker','charcoal']);
   const w = 30 + rng()*36;
   const swirl = (rng()*2-1)*35;                                     // -35..35° petal twist
-  return { gen:'bloom', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, swirl };
+  return { gen:'bloom', brush, weight: burstWeight(brush, w)*0.5, width:w*SCALE, spacing:7*SCALE, swirl };
 }
 function fanSpec(rng){
   const brush = pick(rng, ['marker','charcoal']);                   // GENERATORS.fan allowedBrushes
   const w = 40 + rng()*36;
   const fanspread = 70 + rng()*50;                                  // 70–120°
-  return { gen:'fan', brush, weight: burstWeight(brush, w), width:w*SCALE, spacing:11*SCALE, fanspread };
+  return { gen:'fan', brush, weight: burstWeight(brush, w)*1.5, width:w*SCALE, spacing:15*SCALE, fanspread };
 }
 function tuftSpec(rng){
-  const brush = pick(rng, ['marker','charcoal','pen']);
+  const brush = pick(rng, ['marker','charcoal']);                   // pen dropped — hairline spokes read as ghosts
   const w = 20 + rng()*18;                                          // smaller than a regular burst
-  const spreadFrac = rng()<0.5 ? 1.0 : (0.45 + rng()*0.45);         // half: closed ring, half: open arc
-  return { gen:'tuft', brush, weight: burstWeight(brush==='pen'?'marker':brush, w), width:w*SCALE, spacing:9*SCALE, spreadFrac };
+  return { gen:'tuft', brush, weight: burstWeight(brush, w)*1.6, width:w*SCALE, spacing:13*SCALE, spreadFrac:1.0, strokeLen:0.8 };
 }
 
 // ============================================================================
@@ -505,33 +553,35 @@ function tuftSpec(rng){
 //   · anchors[0] = 'hero' tier (dominant, full size); later anchors = 'mid' (subordinate, smaller)
 //   · satellite  = where regular marks bias toward;  satSigma = spread of that bias
 //   · voids      = circular keep-clear regions (the breathing space)
+// SIZE CAST (Mark 2026-07-10): every composition targets the same distribution — 2–3 LARGE +
+// 1–2 MEDIUM-large + small clusters. The armature only changes the ARRANGEMENT of that cast.
+//   · anchors: featured objects, tier 'large' | 'medium'. `large` = natural large count (hero-max
+//     slider CAPS it); every medium anchor always places.
+//   · clusters: {x,y,s} bias centres for the SMALL fillers — each cluster is filled with ONE
+//     generator family (a group of like bursts/tufts), type chosen per seed. Positioned to fill the
+//     gaps between the featured objects and balance the frame.
+//   · voids: circular keep-clear regions (the breathing space).
 const ARMATURES = {
-  // `clusters` (Mark 2026-07-10): 2–3 bias centres the small/medium marks distribute AMONG, so mass
-  // spreads across the frame (grouped near the heroes + a counterweight) instead of piling at one
-  // point and leaving half the frame dead. Each {x,y,s} is normalized position + spread fraction.
-  // `heroes` (Mark 2026-07-10): the armature's NATURAL hero count — the hero× slider CAPS this,
-  // it doesn't force more. So dominant=1 large, diagonal=1 large+1 medium, triangle=1 large+2 medium
-  // (matching the sketch grammar). Extra anchors past `heroes` are unused for heroes.
-  dominant: {   // ONE dominant hero upper-right; mass diagonals toward lower-left; void lower-right
-    heroes: 1,
-    anchors: [ {x:0.62, y:0.36, tier:'hero'}, {x:0.44, y:0.56, tier:'mid'}, {x:0.30, y:0.74, tier:'mid'} ],
-    clusters: [ {x:0.58, y:0.38, s:0.12}, {x:0.38, y:0.60, s:0.15}, {x:0.24, y:0.40, s:0.12} ],
-    satellite: {x:0.40, y:0.60}, satSigma:0.24,
-    voids: [ {x:0.84, y:0.80, r:0.20} ],
+  dominant: {   // large objects weighted upper-right→centre; medium lower-left; void lower-right
+    large: 2,
+    anchors: [ {x:0.60, y:0.32, tier:'large'}, {x:0.42, y:0.54, tier:'large'}, {x:0.30, y:0.72, tier:'medium'} ],
+    clusters: [ {x:0.52, y:0.40, s:0.12}, {x:0.24, y:0.44, s:0.12}, {x:0.44, y:0.70, s:0.11} ],
+    satellite: {x:0.40, y:0.56}, satSigma:0.22,
+    voids: [ {x:0.82, y:0.78, r:0.18} ],
   },
-  diagonal: {   // TWO elements on a diagonal; smalls bridge between; off-diagonal corners open
-    heroes: 2,
-    anchors: [ {x:0.32, y:0.30, tier:'hero'}, {x:0.70, y:0.68, tier:'mid'}, {x:0.52, y:0.50, tier:'mid'} ],
-    clusters: [ {x:0.34, y:0.34, s:0.12}, {x:0.52, y:0.50, s:0.13}, {x:0.68, y:0.66, s:0.12} ],
+  diagonal: {   // two large on a diagonal, two medium bridging; off-diagonal corners open
+    large: 2,
+    anchors: [ {x:0.28, y:0.28, tier:'large'}, {x:0.64, y:0.66, tier:'large'}, {x:0.46, y:0.46, tier:'medium'}, {x:0.76, y:0.38, tier:'medium'} ],
+    clusters: [ {x:0.36, y:0.40, s:0.11}, {x:0.56, y:0.56, s:0.12}, {x:0.20, y:0.60, s:0.11} ],
     satellite: {x:0.50, y:0.50}, satSigma:0.22,
-    voids: [ {x:0.82, y:0.20, r:0.19}, {x:0.20, y:0.82, r:0.18} ],
+    voids: [ {x:0.80, y:0.20, r:0.16}, {x:0.18, y:0.84, r:0.15} ],
   },
-  triangle: {   // THREE: one dominant + two subordinate; smalls near vertices; corners open
-    heroes: 3,
-    anchors: [ {x:0.36, y:0.34, tier:'hero'}, {x:0.68, y:0.44, tier:'mid'}, {x:0.50, y:0.70, tier:'mid'} ],
-    clusters: [ {x:0.36, y:0.38, s:0.12}, {x:0.64, y:0.44, s:0.12}, {x:0.50, y:0.66, s:0.13} ],
-    satellite: {x:0.51, y:0.50}, satSigma:0.20,
-    voids: [ {x:0.86, y:0.80, r:0.18}, {x:0.16, y:0.84, r:0.17} ],
+  triangle: {   // three large triangulated + one medium centre; corners open
+    large: 3,
+    anchors: [ {x:0.32, y:0.32, tier:'large'}, {x:0.68, y:0.40, tier:'large'}, {x:0.50, y:0.72, tier:'large'}, {x:0.50, y:0.50, tier:'medium'} ],
+    clusters: [ {x:0.40, y:0.54, s:0.11}, {x:0.60, y:0.58, s:0.11}, {x:0.30, y:0.44, s:0.10} ],
+    satellite: {x:0.50, y:0.50}, satSigma:0.20,
+    voids: [ {x:0.84, y:0.80, r:0.15}, {x:0.16, y:0.84, r:0.14} ],
   },
 };
 const ARMATURE_KEYS = ['dominant','diagonal','triangle'];
@@ -566,10 +616,10 @@ function buildPlan(){
   // effective radius (reach) — for spacing/coverage/margin. A ribbon is a linear comb, not a
   // solid disc, so it packs a bit tighter than its full extent.
   function radiusFor(m){                                            // packing-radius estimate per generator shape
-    if(m.gen==='burst') return m.width*1.0;
+    if(m.gen==='burst') return m.width*(m.strokeLen ?? 1);          // long-ray focal suns claim more room
     if(m.gen==='bloom') return m.width*1.3;                         // petals can reach up to 2.5× R0
     if(m.gen==='fan')   return m.width*0.75;                        // arc, not a full disc — packs tighter
-    if(m.gen==='tuft')  return m.width*0.5;                         // small cluster, radius IS the tooth radius
+    if(m.gen==='tuft')  return m.width*0.5*(m.strokeLen ?? 1);      // small cluster, radius IS the tooth radius
     // ribbon: pack by BAND WIDTH, not spine length — a long ribbon is a thin curving band, so its
     // collision footprint is its width (~tooth length), NOT its extent. Lets ribbons CROSS/interleave
     // (Enfantines) and lets every hero land at its anchor instead of rejecting on the spine reach.
@@ -606,80 +656,90 @@ function buildPlan(){
     return true;
   }
 
-  placeHeroes(heroRng, tryAdd, arm);     // heroes land on the armature's anchors, from the independent hero stream
+  placeFeatured(heroRng, tryAdd, arm);   // large + medium objects land on the armature's anchors
 
-  // regular marks (regRng): build roster, shuffle for layered depth, place with breathing room
-  // ribbon-leaning roster (Mark: want more ribbons, fewer all-burst seeds). The SMALL generators
-  // scale by densMul on dense seeds (more little objects); ribbons stay fixed. coverageCap still
-  // throttles what actually lands, so the extra roster just fills a denser seed further.
-  const reg=[]; const N_RIBBON=15;   // ribbon-forward roster (Mark 2026-07-07 — ribbons more present)
-  const N_BURST=Math.round(9*densMul), N_BLOOM=Math.round(4*densMul), N_FAN=Math.round(4*densMul), N_TUFT=Math.round(5*densMul);
-  for(let i=0;i<N_RIBBON;i++) reg.push(ribbonSpec(regRng));
-  for(let i=0;i<N_BURST;i++)  reg.push(burstSpec(regRng));
-  for(let i=0;i<N_BLOOM;i++)  reg.push(bloomSpec(regRng));
-  for(let i=0;i<N_FAN;i++)    reg.push(fanSpec(regRng));
-  for(let i=0;i<N_TUFT;i++)   reg.push(tuftSpec(regRng));
-  for(let i=reg.length-1;i>0;i--){ const k=Math.floor(regRng()*(i+1)); [reg[i],reg[k]]=[reg[k],reg[i]]; }
-  // DISTRIBUTED CLUSTERS (Mark 2026-07-10): each regular biases toward ONE of the armature's cluster
-  // centres (cycled by index so mass spreads evenly across them), grouped near the heroes + a
-  // counterweight — replaces the single-satellite blob that left half the frame dead. Fallback to
-  // the satellite if an armature has no clusters. pFocal 0.62 → mostly clustered, some free sprinkle.
+  // SMALL FILLERS as coherent per-cluster FAMILIES (Mark 2026-07-10): each armature cluster is filled
+  // with ONE radial generator type — a group of like bursts/tufts, not a random mix (the sketch
+  // groupings, and the Enfantines plates). Type + count chosen per cluster under the seed; coverageCap
+  // still throttles the total so a dense seed fills more without crowding. Ribbons no longer fill —
+  // they are FEATURED objects only now. Fallback to the satellite centre if an armature lacks clusters.
   const clusters = (arm.clusters && arm.clusters.length)
     ? arm.clusters.map(c => ({ x:c.x*W, y:c.y*H, s:c.s*minDimP }))
     : [ { x:satelliteCenter.x, y:satelliteCenter.y, s:arm.satSigma*minDimP } ];
-  // PER-MARK placement stream (seeded by mark index) → a mark's candidate positions don't depend
-  // on how many rejections earlier marks had, so adding a hero can't cascade-reshuffle the rest.
-  reg.forEach((m, i) => {
-    const cl = clusters[i % clusters.length];
-    tryAdd(mulberry32(((seed*2246822519) ^ ((i+1)*2654435761)) >>> 0), m, 0.62, cl.s, 0.92, { x:cl.x, y:cl.y });
+  const specForGen = { burst:burstSpec, bloom:bloomSpec, fan:fanSpec, tuft:tuftSpec };
+  const clRng = mulberry32(((seed*0x85ebca6b) ^ 0x9e3779b1) >>> 0);        // cluster type/count stream
+  clusters.forEach((cl, ci) => {
+    const gen = RADIAL_TYPES[Math.floor(clRng()*RADIAL_TYPES.length)];     // this cluster's single family
+    const famPal = paletteSubset(clRng, 3);                                // the family's SHARED palette subset
+    const n = Math.round((6 + Math.floor(clRng()*5)) * densMul);           // 6–10 members × density (Mark img6: a few more smalls)
+    for(let k=0;k<n;k++){
+      const m = specForGen[gen](regRng);
+      m.pal = famPal;                                                      // family coherence: like shapes, like colours
+      // per-member stream (independent of rejections); pFocal high → a tight family with a little sprinkle
+      tryAdd(mulberry32(((seed*2246822519) ^ (((ci*131+k)+1)*2654435761)) >>> 0), m, 0.72, cl.s, 0.9, { x:cl.x, y:cl.y });
+    }
   });
   out.forEach((m, i) => { m.id = i; });   // STABLE identity (= placement order) — seeds a mark by this,
   return out;                              // so its look is fixed no matter WHEN it reveals (see revealOrder)
 }
 
-// HERO marks: HERO_COUNT bold charcoal anchors, RELIABLY LARGE (well above any regular mark's
-// size) so the eye finds a clear object to focus on, placed FIRST with a strong focal pull.
-// Exempt from the coverage budget; still anti-clump spaced. Burst (cog-rosette) is the default.
+// FEATURED marks: the LARGE (2–3) and MEDIUM (1–2) objects at the armature's anchors. Large objects
+// follow the hero-type control (ribbon default / 'either' mixed); medium objects are a radial family
+// for contrast with the large ribbons (matches the sketches). Coverage-exempt; the hero-max slider
+// CAPS the large count. (Mark 2026-07-10 — was placeHeroes / one dominant + tiny subordinates.)
 const HERO_TYPES = ['burst','ribbon','bloom','fan','tuft'];
-const HERO_SCALE = 1.2;          // heroes 20% larger across every generator (Mark 2026-07-05)
-function placeHeroes(heroRng, tryAdd, arm){
+const RADIAL_TYPES = ['burst','bloom','fan','tuft'];   // medium objects + small clusters draw from these
+function placeFeatured(heroRng, tryAdd, arm){
   const minDim = Math.min(FRAME_W, FRAME_H);
-  const nHero = Math.min(HERO_COUNT, arm.heroes ?? arm.anchors.length);   // slider CAPS the armature's natural count
-  for(let i=0;i<nHero;i++){
-    const anchor  = arm.anchors[Math.min(i, arm.anchors.length-1)];   // this hero's armature slot
-    const tierMul = anchor.tier==='hero' ? 1.4 : 0.45;               // STRONG dominance: one towering focal, rest clearly subordinate
-    const sizeMul = HERO_SCALE * tierMul;                             // replaces the flat HERO_SCALE in each branch
-    const center  = { x: anchor.x*FRAME_W, y: anchor.y*FRAME_H };     // land the hero AT its anchor
-    const type = HERO_TYPE==='either' ? pick(heroRng, HERO_TYPES) : HERO_TYPE;
+  let largePlaced = 0;
+  for(let i=0;i<arm.anchors.length;i++){
+    const anchor = arm.anchors[i];
+    const isLarge = anchor.tier==='large';
+    if(isLarge){ if(largePlaced >= HERO_COUNT) continue; largePlaced++; }   // hero-max slider caps the LARGE count
+    const dom = (isLarge && largePlaced===1) ? 1.15 : 1.0;                  // first large modestly dominant (no 3× gap)
+    // more larges ⇒ each a bit smaller, so a triangle of three doesn't tangle while a lone
+    // dominant sun can really tower (Mark 2026-08-18: focal larger, but figures stay distinct)
+    const countMul = (arm.large<=1) ? 1.15 : (arm.large===2 ? 1.0 : 0.82);
+    const sizeMul = (isLarge ? 1.35*countMul : 0.72) * dom;                 // large vs medium-large size tiers
+    const center  = { x: anchor.x*FRAME_W, y: anchor.y*FRAME_H };           // land the object AT its anchor
+    const type = isLarge ? (HERO_TYPE==='either' ? pick(heroRng, HERO_TYPES) : HERO_TYPE)
+                         : pick(heroRng, RADIAL_TYPES);                     // medium = radial family (contrasts large ribbons)
     let m, sigma, sep;
     if(type==='burst'){
-      const w = (100 + heroRng()*55) * sizeMul;   // 120–186 reference units vs regular 26–56 → unmistakably the largest
-      m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, radialoffset:heroRng()*0.20, hero:true };
+      // the SUN — longest rays (strokeLen 1.3), the composition's focal figure (Mark img3:
+      // "I wish the burst were longer and larger as the focal point").
+      const w = (85 + heroRng()*45) * sizeMul;
+      m = { gen:'burst', brush:'charcoal', weight: burstWeight('charcoal', w)*1.15, width:w*SCALE, spacing:11*SCALE,
+            radialoffset:heroRng()*0.20, strokeLen:1.3, hero:true, pal:paletteSubset(heroRng, 4+Math.floor(heroRng()*2)) };
       sigma = minDim*0.10; sep = 0.92;              // compact cogs cluster tight at focal (unchanged)
     } else if(type==='ribbon'){
       // LONG DECAYED S-BAND (Mark 2026-07-10, Enfantines ribbon references): a flowing worm, not a
       // contained comb. Tooth-length (band width) is bold; the spine reaches several × that as an
       // S-curve. Gestural modifiers ON → organic tremor + varied spacing (Gate) + uneven length
       // (Chaos). Colour is the palette per tooth (charcoal = grainy texture, not monochrome).
-      const w        = (120 + heroRng()*70) * sizeMul;         // tooth-length / band width (bold)
+      // WORM-TO-WORM VARIATION (Mark img2/img5: worms larger at times + looking DIFFERENT):
+      // ~30% of worms are JUMBO (1.5×); each worm owns a 3–4 colour palette subset cycled
+      // SEQUENTIALLY down the rungs (the Campos ladder rhythm), plus its own rung weight/spacing.
+      const jumbo    = heroRng() < 0.30;
+      const w        = (95 + heroRng()*50) * sizeMul * (jumbo ? 1.5 : 1);
       const reachMul = 4.5 + heroRng()*1.8;                    // long S-band: spine ≈ 4.5–6.3× the band width
-      m = { gen:'ribbon', brush:'charcoal', weight:1.3, width:w*SCALE, extent:w*reachMul*SCALE,
-            ctrl:8+Math.floor(heroRng()*4), spacing:10*SCALE, field:'hand', flowing:true, hero:true,
+      m = { gen:'ribbon', brush:'charcoal', weight:1.0+heroRng()*0.7, width:w*SCALE, extent:w*reachMul*SCALE,
+            ctrl:8+Math.floor(heroRng()*4), spacing:(8+heroRng()*5)*SCALE, field:'hand', flowing:true, hero:true,
             handTremor:0.34+heroRng()*0.22, handGate:0.24+heroRng()*0.20, handChaos:0.40+heroRng()*0.22,
-            weightVary:0.55 };
+            weightVary:0.55, pal:paletteSubset(heroRng, 3+Math.floor(heroRng()*2)), colormode:'sequential' };
       // long flowing bands — spread wide + loose sep so 2–3 can interleave without one rejecting the next.
       sigma = minDim*0.22; sep = 0.42;
     } else if(type==='bloom'){
-      const w = (95 + heroRng()*50) * sizeMul;    // well above regular bloom's 30–66 range
-      m = { gen:'bloom', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, swirl:(heroRng()*2-1)*35, hero:true };
+      const w = (75 + heroRng()*40) * sizeMul;    // the FLOWER — many thin petals at hero scale
+      m = { gen:'bloom', brush:'charcoal', weight: burstWeight('charcoal', w)*0.55, width:w*SCALE, spacing:7*SCALE, swirl:(heroRng()*2-1)*35, hero:true, pal:paletteSubset(heroRng, 4) };
       sigma = minDim*0.10; sep = 0.92;              // compact rosette like burst
     } else if(type==='fan'){
-      const w = (90 + heroRng()*50) * sizeMul;    // well above regular fan's 40–76 range
-      m = { gen:'fan', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:11*SCALE, fanspread:80+heroRng()*40, hero:true };
+      const w = (72 + heroRng()*40) * sizeMul;    // the GEAR-COMB — few chunky teeth on an arc
+      m = { gen:'fan', brush:'charcoal', weight: burstWeight('charcoal', w)*1.6, width:w*SCALE, spacing:15*SCALE, fanspread:80+heroRng()*40, hero:true, pal:paletteSubset(heroRng, 4) };
       sigma = minDim*0.14; sep = 0.7;                // arc, not a full disc — packs a bit tighter than burst
     } else {   // tuft
-      const w = (70 + heroRng()*40) * sizeMul;    // well above regular tuft's 20–38 range
-      m = { gen:'tuft', brush:'charcoal', weight: burstWeight('charcoal', w), width:w*SCALE, spacing:9*SCALE, spreadFrac: heroRng()<0.5?1.0:(0.6+heroRng()*0.4), hero:true };
+      const w = (70 + heroRng()*40) * sizeMul;    // the STAR — few chunky short spokes, always a full ring
+      m = { gen:'tuft', brush:'charcoal', weight: burstWeight('charcoal', w)*1.7, width:w*SCALE, spacing:13*SCALE, spreadFrac:1.0, strokeLen:0.8, hero:true, pal:paletteSubset(heroRng, 4) };
       sigma = minDim*0.10; sep = 0.92;
     }
     // land AT the armature anchor (tight sigma). Anchors are authored-spaced, so relax the anti-clump
@@ -706,6 +766,10 @@ function applyMark(m){
   P.handGate   = m.handGate ?? 0;
   P.handChaos  = m.handChaos ?? 0;
   P.weightVary = m.weightVary ?? 0;   // coherent thickness variation along the path (ribbons)
+  P.bodied = (m.gen==='ribbon') && markHasBody(m);   // worm rungs span the drawn body (computeTooth env)
+  P.palette   = m.pal || PALETTE;                    // per-figure/family palette subset (Mark 2026-08-18)
+  P.colormode = m.colormode || 'random';             // worms cycle their subset sequentially (ladder rhythm)
+  P.strokeLen = m.strokeLen ?? 1.0;                  // per-generator ray length (burst long / tuft short)
   P.field = m.field ?? g.fieldDefault;
   P.fieldAmount = g.fieldAmountDefault;
   // activate the per-mark field (Bend Field — the only sanctioned wiggle)
@@ -714,6 +778,58 @@ function applyMark(m){
     else if (typeof brush.noField === 'function'){ brush.noField(); }
   } catch(e){ try{ brush.noField(); }catch(_){} }
 }
+
+// ---- FIGURE BODIES (Mark 2026-08-18) -------------------------------------------------
+// Every figure is an ENCLOSED shape — a drawn contour with marks riding its boundary —
+// per the Campos plates + Mark's pencil sketches. Without a body a generator reads as a
+// texture patch, not a figure, and can never look "complete". Grammar per generator:
+//   · ribbon → WORM: two edges offset from the spine, tapering to POINTS at both ends;
+//     teeth become RUNGS laddering between the edges (see computeTooth's bodied env).
+//   · burst/bloom/tuft → blob/ring outline THROUGH the tooth ring; teeth radiate OUTWARD
+//     from it (bias=1 already does this) so the interior stays EMPTY (the urchin/sun).
+//   · fan → open ARC line (the gear-comb), teeth off one side.
+// The contour is emitted as ordinary stroke records BEFORE the mark's teeth, so the reveal
+// draws each figure the way a hand does: outline the body first, then fill the rungs.
+const INK = '#4a4238';                       // graphite-brown contour line (Campos' pencil)
+function markHasBody(m){
+  if(m.body === false) return false;                       // per-mark opt-out
+  if(m.gen === 'tuft') return (m.spreadFrac ?? 1) >= 1;    // open tuft arcs stay bodiless
+  return true;
+}
+function bodyEnv(u){ return 1 - Math.pow(Math.abs(u*2-1), 1.75); }   // 1 mid → 0 tips (pointed worm ends)
+function contourWobble(x, y){ return (noise(x*0.02, y*0.02, 7.7) - 0.5) * 2 * 2.2 * SCALE; }
+function contourPointsFor(m, stations){                     // → { pts, closed }: the figure's outline
+  if(m.gen === 'ribbon'){
+    const L=[], R=[];
+    for(const s of stations){
+      const hw = (P.width*0.5)*bodyEnv(s.u) + 1.2*SCALE + contourWobble(s.x, s.y);
+      L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
+      R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+    }
+    return { pts: L.concat(R.reverse()), closed:true };     // down one edge, back the other → worm body
+  }
+  // radial figures: the blob/ring outline runs THROUGH the stations (teeth radiate outward from
+  // it). Stations sit a tooth-spacing apart — connecting them directly reads as a hard POLYGON on
+  // small figures, so smooth + densify with a Catmull pass (closed loop; fan stays an open arc).
+  const base = stations.map(s => {
+    const w = contourWobble(s.x, s.y);
+    return { x:s.x + s.nx*w, y:s.y + s.ny*w };
+  });
+  const closed = m.gen !== 'fan';
+  let pts;
+  if(closed){
+    pts = [];
+    const n = base.length;
+    for(let i=0;i<n;i++){
+      const p0=base[(i-1+n)%n], p1=base[i], p2=base[(i+1)%n], p3=base[(i+2)%n];
+      for(let s=0;s<4;s++) pts.push(catmullRom(p0,p1,p2,p3,s/4));
+    }
+  } else {
+    pts = samplePolyline(base, 4);
+  }
+  return { pts, closed };
+}
+function outlineWeight(m){ return 0.6 + Math.min(1, (m.width/SCALE)/220) * 0.9; }   // 0.6 small → 1.5 hero
 
 // ---- COMPILE: plan → flat, ordered list of single-STROKE records --------------------
 // The reveal unit is ONE tooth/spoke, not a whole generator — so cog teeth and ribbon combs
@@ -729,6 +845,14 @@ function applyMark(m){
 let strokes    = [];          // flat, ORDERED stamp records: plan order, station order within a mark
 let markField  = [];          // per-mark resolved Bend-Field name (set before a mark's strokes)
 let curFieldMark = -1;        // which mark's field is currently active in drawStrokes()
+let bboxes     = {};          // per-mark TRUE footprint (bbox of every compiled stroke endpoint) — plan overlay
+
+function pushStroke(rec){     // record + expand its mark's real footprint
+  strokes.push(rec);
+  const bb = bboxes[rec.mi] || (bboxes[rec.mi] = { x0:1e9, y0:1e9, x1:-1e9, y1:-1e9 });
+  bb.x0=Math.min(bb.x0,rec.ax,rec.bx); bb.x1=Math.max(bb.x1,rec.ax,rec.bx);
+  bb.y0=Math.min(bb.y0,rec.ay,rec.by); bb.y1=Math.max(bb.y1,rec.ay,rec.by);
+}
 
 // ENTRANCE ORDER (V1-SCOPE §5): marks reveal in generation order — no authored/directed
 // sequence. Heroes are PLACED first (for the additive-hero property) but INTERLEAVED into the
@@ -747,13 +871,26 @@ function revealOrder(){
 }
 
 function compileStrokes(){
-  strokes = []; markField = [];
+  strokes = []; markField = []; bboxes = {};
   for(const m of revealOrder()){
     const id = m.id;                                            // STABLE identity → seed by this, not reveal position
     randomSeed(seed + id*9973); noiseSeed(seed + id*9973);      // MARK seed → spine/station geometry
     applyMark(m);                                               // sets P.* + resolves the mark's field
     markField[id] = P.field;
     const stations = stationsFor(m);
+    // FIGURE BODY first (Mark 2026-08-18): the contour outlines the figure, then the teeth/rungs
+    // fill it — the hand's drawing order, and what makes the reveal read as "drawing a thing".
+    // Contour wobble is noise-based (mark seed already set) → deterministic, reveal-stable.
+    if(markHasBody(m)){
+      const { pts, closed } = contourPointsFor(m, stations);
+      const cw = outlineWeight(m), col = hexAlpha(INK, 0.72);
+      const nSeg = pts.length - (closed ? 0 : 1);
+      for(let j=0;j<nSeg;j++){
+        const a = pts[j], b = pts[(j+1)%pts.length];
+        const sk = (seed + id*9973 + (j+100000)*7919) >>> 0;   // contour segs: own stroke-seed lane (past any tooth k)
+        pushStroke({ brush:'pen', color:col, weight:cw, ax:a.x, ay:a.y, bx:b.x, by:b.y, mi:id, seedK:sk, body:true });
+      }
+    }
     const brushConfig = BRUSH_REGISTRY[m.brush] || BRUSH_REGISTRY['default'];
     const finalWeight = P.weight * brushConfig.baseWeight;
     const colorOffset = id*3;
@@ -761,7 +898,7 @@ function compileStrokes(){
       const sk = (seed + id*9973 + (k+1)*7919) >>> 0;          // per-STROKE seed (stored → reused at stamp)
       randomSeed(sk); noiseSeed(sk);
       const rec = computeTooth(stations, k, colorOffset, finalWeight, m.brush);
-      if(rec){ rec.mi = id; rec.seedK = sk; strokes.push(rec); }
+      if(rec){ rec.mi = id; rec.seedK = sk; pushStroke(rec); }
     }
   }
 }
@@ -880,7 +1017,9 @@ function drawStrokes(from, to){
     randomSeed(rec.seedK); noiseSeed(rec.seedK);
     try { if (typeof brush.seed === 'function') brush.seed(rec.seedK); } catch(e){}
     useBrush(rec.brush, rec.color, rec.weight * wMul);
-    if(lMul === 1){ stamp(rec.ax, rec.ay, rec.bx, rec.by); }
+    // body-contour segments never length-scale: shrinking chained segments would gap the
+    // outline into dashes. They still take the weight swell (wMul) like everything else.
+    if(rec.body || lMul === 1){ stamp(rec.ax, rec.ay, rec.bx, rec.by); }
     else {                                                  // scale tooth length around its midpoint
       const mx=(rec.ax+rec.bx)/2, my=(rec.ay+rec.by)/2, hx=(rec.bx-rec.ax)/2, hy=(rec.by-rec.ay)/2;
       stamp(mx-hx*lMul, my-hy*lMul, mx+hx*lMul, my+hy*lMul);
@@ -890,27 +1029,50 @@ function drawStrokes(from, to){
 }
 
 // Full static frame (curation): freeze a plan, compile, clear to ground, stamp every stroke.
-// DEBUG: mark each mark's centre with a generator-coloured dot (plain p5, not brush — doesn't
-// touch brush state, same technique as drawSpineLine) so generator diversity can be verified by
-// eye, not guessed at from a screenshot. WEBGL text() needs a loaded font, so the legend is HTML
-// (#debuglegend) rather than on-canvas labels. Toggle via the "debug labels" checkbox.
+// PLAN OVERLAY (Mark 2026-08-18, replaces the centre-dot debug): critique PLACEMENT separately
+// from RENDERING. Draws, over the finished frame (plain p5, doesn't touch brush state):
+//   · each mark's TRUE footprint — the bbox of its compiled stroke endpoints (from pushStroke),
+//     stroked in its generator colour (thick = hero/featured), with a centre dot;
+//   · the armature skeleton — anchors as crosses (red = large tier, amber = medium),
+//     cluster bias-circles (blue), voids (grey discs).
+// WEBGL text() needs a loaded font, so the legend stays HTML (#debuglegend).
 let DEBUG_LABELS = false;
 const GEN_DOT = { ribbon:'#000000', burst:'#ff00ff', bloom:'#00aaff', fan:'#ff8800', tuft:'#00cc44' };
-function drawDebugLabels(){
+function drawPlanOverlay(){
   const counts = {};
+  const arm = currentArmature();
+  const minDimP = Math.min(FRAME_W, FRAME_H);
   push();
   translate(-width/2, -height/2);
-  noStroke();
+  // armature skeleton first (under the footprints)
+  for(const v of arm.voids){
+    stroke(120,120,120,150); strokeWeight(2); fill(120,120,120,28);
+    circle(v.x*FRAME_W, v.y*FRAME_H, v.r*minDimP*2);
+  }
+  noFill();
+  if(arm.clusters) for(const c of arm.clusters){
+    stroke(70,70,220,160); strokeWeight(1.5);
+    circle(c.x*FRAME_W, c.y*FRAME_H, c.s*minDimP*2);
+  }
+  for(const a of arm.anchors){
+    const x=a.x*FRAME_W, y=a.y*FRAME_H, s=(a.tier==='large'?16:10)*SCALE;
+    if(a.tier==='large') stroke(210,30,30,230); else stroke(220,140,20,230);
+    strokeWeight(3); line(x-s,y,x+s,y); line(x,y-s,x,y+s);
+  }
+  // per-mark true footprints
   for(const m of plan){
     counts[m.gen] = (counts[m.gen]||0) + 1;
-    fill(GEN_DOT[m.gen] || '#999999');
-    circle(m.cx, m.cy, 10*SCALE);
+    const col = GEN_DOT[m.gen] || '#999999';
+    const bb = bboxes[m.id];
+    if(bb){ stroke(col); strokeWeight(m.hero?3:1); noFill(); rect(bb.x0, bb.y0, bb.x1-bb.x0, bb.y1-bb.y0); }
+    noStroke(); fill(col); circle(m.cx, m.cy, (m.hero?12:7)*SCALE);
   }
   pop();
   const el = document.getElementById('debuglegend');
-  if(el) el.textContent = 'placed: ' + Object.entries(counts).map(([g,n])=>g+'='+n).join('  ') + '  (total ' + plan.length + ')';
+  if(el) el.textContent = 'placed: ' + Object.entries(counts).map(([g,n])=>g+'='+n).join('  ')
+    + '  (total ' + plan.length + ')  ·  box = mark footprint (thick = featured) · ✚ = anchor (red large / amber medium) · ○ = cluster · grey disc = void';
 }
-function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); if(DEBUG_LABELS) drawDebugLabels(); }
+function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); if(DEBUG_LABELS) drawPlanOverlay(); }
 
 // ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
 // revealRate() = REVEAL_RATE (strokes/sec at full energy) × revealEnergy (0..1). In MANUAL
