@@ -167,6 +167,14 @@
     <div class="row"><label>Frond count</label><span class="val" id="v_frondCount">14</span></div>
     <input type="range" id="frondCount" min="4" max="30" step="1" value="14">
   </div>
+  <div class="group" id="ringwidthGroup" style="display:none;">
+    <div class="row"><label>Ring width <span style="color:var(--muted);font-size:10px;">frac of radius</span></label><span class="val" id="v_ringWidth">0.35</span></div>
+    <input type="range" id="ringWidth" min="0.1" max="0.8" step="0.01" value="0.35">
+  </div>
+  <div class="group" id="raycountGroup" style="display:none;">
+    <div class="row"><label>Ray count</label><span class="val" id="v_rayCount">12</span></div>
+    <input type="range" id="rayCount" min="4" max="24" step="1" value="12">
+  </div>
   <div class="group" id="swirlGroup" style="display:none;">
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
@@ -310,7 +318,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
-  tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14,
+  tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14, ringWidth:0.35, rayCount:12,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
   handTremor:0, handGate:0, handChaos:0,
   field:'none',   // active p5.brush vector field; per-generator default applied on switch
@@ -888,6 +896,42 @@ function drawFern(fernIndex){
   drawTeeth(stations, fernIndex*3);
 }
 
+// SUN Generator — a SOLID ring (dense band of short circumferential strokes)
+// with sparse short rays OUTSIDE it. The empty centre is the ring's hole,
+// smaller than Burst's (Rin < R0). Band strokes ride the tangent; rays ride
+// the radial — all through shared drawTeeth (u=0.5, per-station hw).
+function makeSunStations(cx, cy){
+  const R0   = P.width * 0.55;
+  const Rin  = R0 * (1 - P.ringWidth);
+  const out  = [];
+  // ring band: concentric circles of short tangential strokes, packed to read solid
+  const nRings = max(2, round((R0 - Rin) / (P.spacing * 0.55)));
+  for(let r0=0; r0<nRings; r0++){
+    const r = Rin + (R0 - Rin) * (nRings === 1 ? 0.5 : r0/(nRings-1));
+    const count = max(6, round(TWO_PI * r / (P.spacing * 0.75)));
+    const aOff = random(TWO_PI);                       // de-align ring seams
+    for(let i=0;i<count;i++){
+      const a = aOff + (i / count) * TWO_PI;
+      const dx = cos(a), dy = sin(a);
+      out.push({ x:cx+dx*r, y:cy+dy*r, nx:-dy, ny:dx, u:0.5, hw:P.spacing*0.8 });
+    }
+  }
+  // sparse rays just outside the ring, radiating outward (bias=1 pushes them out)
+  for(let k=0;k<P.rayCount;k++){
+    const a = (k / P.rayCount) * TWO_PI + random(-0.5, 0.5) * (TWO_PI / P.rayCount) * 0.3;
+    const dx = cos(a), dy = sin(a);
+    out.push({ x:cx+dx*(R0+2), y:cy+dy*(R0+2), nx:dx, ny:dy, u:0.5, hw:R0*0.22 });
+  }
+  return out;
+}
+function drawSun(sunIndex){
+  const pad = 170;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const stations = makeSunStations(cx, cy);
+  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  drawTeeth(stations, sunIndex*3);
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -905,7 +949,8 @@ const GENERATORS = {
   linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework },
   worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm },
   leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLeaf },
-  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFern }
+  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFern },
+  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawSun }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -969,7 +1014,7 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf' || P.generator==='fern') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf' || P.generator==='fern' || P.generator==='sun') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
   const ttg=document.getElementById('tiptaperGroup');
   if(ttg) ttg.style.display = (P.generator==='worm') ? '' : 'none';
   const mrg=document.getElementById('midribGroup');
@@ -978,6 +1023,11 @@ function updateGeneratorUI(){
   ['frondangleGroup','frondcountGroup'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display = isFern ? '' : 'none';
+  });
+  const isSun = (P.generator==='sun');
+  ['ringwidthGroup','raycountGroup'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = isSun ? '' : 'none';
   });
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
@@ -1148,7 +1198,7 @@ function loadPreset(j){
     if(!j.params || j.params.field === undefined) P.field = 'none';
     if(!j.params || j.params.fieldAmount === undefined) P.fieldAmount = 0.5;
     if(!j.params || j.params.strokeLen  === undefined) P.strokeLen  = 1.0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1373,6 +1423,8 @@ function wireUI(){
   bindSlider('tipTaper','tipTaper',v=>v.toFixed(2));
   bindSlider('frondAngle','frondAngle');
   bindSlider('frondCount','frondCount');
+  bindSlider('ringWidth','ringWidth',v=>v.toFixed(2));
+  bindSlider('rayCount','rayCount');
   bindSlider('swirl','swirl');
   bindSlider('fieldcount','fieldcount');
   bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
@@ -1501,7 +1553,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
