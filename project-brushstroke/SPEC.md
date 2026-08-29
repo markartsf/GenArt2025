@@ -13,6 +13,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 ## Status & open loops  (read at every session start)
 
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
+- **2026-08-29 — generator-revision pass: worm/leaf/fern/sun/petal added to brush lab (handoff 01).**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
   anchor.type/anchor.s, cluster.gen, chain clusters via x2/y2 — a future sketch = one data
