@@ -1,0 +1,32 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "petal-default",
+  "generator": "petal",
+  "brush": "marker",
+  "seed": 1,
+  "params": {
+    "ribbons": 3,
+    "ctrl": 5,
+    "spacing": 8,
+    "width": 140,
+    "weight": 1.4,
+    "anglej": 5,
+    "lenj": 0.05,
+    "taper": 0.6,
+    "bias": 0,
+    "radialoffset": 0,
+    "petalCount": 9,
+    "petalGap": 0.35,
+    "field": "curved",
+    "fieldAmount": 0.5,
+    "strokeLen": 1.0,
+    "colormode": "runs",
+    "drawspine": false,
+    "spineweight": 6,
+    "generator": "petal",
+    "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
+    "bg": "#efe7d8"
+  },
+  "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
+  "bg": "#efe7d8"
+}

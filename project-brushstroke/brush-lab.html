@@ -175,6 +175,14 @@
     <div class="row"><label>Ray count</label><span class="val" id="v_rayCount">12</span></div>
     <input type="range" id="rayCount" min="4" max="24" step="1" value="12">
   </div>
+  <div class="group" id="petalcountGroup" style="display:none;">
+    <div class="row"><label>Petal count</label><span class="val" id="v_petalCount">9</span></div>
+    <input type="range" id="petalCount" min="4" max="16" step="1" value="9">
+  </div>
+  <div class="group" id="petalgapGroup" style="display:none;">
+    <div class="row"><label>Petal gap</label><span class="val" id="v_petalGap">0.35</span></div>
+    <input type="range" id="petalGap" min="0" max="1" step="0.01" value="0.35">
+  </div>
   <div class="group" id="swirlGroup" style="display:none;">
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
@@ -319,6 +327,7 @@ const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
   tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14, ringWidth:0.35, rayCount:12,
+  petalCount:9, petalGap:0.35,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
   handTremor:0, handGate:0, handChaos:0,
   field:'none',   // active p5.brush vector field; per-generator default applied on switch
@@ -932,6 +941,52 @@ function drawSun(sunIndex){
   drawTeeth(stations, sunIndex*3);
 }
 
+// PETAL BLOOM Generator — SEPARATED teardrop petals around an empty centre,
+// clear gaps between petals (NOT a continuous ring; Bloom stays untouched).
+// Each petal is a short closed contour traced as consecutive short strokes
+// through shared drawTeeth (station = segment mid, normal = segment dir,
+// per-station hw = half segment) so field/gestural/palette apply. One
+// drawTeeth call per petal with its own colorOffset — with colormode 'runs'
+// each petal reads mostly one colour.
+function makePetalOutline(cx, cy, a, r1, len, maxW){
+  const dx = cos(a), dy = sin(a);
+  const px = -dy, py = dx;
+  const M = max(4, round((len*2 + maxW*2) / P.spacing));
+  const L=[], R=[];
+  for(let m=0; m<=M; m++){
+    const t = m / M;
+    const h = maxW * Math.pow(Math.sin(PI * Math.pow(t, 0.72)), 0.85);
+    const rx = cx + dx*(r1 + t*len), ry = cy + dy*(r1 + t*len);
+    L.push({ x: rx + px*h, y: ry + py*h });
+    R.push({ x: rx - px*h, y: ry - py*h });
+  }
+  return L.concat(R.reverse());
+}
+function drawPetal(bloomIdx){
+  const pad = 170;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const R0   = P.width * 0.55;
+  const r1   = R0 * 0.5;                                  // empty centre radius
+  const len  = R0 * 0.8;
+  const slot = TWO_PI / P.petalCount;
+  const maxW = 0.5 * (r1 + len*0.65) * slot * (1 - P.petalGap);
+  const aOff = random(TWO_PI);
+  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  for(let p=0; p<P.petalCount; p++){
+    const a = aOff + p*slot + random(-0.12, 0.12)*slot;
+    const pts = makePetalOutline(cx, cy, a, r1, len, maxW);
+    const stations = [];
+    for(let j=0; j<pts.length; j++){
+      const s0 = pts[j], s1 = pts[(j+1) % pts.length];
+      const d  = dist(s0.x, s0.y, s1.x, s1.y);
+      if(d < 0.5) continue;                               // skip degenerate tip segments
+      stations.push({ x:(s0.x+s1.x)/2, y:(s0.y+s1.y)/2,
+                      nx:(s1.x-s0.x)/d, ny:(s1.y-s0.y)/d, u:0.5, hw:d*0.6 });
+    }
+    drawTeeth(stations, bloomIdx*P.petalCount + p);
+  }
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -950,7 +1005,8 @@ const GENERATORS = {
   worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm },
   leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLeaf },
   fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFern },
-  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawSun }
+  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawSun },
+  petal:      { label:'Petal bloom', allowedBrushes:['marker','charcoal','pen'], biasDefault:0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawPetal }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -1014,7 +1070,7 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf' || P.generator==='fern' || P.generator==='sun') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf' || P.generator==='fern' || P.generator==='sun' || P.generator==='petal') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
   const ttg=document.getElementById('tiptaperGroup');
   if(ttg) ttg.style.display = (P.generator==='worm') ? '' : 'none';
   const mrg=document.getElementById('midribGroup');
@@ -1028,6 +1084,11 @@ function updateGeneratorUI(){
   ['ringwidthGroup','raycountGroup'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display = isSun ? '' : 'none';
+  });
+  const isPetal = (P.generator==='petal');
+  ['petalcountGroup','petalgapGroup'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = isPetal ? '' : 'none';
   });
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
@@ -1198,7 +1259,7 @@ function loadPreset(j){
     if(!j.params || j.params.field === undefined) P.field = 'none';
     if(!j.params || j.params.fieldAmount === undefined) P.fieldAmount = 0.5;
     if(!j.params || j.params.strokeLen  === undefined) P.strokeLen  = 1.0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1425,6 +1486,8 @@ function wireUI(){
   bindSlider('frondCount','frondCount');
   bindSlider('ringWidth','ringWidth',v=>v.toFixed(2));
   bindSlider('rayCount','rayCount');
+  bindSlider('petalCount','petalCount');
+  bindSlider('petalGap','petalGap',v=>v.toFixed(2));
   bindSlider('swirl','swirl');
   bindSlider('fieldcount','fieldcount');
   bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
@@ -1553,7 +1616,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
