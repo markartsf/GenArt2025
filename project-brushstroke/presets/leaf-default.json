@@ -1,0 +1,31 @@
+{
+  "schema": "brushstroke.preset/1",
+  "name": "leaf-default",
+  "generator": "leaf",
+  "brush": "pen",
+  "seed": 1,
+  "params": {
+    "ribbons": 3,
+    "ctrl": 5,
+    "spacing": 9,
+    "width": 100,
+    "weight": 1.4,
+    "anglej": 6,
+    "lenj": 0.08,
+    "taper": 0.6,
+    "bias": 0,
+    "radialoffset": 0,
+    "midrib": true,
+    "field": "none",
+    "fieldAmount": 0.5,
+    "strokeLen": 1.0,
+    "colormode": "random",
+    "drawspine": false,
+    "spineweight": 6,
+    "generator": "leaf",
+    "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
+    "bg": "#efe7d8"
+  },
+  "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
+  "bg": "#efe7d8"
+}

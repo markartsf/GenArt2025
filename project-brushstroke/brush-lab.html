@@ -158,6 +158,7 @@
     <div class="row"><label>Tip taper <span style="color:var(--muted);font-size:10px;">blunt ← → drawn-out</span></label><span class="val" id="v_tipTaper">0.50</span></div>
     <input type="range" id="tipTaper" min="0" max="1" step="0.01" value="0.5">
   </div>
+  <label class="toggle group" id="midribGroup" style="display:none;"><input type="checkbox" id="midrib" checked> Midrib</label>
   <div class="group" id="swirlGroup" style="display:none;">
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
@@ -301,7 +302,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
-  tipTaper:0.5,
+  tipTaper:0.5, midrib:true,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
   handTremor:0, handGate:0, handChaos:0,
   field:'none',   // active p5.brush vector field; per-generator default applied on switch
@@ -811,6 +812,39 @@ function drawWorm(wormIndex){
   drawTeeth(stations, wormIndex*3);
 }
 
+// LEAF Generator — a worm with NO bend: closed pointed oval on a straight or
+// gently bowed axis, rungs crossing the body, optional single midrib stroke.
+// Same body machinery as Worm; only the axis differs (placed, not wandering).
+function makeLeafAxis(){
+  const pad = 140;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const ang = random(TWO_PI);
+  const len = P.width * 2.3;
+  const dx = cos(ang), dy = sin(ang);
+  const px = -dy, py = dx;                                  // perpendicular (bow direction)
+  const bow = len * random(0.02, 0.10) * (random() < 0.5 ? -1 : 1);
+  const cps = [
+    { x: cx - dx*len*0.5, y: cy - dy*len*0.5 },
+    { x: cx + px*bow,     y: cy + py*bow     },
+    { x: cx + dx*len*0.5, y: cy + dy*len*0.5 }
+  ];
+  return samplePolyline(cps);
+}
+function drawLeaf(leafIndex){
+  const poly = makeLeafAxis();
+  const stations = placeStations(poly, P.spacing);
+  for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, 1.6);
+  const L=[], R=[];
+  for(const s of stations){
+    const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
+    L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
+    R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+  }
+  drawInkContour(L.concat(R.reverse()), true);
+  if(P.midrib) drawInkContour(poly, false, 0.7);            // thin spine stroke, tip to tip
+  drawTeeth(stations, leafIndex*3);
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -826,7 +860,8 @@ const GENERATORS = {
   fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFieldMarks },
   tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawTuft },
   linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework },
-  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm }
+  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm },
+  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLeaf }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -890,9 +925,11 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
   const ttg=document.getElementById('tiptaperGroup');
   if(ttg) ttg.style.display = (P.generator==='worm') ? '' : 'none';
+  const mrg=document.getElementById('midribGroup');
+  if(mrg) mrg.style.display = (P.generator==='leaf') ? '' : 'none';
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
   const fcg=document.getElementById('fieldcountGroup');
@@ -1074,6 +1111,8 @@ function loadPreset(j){
     if(P.colormode !== undefined){ cm.value = P.colormode; cm.dispatchEvent(new Event('change')); }
     const ds = document.getElementById('drawspine');
     if(P.drawspine !== undefined){ ds.checked = !!P.drawspine; ds.dispatchEvent(new Event('change')); }
+    const mr = document.getElementById('midrib');
+    if(P.midrib !== undefined){ mr.checked = !!P.midrib; mr.dispatchEvent(new Event('change')); }
     // field dropdown — set from loaded value; gensel.value was set directly (no
     // 'change' event) so the per-generator fieldDefault does NOT override this.
     if(P.field !== undefined) document.getElementById('fieldsel').value = P.field;
@@ -1356,6 +1395,7 @@ function wireUI(){
   bindSlider('strokeLen','strokeLen',v=>v.toFixed(2));
   document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
   document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
+  document.getElementById('midrib').addEventListener('change',e=>{P.midrib=e.target.checked;redraw();});
   document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('seedPrev').addEventListener('click',()=>regenerate(Math.max(0,seed-1)));
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
@@ -1418,6 +1458,7 @@ function wireUI(){
     document.getElementById('gensel').value=P.generator;
     document.getElementById('fieldsel').value=P.field;
     document.getElementById('drawspine').checked=P.drawspine;
+    document.getElementById('midrib').checked=P.midrib;
     buildSwatches(); updateGeneratorUI(); redraw();
   });
 }
