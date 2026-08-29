@@ -154,6 +154,10 @@
     <div class="row"><label>Hand · chaos <span style="opacity:.6">envelope ↔ noise</span></label><span class="val" id="v_handChaos"></span></div>
     <input type="range" id="handChaos" min="0" max="1" step="0.01" value="0">
   </div>
+  <div class="group" id="tiptaperGroup" style="display:none;">
+    <div class="row"><label>Tip taper <span style="color:var(--muted);font-size:10px;">blunt ← → drawn-out</span></label><span class="val" id="v_tipTaper">0.50</span></div>
+    <input type="range" id="tipTaper" min="0" max="1" step="0.01" value="0.5">
+  </div>
   <div class="group" id="swirlGroup" style="display:none;">
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
@@ -297,6 +301,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
+  tipTaper:0.5,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
   handTremor:0, handGate:0, handChaos:0,
   field:'none',   // active p5.brush vector field; per-generator default applied on switch
@@ -546,8 +551,11 @@ function drawTeeth(stations, colorOffset){
       cy = s.y + s.ny * w;
     }
     // width envelope: taper tooth length toward both ends (u→0/1)
+    // Stations may carry an explicit per-station half-length `hw` (figure-body
+    // generators: rung = local body width) which replaces the width envelope;
+    // lenj / chaos / strokeLen still apply on top. Absent hw → unchanged.
     const env=1-P.taper*Math.pow(Math.abs(s.u*2-1),1.6);
-    const envLen=(P.width*0.5)*env*(1-random(0,P.lenj));
+    const envLen=(s.hw!==undefined ? s.hw : (P.width*0.5)*env)*(1-random(0,P.lenj));
     // Hand: length chaos. Blend envelope length → per-tooth noise length,
     // wide range with occasional long outliers.
     let halfLen = envLen;
@@ -762,6 +770,47 @@ function drawLinework(idx){
   }
 }
 
+// ---- FIGURE-BODY helpers (ported from v1's 2026-08-18 figure-body round) ----
+// A figure is an ENCLOSED shape: a drawn ink contour with marks riding it.
+// Contour is plain ink (pen, graphite-brown) regardless of the active Brush,
+// matching v1's grammar — the body is "pencil", the fill is the material.
+const INK = '#4a4238';
+// Pointed-tip body envelope: 1 at mid-spine → 0 at both tips. `p` shapes the
+// tip: small p = long drawn-out points, large p = blunt body w/ abrupt point.
+function bodyEnvSharp(u, p){ return 1 - Math.pow(Math.abs(u*2-1), p); }
+function tipExponent(){ return lerp(2.5, 0.9, P.tipTaper); }   // slider 0..1 → blunt..drawn-out
+function contourWobble(x, y){ return (noise(x*0.02, y*0.02, 7.7) - 0.5) * 2 * 2.2; }
+// Draw a figure outline as ONE continuous pen stroke (closed loops repeat the
+// first point). Ink + weight independent of the active Brush + Palette.
+function drawInkContour(pts, closed, w){
+  useBrush('pen', hexAlpha(INK, 0.72), w !== undefined ? w : 1.1);
+  strokePath(closed ? pts.concat([pts[0]]) : pts);
+}
+
+// WORM Generator — closed body: a wandering spine whose width tapers to a
+// POINT at both ends; teeth become RUNGS crossing the body (contour to
+// contour), not radiating outward. Contour first, rungs second — the hand's
+// drawing order. Rung half-length rides each station as `hw` (drawTeeth).
+function makeWormStations(){
+  const cps  = makeControlPoints(P.ctrl);
+  const poly = samplePolyline(cps);
+  const stations = placeStations(poly, P.spacing);
+  const p = tipExponent();
+  for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, p);
+  return stations;
+}
+function drawWorm(wormIndex){
+  const stations = makeWormStations();
+  const L=[], R=[];
+  for(const s of stations){
+    const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
+    L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
+    R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+  }
+  drawInkContour(L.concat(R.reverse()), true);
+  drawTeeth(stations, wormIndex*3);
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -776,7 +825,8 @@ const GENERATORS = {
   fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFan        },
   fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFieldMarks },
   tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawTuft },
-  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework }
+  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework },
+  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -840,7 +890,9 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework') ? 'none' : '';   // taper neutral on radial/scatter/contour forms
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
+  const ttg=document.getElementById('tiptaperGroup');
+  if(ttg) ttg.style.display = (P.generator==='worm') ? '' : 'none';
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
   const fcg=document.getElementById('fieldcountGroup');
@@ -1010,7 +1062,7 @@ function loadPreset(j){
     if(!j.params || j.params.field === undefined) P.field = 'none';
     if(!j.params || j.params.fieldAmount === undefined) P.fieldAmount = 0.5;
     if(!j.params || j.params.strokeLen  === undefined) P.strokeLen  = 1.0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1230,6 +1282,7 @@ function wireUI(){
   bindSlider('lenj','lenj',v=>v.toFixed(2)); bindSlider('taper','taper',v=>v.toFixed(2));
   bindSlider('bias','bias',v=>v.toFixed(2));
   bindSlider('radialoffset','radialoffset',v=>v.toFixed(2));
+  bindSlider('tipTaper','tipTaper',v=>v.toFixed(2));
   bindSlider('swirl','swirl');
   bindSlider('fieldcount','fieldcount');
   bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
@@ -1357,7 +1410,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
