@@ -159,6 +159,14 @@
     <input type="range" id="tipTaper" min="0" max="1" step="0.01" value="0.5">
   </div>
   <label class="toggle group" id="midribGroup" style="display:none;"><input type="checkbox" id="midrib" checked> Midrib</label>
+  <div class="group" id="frondangleGroup" style="display:none;">
+    <div class="row"><label>Frond angle (°)</label><span class="val" id="v_frondAngle">40</span></div>
+    <input type="range" id="frondAngle" min="15" max="75" step="1" value="40">
+  </div>
+  <div class="group" id="frondcountGroup" style="display:none;">
+    <div class="row"><label>Frond count</label><span class="val" id="v_frondCount">14</span></div>
+    <input type="range" id="frondCount" min="4" max="30" step="1" value="14">
+  </div>
   <div class="group" id="swirlGroup" style="display:none;">
     <div class="row"><label>Swirl amount (°)</label><span class="val" id="v_swirl">60</span></div>
     <input type="range" id="swirl" min="-180" max="180" step="1" value="60">
@@ -302,7 +310,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
-  tipTaper:0.5, midrib:true,
+  tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
   handTremor:0, handGate:0, handChaos:0,
   field:'none',   // active p5.brush vector field; per-generator default applied on switch
@@ -845,6 +853,41 @@ function drawLeaf(leafIndex){
   drawTeeth(stations, leafIndex*3);
 }
 
+// FERN Generator — central drawn spine; each station emits ONE frond (a single
+// stroke) leaving the spine at ~frondAngle°, side alternating per station.
+// Fronds are longest mid-spine and shorten toward the tip. One-sidedness comes
+// from Tooth Bias (biasDefault 1.0) — the stroke starts ON the spine and
+// extends 2·hw along the frond direction, so bias/gestural/field all apply.
+function drawFern(fernIndex){
+  const pad = 150;
+  const cx = random(pad, width-pad), cy = random(pad, height-pad);
+  const ang = random(TWO_PI);
+  const len = P.width * 2.6;
+  const dx = cos(ang), dy = sin(ang);
+  const px = -dy, py = dx;
+  const bow = len * random(0.05, 0.16) * (random() < 0.5 ? -1 : 1);
+  const poly = samplePolyline([
+    { x: cx - dx*len*0.5, y: cy - dy*len*0.5 },
+    { x: cx + px*bow,     y: cy + py*bow     },
+    { x: cx + dx*len*0.5, y: cy + dy*len*0.5 }
+  ]);
+  let arcLen = 0;
+  for(let i=1;i<poly.length;i++) arcLen += dist(poly[i-1].x, poly[i-1].y, poly[i].x, poly[i].y);
+  const stations = placeStations(poly, arcLen / P.frondCount).slice(0, P.frondCount);
+  const theta = radians(P.frondAngle);
+  for(let i=0;i<stations.length;i++){
+    const s = stations[i];
+    const tx = s.ny, ty = -s.nx;                        // spine tangent (toward the tip)
+    const phi = (i % 2 === 0 ? 1 : -1) * theta;         // alternate sides
+    s.nx = tx*Math.cos(phi) - ty*Math.sin(phi);         // frond direction replaces the normal
+    s.ny = tx*Math.sin(phi) + ty*Math.cos(phi);
+    // longest mid-spine, shortening toward the tip (u→1)
+    s.hw = (P.width*0.5) * Math.sin(PI*(0.2 + 0.55*s.u)) * (1 - 0.45*s.u);
+  }
+  drawInkContour(poly, false, 1.0);                     // the central spine stroke
+  drawTeeth(stations, fernIndex*3);
+}
+
 // Generator registry — each entry declares its allowed Brushes (SPEC §1.5
 // decision 1) and its draw fn. Adding a generator = one entry here, no
 // switch statements anywhere.
@@ -861,7 +904,8 @@ const GENERATORS = {
   tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawTuft },
   linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework },
   worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm },
-  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLeaf }
+  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLeaf },
+  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFern }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -925,11 +969,16 @@ function updateGeneratorUI(){
   refreshBrushOptions();
   syncMaterialSliders();
   const tg=document.getElementById('taperGroup');
-  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
+  if(tg) tg.style.display = (P.generator==='burst' || P.generator==='bloom' || P.generator==='fieldmarks' || P.generator==='fan' || P.generator==='tuft' || P.generator==='linework' || P.generator==='worm' || P.generator==='leaf' || P.generator==='fern') ? 'none' : '';   // taper neutral on radial/scatter/contour/body forms
   const ttg=document.getElementById('tiptaperGroup');
   if(ttg) ttg.style.display = (P.generator==='worm') ? '' : 'none';
   const mrg=document.getElementById('midribGroup');
   if(mrg) mrg.style.display = (P.generator==='leaf') ? '' : 'none';
+  const isFern = (P.generator==='fern');
+  ['frondangleGroup','frondcountGroup'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = isFern ? '' : 'none';
+  });
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
   const fcg=document.getElementById('fieldcountGroup');
@@ -1099,7 +1148,7 @@ function loadPreset(j){
     if(!j.params || j.params.field === undefined) P.field = 'none';
     if(!j.params || j.params.fieldAmount === undefined) P.fieldAmount = 0.5;
     if(!j.params || j.params.strokeLen  === undefined) P.strokeLen  = 1.0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1322,6 +1371,8 @@ function wireUI(){
   bindSlider('bias','bias',v=>v.toFixed(2));
   bindSlider('radialoffset','radialoffset',v=>v.toFixed(2));
   bindSlider('tipTaper','tipTaper',v=>v.toFixed(2));
+  bindSlider('frondAngle','frondAngle');
+  bindSlider('frondCount','frondCount');
   bindSlider('swirl','swirl');
   bindSlider('fieldcount','fieldcount');
   bindSlider('fieldscale','fieldscale',v=>v.toFixed(4));
@@ -1450,7 +1501,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
