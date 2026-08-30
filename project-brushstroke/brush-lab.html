@@ -661,7 +661,7 @@ function drawBurst(burstIndex){
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeBurstStations(cx, cy);
   if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), true);
-  if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), true);
+  if(P.drawContour) drawInkContour(smoothRing(ringPts(cx, cy, stations, 1), true), true);
   drawTeeth(stations, burstIndex*3);
 }
 
@@ -709,7 +709,7 @@ function drawBloom(bloomIndex){
   const stations = makeBloomStations(cx, cy);
   if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), true);
   // the noise-modulated blob outline — v1's radial figure grammar
-  if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), true);
+  if(P.drawContour) drawInkContour(smoothRing(ringPts(cx, cy, stations, 1), true), true);
   drawTeeth(stations, bloomIndex*3);
 }
 
@@ -765,7 +765,7 @@ function drawFan(fanIndex){
   const spreadRad = radians(P.fanspread);
   const stations = makeFanStations(cx, cy, baseRad, spreadRad);
   if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), false);  // an arc, not a closed ring
-  if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), false);
+  if(P.drawContour) drawInkContour(smoothRing(ringPts(cx, cy, stations, 1), false), false);
   drawTeeth(stations, fanIndex*3);
 }
 
@@ -801,7 +801,7 @@ function drawTuft(idx){
     // one ring per tuft, at that tuft's own centre + radius (closed only when the
     // tuft is a full ring; an open arc gets an open spine)
     if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), P.tuftspread >= 1);
-    if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), P.tuftspread >= 1);
+    if(P.drawContour) drawInkContour(smoothRing(ringPts(cx, cy, stations, 1), P.tuftspread >= 1), P.tuftspread >= 1);
     // colorOffset varies per tuft so adjacent tufts aren't identical palettes
     drawTeeth(stations, t * 3);
   }
@@ -1104,6 +1104,20 @@ function drawSpineLine(poly, closed){
 // marks actually are. Neither consumes random().
 function ringPts(cx, cy, stations, k){
   return stations.map(s => ({ x: cx + (s.x-cx)*k, y: cy + (s.y-cy)*k }));
+}
+// Ring CONTOURS need smoothing that ring spines don't: stations sit a tooth
+// apart and a form like Bloom swings its radius hard between them, so joining
+// them straight reads as a faceted polygon rather than a drawn edge. Densify
+// with a Catmull-Rom pass (v1's fix, same 4 subdivisions per segment).
+function smoothRing(pts, closed){
+  if(pts.length < 3) return pts;
+  if(!closed) return samplePolyline(pts, 4);
+  const out = [], n = pts.length;
+  for(let i=0;i<n;i++){
+    const p0=pts[(i-1+n)%n], p1=pts[i], p2=pts[(i+1)%n], p3=pts[(i+2)%n];
+    for(let s=0;s<4;s++) out.push(catmullRom(p0,p1,p2,p3,s/4));
+  }
+  return out;
 }
 function circlePts(cx, cy, r, k, n){
   const N = n || 64, out = [], rr = r * k;
