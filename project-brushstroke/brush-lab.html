@@ -273,6 +273,7 @@
       <option value="random">Random per tooth</option>
       <option value="sequential">Sequential cycle</option>
       <option value="runs">Runs (streaks of one)</option>
+      <option value="single">Single (one per figure)</option>
     </select>
   </div>
   <div class="group">
@@ -554,8 +555,12 @@ function hexAlpha(hex, a){
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// `single` ignores the per-tooth index entirely: the whole figure takes one
+// palette colour keyed by the figure's own offset, so adjacent figures differ
+// but each reads as ONE object (right for sun/petal, wrong for a comb).
 function pickColor(i, ribbonOffset){
   const pal=P.palette;
+  if(P.colormode==='single')     return pal[ribbonOffset%pal.length];
   if(P.colormode==='sequential') return pal[(i+ribbonOffset)%pal.length];
   if(P.colormode==='runs')      return pal[(floor(i/5)+ribbonOffset)%pal.length];
   return pal[floor(random(pal.length))]; // random
@@ -1013,7 +1018,9 @@ function drawPetal(bloomIdx){
       stations.push({ x:(s0.x+s1.x)/2, y:(s0.y+s1.y)/2,
                       nx:(s1.x-s0.x)/d, ny:(s1.y-s0.y)/d, u:0.5, hw:d*0.6 });
     }
-    drawTeeth(stations, bloomIdx*P.petalCount + p);
+    // In `single` mode the whole bloom is one colour, so key on the FIGURE
+    // index; otherwise each petal gets its own offset so petals differ.
+    drawTeeth(stations, P.colormode==='single' ? bloomIdx : bloomIdx*P.petalCount + p);
   }
 }
 
@@ -1025,18 +1032,18 @@ function drawPetal(bloomIdx){
 // organic coral texture. Pen/rotring read too thin to register as a fan
 // against the Ground; spray loses the radiating-line geometry.
 const GENERATORS = {
-  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawRibbon     },
-  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'none',    fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawBurst      },
-  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawBloom      },
-  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFan        },
-  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFieldMarks },
-  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawTuft },
-  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLinework },
-  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawWorm },
-  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawLeaf },
-  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawFern },
-  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawSun },
-  petal:      { label:'Petal bloom', allowedBrushes:['marker','charcoal','pen'], biasDefault:0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, draw:drawPetal }
+  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawRibbon     },
+  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'none',    fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawBurst      },
+  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawBloom      },
+  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawFan        },
+  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawFieldMarks },
+  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawTuft },
+  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawLinework },
+  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawWorm },
+  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawLeaf },
+  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawFern },
+  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'single', draw:drawSun },
+  petal:      { label:'Petal bloom', allowedBrushes:['marker','charcoal','pen'], biasDefault:0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'single', draw:drawPetal }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -1622,6 +1629,12 @@ function wireUI(){
     const fd = GENERATORS[P.generator].fieldDefault ?? 'none';
     P.field = fd;
     document.getElementById('fieldsel').value = fd;
+    // Per-generator colour order — multicolour-per-tooth suits combs, but sun and
+    // petal must read as ONE figure. Same user-switch-only guard as bias/field:
+    // a saved preset's colormode always wins (loadPreset never fires 'change').
+    const cd = GENERATORS[P.generator].colormodeDefault ?? 'random';
+    P.colormode = cd;
+    document.getElementById('colormode').value = cd;
     // Per-generator distortion defaults — same user-switch-only guard as bias/field.
     P.fieldAmount = GENERATORS[P.generator].fieldAmountDefault ?? 0.5;
     P.strokeLen   = GENERATORS[P.generator].strokeLenDefault   ?? 1.0;
