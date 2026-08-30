@@ -21,7 +21,7 @@
     "fieldAmount": 0.5,
     "strokeLen": 1.0,
     "colormode": "random",
-    "drawspine": false,
+    "drawspine": true,
     "spineweight": 6,
     "generator": "fern",
     "palette": ["#e63946", "#1d3557", "#e9c46a", "#2a9d8f", "#c97fa8", "#7d4f2a", "#f1faee"],
