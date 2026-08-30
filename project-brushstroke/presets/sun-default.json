@@ -20,7 +20,7 @@
     "field": "curved",
     "fieldAmount": 0.5,
     "strokeLen": 1.0,
-    "colormode": "random",
+    "colormode": "single",
     "drawspine": false,
     "spineweight": 6,
     "generator": "sun",
