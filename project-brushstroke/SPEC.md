@@ -19,6 +19,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — armature editor (`?armature=1`) added to V1: placement authoring only; reveal, composition schema, and §4·3b host topology unchanged (handoff 03).**
 - **2026-08-29 — colour-sound spike DESIGN recorded (§4 roadmap tail, not scheduled, not built).**
 - **2026-08-29 — working order recorded (§4); §1.5 decision 3 amended for `spineColor`; armature editor logged in V1-SCOPE §9.**
+- **2026-08-30 — `brushstroke.armature/1` schema documented (§1.5, after decision 4); shared loader `v1/armature-io.js`; reveal can load an armature; Mark's three armatures committed. KNOWN GAP recorded: the file is an overlay on a rebuilt plan, so orphaned placements drop silently (handoff 05).**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
@@ -305,6 +306,70 @@ Composition page stages Presets together. Editor → Preset → Composition.
      `localStorage` (same schema). localStorage is explicitly a cache, NOT a
      substitute for the file — anything worth keeping must be Exported to JSON to
      become portable. Never make localStorage the only home for a preset.
+
+#### `brushstroke.armature/1` — the placement file (added 2026-08-30)
+
+The armature editor's output (§4·3b). It follows decision 4's rule above — **the
+JSON file is the source of truth**, portable, version-controllable, living in the
+repo (`v1/armatures/`). Read it with the shared loader (`v1/armature-io.js`);
+**no consumer parses it itself**, because a second parser is a second set of
+validation rules and the failure that hides is a wrong composition rendered
+confidently.
+
+Fields below are **what the editor actually writes**, not an aspiration:
+
+```jsonc
+{
+  "schema": "brushstroke.armature/1",   // tag + version; readers refuse anything else
+  "name":   "dominant-seed669141",
+  "seed":   669141,                     // GLOBAL seed the plan is rebuilt from
+  "armature": "dominant",               // which in-code armature skeleton
+  "frame":  { "w": 1456, "h": 910 },    // what the coordinates are relative to
+  "curation": {                         // the plan-shaping controls at export time
+    "heroCount": 2, "heroType": "burst", "raggedness": 0, "bleedMode": "some"
+  },
+  "placements": [
+    { "id": 0,                          // STABLE mark id — load-bearing, see below
+      "gen": "burst",                   // generator id
+      "x": 998, "y": 549,               // absolute px in the recorded frame, integers
+      "scaleMul": 1,                    // per-placement size multiplier (extrinsic)
+      "seedOff": 0,                     // per-figure seed offset — re-roll one in place
+      "hero": true,                     // hero/anchor flag the armature carries
+      "bleedEdge": null }               // 'left'|'right'|'top'|'bottom'|null
+  ]
+}
+```
+
+- **`id` is stable and load-bearing.** Marks seed by placement id, never by draw
+  order, so an id must survive a round trip unchanged or that figure redraws
+  differently. The loader rejects missing or duplicated ids for this reason.
+- **Coordinates are absolute to the recorded `frame`.** A file records what it was
+  authored against. On a mismatch the loader **refuses rather than rescaling** —
+  no scaling rule is defined, and inventing one silently would move every figure.
+- **Placement only.** No reveal, no timing, no ground, no composition — see the
+  two-builds table in §4·3b. Reveal order stays emergent (2026-07-02).
+
+**KNOWN GAP — the file is an OVERLAY, not a self-contained composition.** It does
+not store the marks; it stores adjustments to a plan rebuilt procedurally from
+`seed` + `armature` + `curation`. If that rebuild yields a different set of marks
+than the author had on screen, placements whose ids no longer exist are silently
+dropped and those figures do not render. All three armatures committed
+2026-08-30 hit this: each carries 28 placements where its own recorded seed
+rebuilds 24 marks, so four figures are lost on load. The trigger was an editor
+desync (the placement store is initialised once and not rebuilt when the seed
+changes), but the format is what makes the failure *silent*. Two honest fixes
+exist and **neither is decided**: re-initialise the store whenever the plan
+changes, or make the file self-contained by recording each mark's generative
+parameters instead of an id reference.
+
+**Fields the format does NOT carry**, despite being natural to assume:
+- **No preset id.** V1 marks are generated by `buildPlan` from the armature and
+  seed; they are not preset-backed, so there is nothing to reference.
+- **No per-placement seed** — only `seedOff`, an offset from the global `seed`.
+- **No anchor or cluster geometry.** Those live in the in-code `sketch-*`
+  skeletons as normalised fractions; the file records placed figures, not the
+  skeleton they were placed against.
+
 5. **Brush material is differentiated by a per-Brush `baseWeight` multiplier.**
    Each Brush in the `BRUSH_REGISTRY` carries `baseWeight` and `vibration`
    values; a Tooth's final weight is `userWeight × brush.baseWeight`. So at the
