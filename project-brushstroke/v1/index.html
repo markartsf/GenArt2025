@@ -103,6 +103,8 @@
 </div>
 <div id="wrap">
   <div id="canvas-holder"></div>
+  <div id="sheetpreview" style="display:none;width:100%;min-height:100vh;background:#0e0d0b;
+       background-size:contain;background-repeat:no-repeat;background-position:top center;"></div>
   <div id="panel">
     <h1>Brushstroke V1.0</h1>
     <p class="sub">native · reveal loop</p>
@@ -133,6 +135,16 @@
       <label>hero type<select id="htype"><option value="burst" selected>burst (cog)</option><option value="ribbon">ribbon</option><option value="bloom">bloom</option><option value="fan">fan</option><option value="tuft">tuft</option><option value="either">either (any)</option></select></label>
       <label>raggedness <span class="val" id="ragval">0.00</span><input id="rag" type="range" min="0" max="1" step="0.05" value="0"></label>
       <label>edge bleed<select id="bleed"><option value="some" selected>some seeds (~⅓)</option><option value="off">off</option><option value="all">every seed</option></select></label>
+    </div>
+    <div class="herobox" id="sheetbox" style="display:none;">
+      <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Contact sheet</div>
+      <label>start seed<input id="sheetseed" type="number" step="1" value="1"
+        style="width:100%;background:#2c2a24;color:#e9e2d4;border:1px solid rgba(255,255,255,.12);
+               border-radius:5px;padding:4px 6px;font:inherit;font-size:11px;"></label>
+      <button class="primary" id="sheetrender" style="width:100%;margin-top:7px;">Render 12 tiles</button>
+      <button id="sheetsave" style="width:100%;margin-top:6px;">Download PNG</button>
+      <div id="sheetstatus" style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5;">
+        seed varies; armature / hero / ragged / bleed held</div>
     </div>
     <div class="herobox" id="armaturebox" style="display:none;">
       <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Armature editor</div>
@@ -1198,6 +1210,9 @@ const ARMATURE_MODE  = ARMATURE_PARAM === '1';
 // into the REVEAL. An armature literally named "1" is therefore unreachable by
 // URL — flagged; use the dropdown for it.
 const ARMATURE_LOAD  = (ARMATURE_PARAM && ARMATURE_PARAM !== '1') ? ARMATURE_PARAM : null;
+// `?sheet=1` opens the contact sheet; `?sheet=<n>` starts its seed run at n.
+const SHEET_PARAM = new URLSearchParams(location.search).get('sheet');
+const SHEET_MODE  = SHEET_PARAM !== null;
 const GEN_DOT = { ribbon:'#000000', burst:'#ff00ff', bloom:'#00aaff', fan:'#ff8800', tuft:'#00cc44' };
 function drawPlanOverlay(){
   const counts = {};
@@ -1285,6 +1300,128 @@ function renderStatic(){
   compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length);
   if(DEBUG_LABELS) drawPlanOverlay();
   if(ARMATURE_MODE) drawSelectionOverlay();
+}
+
+// ============================================================================
+//  CONTACT SHEET (handoff 06 — step 3 of the working order)
+// ============================================================================
+// Twelve end frames, tiled, numbered, one PNG — so a composition is judged by
+// scanning a page instead of sitting through a playthrough.
+//
+// It varies SEED ONLY. Everything that shapes the plan (armature, hero count,
+// hero type, raggedness, edge bleed) is held constant and recorded in the header,
+// so the sheet is reproducible from one number. It therefore judges EMERGENT
+// compositions: a placement edit is bound to the seed that produced its marks
+// (§1.5 — an id is stable only within its seed), so sweeping an AUTHORED armature
+// across seeds would orphan nearly every placement and is deliberately not built.
+//
+// Every tile goes through renderAccretive(), never renderStatic() — a sheet on the
+// static path would judge a frame the piece never arrives at (§4·3b).
+const SHEET_COLS = 4, SHEET_ROWS = 3;          // 4x3: a 1.6:1 tile grids to ~2.1:1,
+const SHEET_N    = SHEET_COLS * SHEET_ROWS;    // which fits a laptop's landscape
+const SHEET_TILE_W = 520;                      // tile width in sheet px (height derived)
+const SHEET_PAD = 18, SHEET_LABEL = 26, SHEET_HEAD = 62;
+
+function sheetSeeds(start){                    // the existing seed x7+1 chain, no new convention
+  const out = []; let s = start;
+  for(let i=0;i<SHEET_N;i++){ out.push(s); s = s*7 + 1; }
+  return out;
+}
+
+let sheetCanvas = null, sheetBusy = false;
+function sheetSay(msg){ const el=document.getElementById('sheetstatus'); if(el) el.textContent=msg; }
+
+async function renderContactSheet(startSeed){
+  if(sheetBusy) return;
+  sheetBusy = true;
+  const src = document.querySelector('#canvas-holder canvas');
+  // TRUE ASPECT: derive tile height from the DRAWING BUFFER, never the CSS box (the
+  // canvas displays non-uniformly when the window is narrow, and a composition
+  // judged squashed is judged wrong). Uniform scale, so a tile IS the sketch.
+  const aspect = src.height / src.width;
+  const tw = SHEET_TILE_W, th = Math.round(tw * aspect);
+  const W = SHEET_COLS*tw + (SHEET_COLS+1)*SHEET_PAD;
+  const H = SHEET_HEAD + SHEET_ROWS*(th+SHEET_LABEL) + (SHEET_ROWS+1)*SHEET_PAD;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#0e0d0b'; g.fillRect(0,0,W,H);      // recessive chrome, seed-harness lineage
+  sheetCanvas = c;
+
+  const seeds = sheetSeeds(startSeed);
+  const savedSeed = seed;
+  const t0 = performance.now();
+  let totalStrokes = 0, totalFrames = 0;
+
+  for(let i=0;i<seeds.length;i++){
+    seed = seeds[i];
+    document.getElementById('seedval').textContent = seed;
+    sheetSay('rendering ' + (i+1) + ' / ' + SHEET_N + '  ·  seed ' + seed);
+    const r = await renderAccretive();
+    totalStrokes += r.strokes; totalFrames += r.frames;
+    const col = i % SHEET_COLS, row = (i / SHEET_COLS) | 0;
+    const x = SHEET_PAD + col*(tw + SHEET_PAD);
+    const y = SHEET_HEAD + SHEET_PAD + row*(th + SHEET_LABEL + SHEET_PAD);
+    g.drawImage(src, 0, 0, src.width, src.height, x, y, tw, th);   // uniform scale
+    g.strokeStyle = 'rgba(255,255,255,0.14)'; g.lineWidth = 1;
+    g.strokeRect(x+0.5, y+0.5, tw-1, th-1);
+    g.fillStyle = '#c9c4ba';
+    g.font = '13px ui-monospace, Menlo, monospace';
+    g.textBaseline = 'middle';
+    g.fillText('seed ' + seed, x, y + th + SHEET_LABEL/2 + 1);     // below the tile, never over it
+    g.fillStyle = '#6f6a62';
+    g.fillText(String(i+1).padStart(2,'0'), x + tw - 18, y + th + SHEET_LABEL/2 + 1);
+    updateSheetPreview();
+  }
+
+  const sig = planSignatureFor(seeds[0], { heroCount:HERO_COUNT, heroType:HERO_TYPE,
+                                           raggedness:RAGGEDNESS, bleedMode:BLEED_MODE }, ARMATURE);
+  g.fillStyle = '#e9e2d4';
+  g.font = '15px ui-monospace, Menlo, monospace';
+  g.fillText('BRUSHSTROKE contact sheet  ·  seeds ' + seeds[0] + ' onward (x7+1)', SHEET_PAD, 22);
+  g.fillStyle = '#8d877d';
+  g.font = '12px ui-monospace, Menlo, monospace';
+  g.fillText('armature ' + ARMATURE + '   hero ' + HERO_COUNT + '/' + HERO_TYPE +
+             '   ragged ' + Number(RAGGEDNESS).toFixed(2) + '   bleed ' + BLEED_MODE +
+             '   plan ' + sig + '   ' + new Date().toISOString().slice(0,10) +
+             '   accretive chunk ' + ACCRETIVE_CHUNK, SHEET_PAD, 44);
+
+  seed = savedSeed;
+  document.getElementById('seedval').textContent = seed;
+  const ms = Math.round(performance.now()-t0);
+  sheetSay('done · ' + SHEET_N + ' tiles · ' + (ms/1000).toFixed(1) + 's  (' +
+           Math.round(ms/SHEET_N) + ' ms/tile, ' + totalStrokes + ' strokes)');
+  updateSheetPreview();
+  sheetBusy = false;
+  return { ms, msPerTile: Math.round(ms/SHEET_N), totalStrokes, totalFrames };
+}
+
+function updateSheetPreview(){
+  const holder = document.getElementById('sheetpreview');
+  if(!holder || !sheetCanvas) return;
+  holder.style.backgroundImage = 'url(' + sheetCanvas.toDataURL('image/png') + ')';
+}
+
+function downloadContactSheet(){
+  if(!sheetCanvas) return;
+  const a = document.createElement('a');
+  a.href = sheetCanvas.toDataURL('image/png');
+  a.download = 'contact-sheet_' + ARMATURE + '_seed' + document.getElementById('sheetseed').value + '.png';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function enterSheetMode(){
+  ['revealbox','revealarmbox','armaturebox'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none'; });
+  document.getElementById('sheetbox').style.display = '';
+  document.querySelector('#panel .sub').textContent = 'native · contact sheet';
+  const hint = document.querySelector('#panel .hint');
+  if(hint) hint.textContent = 'Twelve end frames on the accretive path — what the music actually ' +
+    'arrives at, not the static preview. Seed varies; everything else is held and recorded in the header.';
+  const start = (SHEET_PARAM && SHEET_PARAM !== '1') ? parseInt(SHEET_PARAM,10) : seed;
+  document.getElementById('sheetseed').value = Number.isFinite(start) ? start : seed;
+  document.getElementById('canvas-holder').style.display = 'none';
+  document.getElementById('sheetpreview').style.display = 'block';
 }
 
 // ---- ACCRETIVE RENDER (shared: contact sheet + "Render as reveal") -----------------
@@ -1644,7 +1781,8 @@ function setup(){
   noLoop();
   wireUI();
   regenerate(seed);
-  if(ARMATURE_MODE) enterArmatureMode();
+  if(SHEET_MODE) enterSheetMode();
+  else if(ARMATURE_MODE) enterArmatureMode();
   else if(ARMATURE_LOAD){
     ArmatureIO.loadFromFolder(ARMATURE_LOAD, { frameW: FRAME_W, frameH: FRAME_H })
       .then(res => { const sel=document.getElementById('revarmload');
@@ -2065,6 +2203,11 @@ function enterArmatureMode(){
     try { importArmature(res.block); showErr(''); }
     catch(err){ showErr('Armature not loaded — ' + err.message); }
   });
+  document.getElementById('sheetrender').addEventListener('click', ()=>{
+    const v = parseInt(document.getElementById('sheetseed').value, 10);
+    renderContactSheet(Number.isFinite(v) ? v : seed);
+  });
+  document.getElementById('sheetsave').addEventListener('click', downloadContactSheet);
   document.getElementById('armexport').addEventListener('click', exportArmature);
   document.getElementById('armimportbtn').addEventListener('click', ()=>document.getElementById('armimport').click());
   document.getElementById('armimport').addEventListener('change', ev=>{
