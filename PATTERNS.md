@@ -138,6 +138,50 @@ tried, both wrong — see Failed approaches).
   name is actually registered in the installed p5.brush build before assuming a
   param bug.
 
+### Brushstroke — two kinds of figure scale (they multiply)
+
+Size in Brushstroke comes from two independent multipliers. Keep them separate;
+do not try to unify them.
+
+- **Intrinsic — the preset's `scaleMul`** (brush lab, added 2026-08-29). The
+  figure's own natural size at its tuned proportions: "how big is a worm."
+  Lives in `brushstroke.preset/1`.
+- **Extrinsic — the armature's `scaleMul`** (composition/armature data). A
+  per-placement multiplier over an already-tuned figure, so one preset serves as
+  both a small counterweight and a large hero without re-tuning.
+
+**Effective size = preset `scaleMul` × armature `scaleMul`.**
+
+Implementation notes that keep the intrinsic scale honest:
+
+- It is applied by scoping a multiplication over the size-bearing params
+  (`width`, `spacing`, `weight`, `tuftradius`, `spineweight`, `contourWeight`,
+  `linewidth`) for the whole draw pass, not by transforming the canvas.
+- **Counts stay fixed for free.** Every count in the generator code is a *ratio*
+  of those params (`TWO_PI*R0/spacing`, `arcLength/spacing`), so scaling
+  numerator and denominator together leaves counts untouched. A new generator
+  keeps this property as long as it derives counts as ratios and never from an
+  absolute pixel constant.
+- **Absolute pixel constants are the trap.** Anything in figure space that is
+  written as a raw number (Sun's 2px ray standoff, the contour's 1.2px offset and
+  its wobble amplitude) must be multiplied by `scaleMul` or the figure is not the
+  same drawing at another size. Placement padding is *not* figure space and
+  should not scale.
+- **Verify by geometry, not by eye.** Patch the `stamp()` adapter to record every
+  tooth's endpoints, render at 1× and 2×, and check that each point's offset from
+  the mark centroid scales by exactly 2. Centroid-relative, so it isolates shape
+  from placement, and it catches unscaled constants that look fine in a render.
+
+**Grain does NOT stay fixed, and cannot in this draw path.** In brush lab the
+grain is p5.brush's own stamp texture, whose size is a function of stroke weight
+— there is no separate grain-cell knob (`uGrainCell` belongs to the M3 KM
+compositor in `render/`, a different pipeline). So scaling stroke weight
+necessarily scales the grain: a 2× figure has 2× coarser charcoal texture.
+Holding grain constant would mean not scaling stroke weight, which makes a large
+figure look thin-lined. **The two cannot both hold under p5.brush**; if
+medium-constant grain becomes a requirement, it needs the owned pigment path,
+where grain is a shader uniform independent of mark size.
+
 ### Brushstroke — colour order shifts the jitter RNG stream
 
 In brush lab, `random` colour order draws a value per tooth (`pickColor` →
