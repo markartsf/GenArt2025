@@ -146,7 +146,7 @@
       <label>armature file<select id="revarmload"><option value="">— in-code armature —</option></select></label>
       <button id="revarmimportbtn" style="width:100%;margin-top:6px;">Load armature file…</button>
       <input type="file" id="revarmimport" accept=".json,application/json" style="display:none">
-      <div id="revarmname" style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center;">using the in-code armature</div>
+      <div id="revarmname" style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center;white-space:pre-line;">using the in-code armature</div>
     </div>
     <div class="herobox" id="revealbox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
@@ -1255,8 +1255,13 @@ function preparePlan(){
     // worse: the store desyncs, placements orphan, and an export then records the
     // NEW seed against the OLD plan's ids. That is how the three armatures
     // committed 2026-08-30 each lost four figures. Re-init when the mark set moves.
+    // Re-init only when the plan moved underneath a store WE built. A store loaded
+    // from a file owns its ids: a mismatch there means the file disagrees with the
+    // rebuilt plan, which is reported as orphans below — never resolved by
+    // discarding the file (that silently threw away authored work).
     const planIds = pl.map(m => m.id).join(',');
-    if(!Placement.list().length || planIds !== Placement.idSet()){
+    if(!Placement.list().length ||
+       (!Placement.isFromFile() && planIds !== Placement.idSet())){
       const lost = Placement.isDirty();
       Placement.init(pl);
       if(lost) showErr('Placement edits were discarded — the plan changed (seed or curation). ' +
@@ -1265,7 +1270,11 @@ function preparePlan(){
     pl = applyPlacements(pl);
   } else if(armatureActive){
     pl = applyPlacements(pl);                            // reveal driven by a loaded armature
+  } else {
+    orphanNote = '';
   }
+  if(orphanNote) showErr(orphanNote);                    // re-asserted each render
+  if(ARMATURE_MODE) updateArmatureReadout();             // note is known only now
   return pl;
 }
 
@@ -1620,6 +1629,7 @@ const Placement = (() => {
   let items = [];
   let sel = null;
   let dirty = false;                    // any edit since init — guards discarding work
+  let fromFile = false;                 // ids came from a file, not from a plan we built
   let onChange = () => {};
   const find = id => items.find(p => p.id === id);
   const changed = () => { dirty = true; onChange(items); };
@@ -1633,9 +1643,12 @@ const Placement = (() => {
       }));
       sel = null;
       dirty = false;                    // a fresh init is not an edit
+      fromFile = false;                 // these ids came from the plan we were handed
     },
     list(){ return items; },
     isDirty(){ return dirty; },
+    isFromFile(){ return fromFile; },
+    releaseFile(){ fromFile = false; },   // an explicit reseed drops the file's claim
     idSet(){ return items.map(p => p.id).join(','); },
     get(id){ return find(id); },
     selectedId(){ return sel; },
@@ -1659,7 +1672,10 @@ const Placement = (() => {
         scaleMul:p.scaleMul==null?1:+p.scaleMul, seedOff:p.seedOff|0,
         hero:!!p.hero, bleedEdge:p.bleedEdge||null
       }));
-      sel = null; onChange(items); dirty = false;   // a load is not an edit
+      // A LOAD is authoritative: the file's id set defines this arrangement, even
+      // where it disagrees with the rebuilt plan. Without this the plan-change
+      // guard fires on the very first frame after a load and throws the file away.
+      sel = null; fromFile = true; onChange(items); dirty = false;
     }
   };
 })();
@@ -1667,8 +1683,16 @@ const Placement = (() => {
 // The renderer's half of the seam: rebuild the plan as usual, then let the store
 // overrule placement. Deleted marks drop out; scaled marks scale the same
 // size-bearing params brush lab's scaleMul does, so proportions hold.
+// Persistent while it applies — re-asserted every render, not a transient toast.
+let orphanNote = '';
 function applyPlacements(pl){
   const keep = [];
+  const planIds = new Set(pl.map(m => m.id));
+  const total   = Placement.list().length;
+  const orphans = Placement.list().filter(p => !planIds.has(p.id)).length;
+  orphanNote = orphans
+    ? orphans + ' of ' + total + " placements don't exist in this plan — those figures are not drawn."
+    : '';
   for(const m of pl){
     const p = Placement.get(m.id);
     if(!p) continue;                       // deleted in the editor
@@ -1883,7 +1907,8 @@ function useArmatureForReveal(res, label){
   importArmature(res.block);          // sets seed/armature/curation, then placements
   armatureActive = true;
   const n = document.getElementById('revarmname');
-  if(n) n.textContent = 'armature: ' + (label || res.block.name || 'loaded');
+  if(n) n.textContent = 'armature: ' + (label || res.block.name || 'loaded') +
+                       (orphanNote ? '\n⚠ ' + orphanNote : '');
   showErr('');
   redraw();
   return true;
@@ -1918,9 +1943,11 @@ function updateArmatureReadout(){
   const id = Placement.selectedId();
   const p = id==null ? null : Placement.get(id);
   el.textContent = p
-    ? `${p.gen} #${p.id}${p.hero?' (hero)':''} · x ${Math.round(p.x)} y ${Math.round(p.y)} · scale ${p.scaleMul.toFixed(2)} · seed +${p.seedOff}`
+    ? (orphanNote ? '⚠ ' + orphanNote + '\n' : '') +
+      `${p.gen} #${p.id}${p.hero?' (hero)':''} · x ${Math.round(p.x)} y ${Math.round(p.y)} · scale ${p.scaleMul.toFixed(2)} · seed +${p.seedOff}`
       + '\n↑↓←→ nudge (⇧ ×10) · [ ] reseed · ⌫ delete'
-    : `${Placement.list().length} figures · click a footprint to select`;
+    : (orphanNote ? '⚠ ' + orphanNote + '\n' : '') +
+      `${Placement.list().length} figures · click a footprint to select`;
 }
 
 function enterArmatureMode(){
@@ -2022,8 +2049,15 @@ function wireUI(){
   const $ = id => document.getElementById(id);
   // In the editor, changing the seed rebuilds the plan and therefore discards
   // placement edits (see preparePlan). Ask first rather than losing authored work.
-  const mayDiscard = () => !(ARMATURE_MODE && Placement.isDirty()) ||
-    confirm('Reseeding rebuilds the plan and discards your placement edits.\n\nExport first to keep them. Continue?');
+  const mayDiscard = () => {
+    if(ARMATURE_MODE && Placement.isDirty() &&
+       !confirm('Reseeding rebuilds the plan and discards your placement edits.\n\nExport first to keep them. Continue?'))
+      return false;
+    // Past this point the user has chosen a new plan, so a loaded file no longer
+    // owns the ids — otherwise its placements would orphan against every mark.
+    if(ARMATURE_MODE) Placement.releaseFile();
+    return true;
+  };
   $('seedPrev').addEventListener('click', ()=> { if(mayDiscard()) regenerate(Math.max(0, seed-1)); });
   $('seedNext').addEventListener('click', ()=> { if(mayDiscard()) regenerate(seed+1); });
   $('reseed').addEventListener('click',  ()=> { if(mayDiscard()) regenerate(seed*7+1); });   // the seed×7+1 chain
