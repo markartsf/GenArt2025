@@ -846,6 +846,27 @@ judged against compositions that already satisfy.
        settled here**. **The host-topology question above stays OPEN**: this build picked
        "inside V1" for *armature editing only* and decides nothing about where the compose host
        lives.
+     - **Editor frame vs reveal end frame — they DIFFER, and that is ACCEPTED
+       (Mark, 2026-08-30). SETTLED, not an open loop.** For the same armature and seed the
+       editor's static frame and the reveal's end frame differ by **~22.2% of pixels**.
+       - **Cause:** intra-mark stroke overlap composited in ONE p5.brush buffer versus across
+         several. p5.brush buffers strokes and composites once per frame, so a mark's
+         overlapping strokes combine differently when merged in one buffer than when some are
+         already flattened onto the canvas. Measured: splitting the stroke stream **between**
+         marks costs nothing (0.013%); splitting **inside** a mark costs in proportion to that
+         mark's self-overlap (12% for one dense hero burst alone). A one-frame reveal
+         reproduces the editor frame exactly (0.013%), which **rules out** the reveal
+         machinery, per-frame field state, p5.brush's per-stroke RNG, and alpha accumulation —
+         ink coverage (34.4% vs 33.5%) and mean darkness (117.6 vs 118.1) are unchanged, so it
+         is redistribution at overlaps, not extra ink.
+       - **Bounded:** sparse marks are pixel-identical; only dense hero figures diverge.
+       - **Decision:** accept the divergence. *Option 1* (make the editor accrete) rejected —
+         several seconds per drag breaks the authoring loop. *Option 2* (reveal splits only at
+         mark boundaries) rejected — per-tooth accretion **is** the piece and is not traded for
+         preview parity. **Mitigation: an on-demand "Render as reveal" control in the editor
+         — PLANNED, NOT BUILT.**
+       - Consequence for the schema: the armature file's promise is authored *placement*, not a
+         pixel-exact end frame. Judge dense compositions in the reveal.
    - **Layering verdict — translucency CONFIRMED (2026-06-25, by-eye at retina).** Multi-plate
      layering reads as translucency, signed off. A wash plate + multiple Tuft fields (each at
      its own scale / seed / palette-offset) through the cached KM compositor produce the
