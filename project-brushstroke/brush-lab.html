@@ -279,6 +279,13 @@
     <label style="display:block;margin-bottom:7px;">Palette</label>
     <div class="swatches" id="swatches"></div>
   </div>
+  <label class="toggle group" id="drawcontourGroup"><input type="checkbox" id="drawContour"> Draw body contour</label>
+  <div class="group" id="contourweightGroup" style="display:none;">
+    <div class="row"><label>Contour weight</label><span class="val" id="v_contourWeight">1.0</span></div>
+    <input type="range" id="contourWeight" min="0.25" max="8" step="0.05" value="1">
+    <div class="row" style="margin-top:8px;"><label>Contour colour</label></div>
+    <div class="swatches"><input type="color" id="contourColor" value="#000000"></div>
+  </div>
   <label class="toggle group" id="drawspineGroup"><input type="checkbox" id="drawspine"> Draw spine</label>
   <div class="group" id="spineweightGroup">
     <div class="row"><label>Spine weight (pt)</label><span class="val" id="v_spineweight">6</span></div>
@@ -326,6 +333,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
+  drawContour:false, contourWeight:1.0, contourColor:'#000000',
   tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14, ringWidth:0.35, rayCount:12,
   petalCount:9, petalGap:0.35,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
@@ -803,6 +811,8 @@ function drawLinework(idx){
 // A figure is an ENCLOSED shape: a drawn ink contour with marks riding it.
 // Contour is plain ink (pen, graphite-brown) regardless of the active Brush,
 // matching v1's grammar — the body is "pencil", the fill is the material.
+// Legacy graphite-brown ink from the handoff-01 round; kept as the palette-free
+// reference colour. The live contour colour is P.contourColor (default black).
 const INK = '#4a4238';
 // Pointed-tip body envelope: 1 at mid-spine → 0 at both tips. `p` shapes the
 // tip: small p = long drawn-out points, large p = blunt body w/ abrupt point.
@@ -811,8 +821,14 @@ function tipExponent(){ return lerp(2.5, 0.9, P.tipTaper); }   // slider 0..1 �
 function contourWobble(x, y){ return (noise(x*0.02, y*0.02, 7.7) - 0.5) * 2 * 2.2; }
 // Draw a figure outline as ONE continuous pen stroke (closed loops repeat the
 // first point). Ink + weight independent of the active Brush + Palette.
-function drawInkContour(pts, closed, w){
-  useBrush('pen', hexAlpha(INK, 0.72), w !== undefined ? w : 1.1);
+// BODY CONTOUR — the drawn edge that holds a figure's marks. A user feature
+// (drawContour / contourWeight / contourColor), NOT an always-on side effect:
+// callers must gate on P.drawContour. Colour + weight are independent of the
+// active Brush and of the Palette (same rule as the spine, SPEC §1.5 dec. 3);
+// it renders through p5.brush's 'pen' so it keeps a drawn, textured edge rather
+// than a vector-perfect line. `mul` scales weight for secondary ink (leaf midrib).
+function drawInkContour(pts, closed, mul){
+  useBrush('pen', hexAlpha(P.contourColor, 0.72), P.contourWeight * (mul === undefined ? 1 : mul));
   strokePath(closed ? pts.concat([pts[0]]) : pts);
 }
 
@@ -827,13 +843,15 @@ function drawWorm(wormIndex){
   const p = tipExponent();
   for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, p);
   if(P.drawspine) drawSpineLine(poly, false);            // the centre path (distinct from the body contour)
-  const L=[], R=[];
-  for(const s of stations){
-    const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
-    L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
-    R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+  if(P.drawContour){
+    const L=[], R=[];
+    for(const s of stations){
+      const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
+      L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
+      R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+    }
+    drawInkContour(L.concat(R.reverse()), true);
   }
-  drawInkContour(L.concat(R.reverse()), true);
   drawTeeth(stations, wormIndex*3);
 }
 
@@ -860,14 +878,17 @@ function drawLeaf(leafIndex){
   const stations = placeStations(poly, P.spacing);
   for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, 1.6);
   if(P.drawspine) drawSpineLine(poly, false);            // the leaf axis (distinct from the body contour)
-  const L=[], R=[];
-  for(const s of stations){
-    const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
-    L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
-    R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+  if(P.drawContour){
+    const L=[], R=[];
+    for(const s of stations){
+      const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
+      L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
+      R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+    }
+    drawInkContour(L.concat(R.reverse()), true);
+    // The midrib is body ink too, so it rides the contour toggle (thinner).
+    if(P.midrib) drawInkContour(poly, false, 0.7);
   }
-  drawInkContour(L.concat(R.reverse()), true);
-  if(P.midrib) drawInkContour(poly, false, 0.7);            // thin spine stroke, tip to tip
   drawTeeth(stations, leafIndex*3);
 }
 
@@ -1121,6 +1142,12 @@ function updateGeneratorUI(){
     const el=document.getElementById(id);
     if(el) el.style.display = hasSpine ? '' : 'none';
   });
+  // Body contour: only generators that actually HAVE a closed body outline.
+  // Fern's ink is its stem (a spine, not a body); Petal's outlines are its own
+  // palette-coloured marks, not ink — neither has a contour to control.
+  const hasContour = (P.generator==='worm' || P.generator==='leaf');
+  document.getElementById('drawcontourGroup').style.display = hasContour ? '' : 'none';
+  document.getElementById('contourweightGroup').style.display = (hasContour && P.drawContour) ? '' : 'none';
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
   const fcg=document.getElementById('fieldcountGroup');
@@ -1290,7 +1317,12 @@ function loadPreset(j){
     if(!j.params || j.params.field === undefined) P.field = 'none';
     if(!j.params || j.params.fieldAmount === undefined) P.fieldAmount = 0.5;
     if(!j.params || j.params.strokeLen  === undefined) P.strokeLen  = 1.0;
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    // Presets predating handoff 02 have no contour fields → load as OFF at the
+    // defaults, so every preset on disk keeps the appearance it was saved with.
+    if(!j.params || j.params.drawContour   === undefined) P.drawContour   = false;
+    if(!j.params || j.params.contourWeight === undefined) P.contourWeight = 1.0;
+    if(!j.params || j.params.contourColor  === undefined) P.contourColor  = '#000000';
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1304,6 +1336,10 @@ function loadPreset(j){
     if(P.drawspine !== undefined){ ds.checked = !!P.drawspine; ds.dispatchEvent(new Event('change')); }
     const mr = document.getElementById('midrib');
     if(P.midrib !== undefined){ mr.checked = !!P.midrib; mr.dispatchEvent(new Event('change')); }
+    // Body-contour toggle + colour (weight rides the slider cascade above).
+    const dc = document.getElementById('drawContour');
+    dc.checked = !!P.drawContour; dc.dispatchEvent(new Event('change'));
+    document.getElementById('contourColor').value = P.contourColor;
     // field dropdown — set from loaded value; gensel.value was set directly (no
     // 'change' event) so the per-generator fieldDefault does NOT override this.
     if(P.field !== undefined) document.getElementById('fieldsel').value = P.field;
@@ -1593,6 +1629,11 @@ function wireUI(){
   document.getElementById('colormode').addEventListener('change',e=>{P.colormode=e.target.value;redraw();});
   document.getElementById('drawspine').addEventListener('change',e=>{P.drawspine=e.target.checked;redraw();});
   document.getElementById('midrib').addEventListener('change',e=>{P.midrib=e.target.checked;redraw();});
+  document.getElementById('drawContour').addEventListener('change',e=>{
+    P.drawContour=e.target.checked; updateGeneratorUI(); redraw();
+  });
+  document.getElementById('contourColor').addEventListener('input',e=>{P.contourColor=e.target.value;redraw();});
+  bindSlider('contourWeight','contourWeight',v=>v.toFixed(2));
   document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('seedPrev').addEventListener('click',()=>regenerate(Math.max(0,seed-1)));
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
@@ -1647,7 +1688,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
@@ -1656,6 +1697,8 @@ function wireUI(){
     document.getElementById('fieldsel').value=P.field;
     document.getElementById('drawspine').checked=P.drawspine;
     document.getElementById('midrib').checked=P.midrib;
+    document.getElementById('drawContour').checked=P.drawContour;
+    document.getElementById('contourColor').value=P.contourColor;
     buildSwatches(); updateGeneratorUI(); redraw();
   });
 }
