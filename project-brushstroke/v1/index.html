@@ -135,11 +135,16 @@
     <div class="herobox" id="armaturebox" style="display:none;">
       <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Armature editor</div>
       <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;white-space:pre-line;">nothing selected</div>
+      <label style="margin-top:6px;">load armature<select id="armload"><option value="">— from armatures/ folder —</option></select></label>
       <div class="btnrow" style="margin-top:8px;">
         <button id="armexport">Export JSON ⤓</button>
         <button id="armimportbtn">Import…</button>
       </div>
       <input type="file" id="armimport" accept=".json,application/json" style="display:none">
+    </div>
+    <div class="herobox" id="revealarmbox">
+      <label>armature file<select id="revarmload"><option value="">— in-code armature —</option></select></label>
+      <div id="revarmname" style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center;">using the in-code armature</div>
     </div>
     <div class="herobox" id="revealbox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
@@ -1225,12 +1230,27 @@ function drawPlanOverlay(){
   if(el) el.textContent = 'placed: ' + Object.entries(counts).map(([g,n])=>g+'='+n).join('  ')
     + '  (total ' + plan.length + ')  ·  box = mark footprint (thick = featured) · ✚ = anchor (red large / amber medium) · ○ = cluster · grey disc = void';
 }
-function renderStatic(){
-  plan = buildPlan();
+// TRUE when a brushstroke.armature file is driving placement in normal (reveal)
+// mode. The editor always drives placement; the reveal only does once loaded.
+let armatureActive = false;
+
+// The ONE plan-building path. Both the static/editor frame and the reveal call
+// it, so a loaded armature cannot apply to one and not the other — that
+// divergence is exactly what would make the editor frame and the reveal end
+// frame disagree.
+function preparePlan(){
+  let pl = buildPlan();
   if(ARMATURE_MODE){
-    if(!Placement.list().length) Placement.init(plan);   // first frame seeds the store from the armature
-    plan = applyPlacements(plan);
+    if(!Placement.list().length) Placement.init(pl);     // first frame seeds the store from the armature
+    pl = applyPlacements(pl);
+  } else if(armatureActive){
+    pl = applyPlacements(pl);                            // reveal driven by a loaded armature
   }
+  return pl;
+}
+
+function renderStatic(){
+  plan = preparePlan();
   compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length);
   if(DEBUG_LABELS) drawPlanOverlay();
   if(ARMATURE_MODE) drawSelectionOverlay();
@@ -1284,7 +1304,7 @@ let audioDriven = false;      // true → revealEnergy comes from the FFT each f
 // Begin an append-only reveal from the current seed/hero settings.
 function startReveal(){
   if(ARMATURE_MODE) return;           // placement authoring only — the reveal stays emergent
-  plan = buildPlan();                 // freeze the plan being revealed
+  plan = preparePlan();               // freeze the plan being revealed (armature-aware)
   compileStrokes();                   // flatten it to ordered stroke records
   revealCount = 0; lastDrawn = 0; revealFps = 0; curFieldMark = -1;
   paintGround();                      // ground painted ONCE; never cleared again until reset
@@ -1802,6 +1822,44 @@ function importArmature(input){
   Placement.fromJSON(block.placements);   // fires onChange → full redraw
 }
 
+// ---- FOLDER DROPDOWNS + REVEAL LOADING -------------------------------------
+// Populate a <select> from armatures/index.json. Static fetch, so it behaves the
+// same in Safari and Chrome; an absent folder just leaves the picker as the path.
+async function populateArmatureSelect(id, placeholder){
+  const sel = document.getElementById(id);
+  if(!sel) return [];
+  const entries = await ArmatureIO.listFolder();
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value = ''; ph.textContent = placeholder;
+  sel.appendChild(ph);
+  entries.forEach(e => {
+    const o = document.createElement('option');
+    o.value = e.name; o.textContent = e.name;
+    sel.appendChild(o);
+  });
+  return entries;
+}
+
+// Apply a validated armature in NORMAL (reveal) mode: it supplies placement only.
+// Reveal order stays emergent and audio behaviour is untouched.
+function useArmatureForReveal(res, label){
+  if(!res.ok){
+    armatureActive = false;
+    showErr('Armature not loaded — ' + res.error);
+    const n = document.getElementById('revarmname');
+    if(n) n.textContent = 'load failed — nothing rendered';
+    return false;
+  }
+  importArmature(res.block);          // sets seed/armature/curation, then placements
+  armatureActive = true;
+  const n = document.getElementById('revarmname');
+  if(n) n.textContent = 'armature: ' + (label || res.block.name || 'loaded');
+  showErr('');
+  redraw();
+  return true;
+}
+
 // Keyboard editing for the selected figure. Ignored while a text field or the
 // preset/armature selects have focus so V1's own controls keep their keys.
 function armatureKey(e){
@@ -1859,6 +1917,15 @@ function enterArmatureMode(){
   window.addEventListener('mousemove', armatureMouseMove);
   window.addEventListener('mouseup', armatureMouseUp);
   window.addEventListener('keydown', armatureKey);
+  populateArmatureSelect('armload', '— from armatures/ folder —');
+  document.getElementById('armload').addEventListener('change', async e => {
+    const name = e.target.value;
+    if(!name) return;
+    const res = await ArmatureIO.loadFromFolder(name, { frameW: FRAME_W, frameH: FRAME_H });
+    if(!res.ok){ showErr('Armature not loaded — ' + res.error); return; }
+    try { importArmature(res.block); showErr(''); }
+    catch(err){ showErr('Armature not loaded — ' + err.message); }
+  });
   document.getElementById('armexport').addEventListener('click', exportArmature);
   document.getElementById('armimportbtn').addEventListener('click', ()=>document.getElementById('armimport').click());
   document.getElementById('armimport').addEventListener('change', ev=>{
@@ -1934,6 +2001,14 @@ function wireUI(){
   $('armature').addEventListener('change', e=>{ ARMATURE=e.target.value; running=false; stopAudio(); redraw(); });
   $('rag').addEventListener('input', e=>{ RAGGEDNESS=+e.target.value; $('ragval').textContent=RAGGEDNESS.toFixed(2); running=false; stopAudio(); redraw(); });
   $('bleed').addEventListener('change', e=>{ BLEED_MODE=e.target.value; running=false; stopAudio(); redraw(); });
+  // ---- reveal-side armature selection (placement only; reveal stays emergent)
+  populateArmatureSelect('revarmload', '— in-code armature —');
+  $('revarmload').addEventListener('change', async e => {
+    const name = e.target.value;
+    if(!name){ armatureActive = false;
+      $('revarmname').textContent = 'using the in-code armature'; showErr(''); redraw(); return; }
+    useArmatureForReveal(await ArmatureIO.loadFromFolder(name, { frameW: FRAME_W, frameH: FRAME_H }), name);
+  });
   $('debuglabels').addEventListener('change', e=>{ DEBUG_LABELS=e.target.checked; running=false; stopAudio(); redraw(); });
   // reveal controls — manual (fixed clock) preview vs audio-driven
   $('reveal').addEventListener('click',  ()=>{ stopAudio(); audioDriven=false; revealEnergy=1.0; startReveal(); });
