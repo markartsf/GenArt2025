@@ -136,7 +136,9 @@
       <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;white-space:pre-line;">nothing selected</div>
       <div class="btnrow" style="margin-top:8px;">
         <button id="armexport">Export JSON ⤓</button>
+        <button id="armimportbtn">Import…</button>
       </div>
+      <input type="file" id="armimport" accept=".json,application/json" style="display:none">
     </div>
     <div class="herobox" id="revealbox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
@@ -1779,6 +1781,26 @@ function exportArmature(){
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+// Restore the plan the block was authored against, THEN apply its placements —
+// validating fully before touching any state so a bad file changes nothing.
+function importArmature(block){
+  if(!block || block.schema !== 'brushstroke.armature/1')
+    throw new Error("Not a brushstroke.armature/1 (schema was '" + (block && block.schema) + "').");
+  if(!Array.isArray(block.placements)) throw new Error('Block has no placements array.');
+  if(block.frame && (block.frame.w !== FRAME_W || block.frame.h !== FRAME_H))
+    showErr('Armature was authored at ' + block.frame.w + '×' + block.frame.h +
+            ', this display is ' + FRAME_W + '×' + FRAME_H + ' — positions are absolute, so it will not line up.');
+  if(block.armature){ ARMATURE = block.armature; const el=document.getElementById('armature'); if(el) el.value = ARMATURE; }
+  if(block.curation){
+    if(block.curation.heroCount != null) HERO_COUNT = block.curation.heroCount;
+    if(block.curation.heroType)         HERO_TYPE  = block.curation.heroType;
+    if(block.curation.raggedness != null) RAGGEDNESS = block.curation.raggedness;
+    if(block.curation.bleedMode)        BLEED_MODE = block.curation.bleedMode;
+  }
+  if(block.seed != null){ seed = block.seed; document.getElementById('seedval').textContent = seed; }
+  Placement.fromJSON(block.placements);   // fires onChange → full redraw
+}
+
 // Keyboard editing for the selected figure. Ignored while a text field or the
 // preset/armature selects have focus so V1's own controls keep their keys.
 function armatureKey(e){
@@ -1837,6 +1859,16 @@ function enterArmatureMode(){
   window.addEventListener('mouseup', armatureMouseUp);
   window.addEventListener('keydown', armatureKey);
   document.getElementById('armexport').addEventListener('click', exportArmature);
+  document.getElementById('armimportbtn').addEventListener('click', ()=>document.getElementById('armimport').click());
+  document.getElementById('armimport').addEventListener('change', ev=>{
+    const f = ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = x => { try { importArmature(JSON.parse(x.target.result)); }
+                      catch(err){ console.error(err); showErr('Armature load failed: ' + err.message); } };
+    r.readAsText(f);
+    ev.target.value = '';
+  });
   cv.style.cursor = 'crosshair';
   redraw();                            // end state + overlay
   updateArmatureReadout();
