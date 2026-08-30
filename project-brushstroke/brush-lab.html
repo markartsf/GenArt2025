@@ -837,7 +837,9 @@ function contourWobble(x, y){ return (noise(x*0.02, y*0.02, 7.7) - 0.5) * 2 * 2.
 // it renders through p5.brush's 'pen' so it keeps a drawn, textured edge rather
 // than a vector-perfect line. `mul` scales weight for secondary ink (leaf midrib).
 function drawInkContour(pts, closed, mul){
-  useBrush('pen', hexAlpha(P.contourColor, 0.72), P.contourWeight * (mul === undefined ? 1 : mul));
+  // Full alpha: the picker means what it says. A faded contour = pick a
+  // lighter colour (the old inherited 0.72 made pure black read dark grey).
+  useBrush('pen', P.contourColor, P.contourWeight * (mul === undefined ? 1 : mul));
   strokePath(closed ? pts.concat([pts[0]]) : pts);
 }
 
