@@ -17,6 +17,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — spine rendering unified, body contour made optional, spineOffset added, colormodeDefault per generator (handoff 02).**
 - **2026-08-29 — uniform `scaleMul` added to brush lab (intrinsic figure size); armature `scaleMul` remains the extrinsic per-placement multiplier (handoff 02b).**
 - **2026-08-29 — armature editor (`?armature=1`) added to V1: placement authoring only; reveal, composition schema, and §4·3b host topology unchanged (handoff 03).**
+- **2026-08-29 — colour-sound spike DESIGN recorded (§4 roadmap tail, not scheduled, not built).**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
@@ -778,6 +779,66 @@ rule that keeps us out of the days-long tangles.
 > frame rates — before committing a milestone to them. Its product is a written
 > finding, not committed code. This does not relax "build in isolation, then
 > port" for actual milestone work.
+
+### Colour-sound mapping — spike design (NOT SCHEDULED)
+
+> **Status: DESIGN RECORD ONLY. Nothing here is built, and nothing here is
+> scheduled.** No code, no stub, no spike folder exists for any of it. This is
+> planning analysis settled 2026-08-29, written down while fresh so the planning
+> seat and the build seat share one copy. **Do not read any paragraph below as a
+> description of behaviour the app has.** If a future session wants to act on
+> this, that is a new decision to take with Mark first — the presence of this
+> section is not licence to start.
+
+**Position in the order.** This extends the step-5 family-mapping spike. It runs
+**after** V1 end-frame compositions satisfy Mark — a mapping can only be judged
+against compositions he already likes, otherwise a bad reaction is
+unattributable: nobody can tell whether the mapping is wrong or the underlying
+frame was never right. Same reasoning as deferring the V2 merge.
+
+**What is extractable from a mixed-down mp3**, most to least reliable:
+
+1. **Band energy** — reliable. Already in use.
+2. **Onsets** (sudden energy jumps) — reliable enough for accents.
+3. **Spectral centroid** — one number, the "brightness" of the sound. Reliable;
+   maps naturally to light/dark or warm/cool.
+4. **Chroma vector** — the spectrum folded into the 12 pitch classes, giving 12
+   continuous values per frame. Standard, works on mixed-down audio, and is
+   literally note→something. This is the Scriabin-style note-to-colour handle.
+5. **Individual notes within a chord** (polyphonic transcription) — **RULED OUT,
+   do not attempt.** Unreliable, an open research problem, and wrong often enough
+   on dense ambient material to be useless. Recorded as ruled-out in the same
+   spirit as p5.blender (PATTERNS → Failed approaches) so it is not
+   re-investigated from scratch.
+
+**Honest ceiling: pitch class yes, individual voices no.**
+
+**Resolution of the conflict with "one palette per piece" (DESIGN).** Twelve
+notes mapped to twelve arbitrary colours breaks palette discipline immediately.
+The resolution: **audio selects which colour within the authored palette a mark
+takes — chroma → colour index — and never introduces new colour.** The palette
+stays authored; the audio does the picking. This is a small change in practice,
+because colour order is already a per-mark decision (§ brush lab's `colormode`).
+Twelve pitch classes fold onto a seven-colour palette, or a palette of twelve
+deliberately related hues is authored for a piece that wants the full
+correspondence.
+
+**One spike, two mappings.** Band → generator family, and chroma → colour index.
+Both are the same shape: **audio picks from an authored set.**
+
+**The open question the spike must answer is LEGIBILITY, not feasibility.**
+Per-mark switching across twelve colours may read as noise rather than as
+synesthesia. The likely stronger reading is chroma driving a **slow palette
+rotation** — the piece drifting warm as the harmony moves — rather than colour
+changing mark to mark. The spike should test **both**. Note that the strongest
+synesthetic reading generally comes from **few rules applied consistently.**
+
+**Track note.** Winterland is harmonically slow and sustained, so chroma should
+be legible on it. A denser or more percussive track is a weaker first test.
+
+**Spike discipline (§5, PATTERNS).** This is a spike: **throwaway, never
+committed as a feature, and its only product is a written finding.** Recorded
+here so the eventual execution does not drift into a feature branch.
 
 ---
 
