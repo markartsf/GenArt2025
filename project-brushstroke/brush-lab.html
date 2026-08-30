@@ -291,6 +291,7 @@
   <div class="group" id="spineweightGroup">
     <div class="row"><label>Spine weight (vector pt)</label><span class="val" id="v_spineweight">6</span></div>
     <input type="range" id="spineweight" min="1" max="20" step="0.5" value="6">
+
   </div>
   <div class="group" id="spineoffsetGroup" style="display:none;">
     <div class="row"><label>Spine offset <span style="color:var(--muted);font-size:10px;">hub ← 1 → outside</span></label><span class="val" id="v_spineOffset">1.00</span></div>
@@ -632,7 +633,10 @@ function drawRibbon(ribbonIndex){
   const cps  = makeControlPoints(P.ctrl);
   const poly = samplePolyline(cps);
   const stations = placeStations(poly, P.spacing);
-  if(P.drawspine) drawSpineLine(poly);
+  if(P.drawspine) drawSpineLine(poly, false);
+  // Same topology as Worm — a body around a spine — so it takes the same
+  // contour; only the width envelope differs (taper, not pointed tips).
+  if(P.drawContour) drawInkContour(bodyContourPts(stations, ribbonHalfWidth), true);
   drawTeeth(stations, ribbonIndex*3);
 }
 
@@ -653,7 +657,8 @@ function drawBurst(burstIndex){
   const pad = 170;
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeBurstStations(cx, cy);
-  if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), true);
+  if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), true);
+  if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), true);
   drawTeeth(stations, burstIndex*3);
 }
 
@@ -699,7 +704,9 @@ function drawBloom(bloomIndex){
   const pad = 170;
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeBloomStations(cx, cy);
-  if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), true);
+  if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), true);
+  // the noise-modulated blob outline — v1's radial figure grammar
+  if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), true);
   drawTeeth(stations, bloomIndex*3);
 }
 
@@ -754,7 +761,8 @@ function drawFan(fanIndex){
   const baseRad   = random(TWO_PI);                            // each fan points its own way
   const spreadRad = radians(P.fanspread);
   const stations = makeFanStations(cx, cy, baseRad, spreadRad);
-  if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), false);   // an arc, not a closed ring
+  if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), false);  // an arc, not a closed ring
+  if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), false);
   drawTeeth(stations, fanIndex*3);
 }
 
@@ -789,7 +797,8 @@ function drawTuft(idx){
     const stations = makeTuftStations(cx, cy, r, P.tuftspread);
     // one ring per tuft, at that tuft's own centre + radius (closed only when the
     // tuft is a full ring; an open arc gets an open spine)
-    if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), P.tuftspread >= 1);
+    if(P.drawspine)  drawSpineLine(ringPts(cx, cy, stations, P.spineOffset), P.tuftspread >= 1);
+    if(P.drawContour) drawInkContour(ringPts(cx, cy, stations, 1), P.tuftspread >= 1);
     // colorOffset varies per tuft so adjacent tufts aren't identical palettes
     drawTeeth(stations, t * 3);
   }
@@ -843,6 +852,28 @@ function drawInkContour(pts, closed, mul){
   strokePath(closed ? pts.concat([pts[0]]) : pts);
 }
 
+// Body edges for SPINE-BASED figures (ribbon/worm/leaf): offset each station to
+// both sides by the body's local half-width, then run down one edge and back the
+// other → one closed outline. `hwOf(station)` supplies that half-width, which is
+// what differs between the forms (ribbon: the taper envelope; worm/leaf: the
+// pointed-tip envelope already stored on the station as `hw`). Consumes no
+// random() — only noise-based wobble — so toggling the contour never disturbs
+// the mark geometry.
+function bodyContourPts(stations, hwOf){
+  const L=[], R=[];
+  for(const s of stations){
+    const hw = hwOf(s) + 1.2 + contourWobble(s.x, s.y);
+    L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
+    R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
+  }
+  return L.concat(R.reverse());
+}
+// Half-width of a ribbon body at a station: the same taper envelope drawTeeth
+// uses for tooth length, minus the per-tooth length jitter.
+function ribbonHalfWidth(s){
+  return (P.width*0.5) * (1 - P.taper*Math.pow(Math.abs(s.u*2-1),1.6));
+}
+
 // WORM Generator — closed body: a wandering spine whose width tapers to a
 // POINT at both ends; teeth become RUNGS crossing the body (contour to
 // contour), not radiating outward. Contour first, rungs second — the hand's
@@ -854,15 +885,7 @@ function drawWorm(wormIndex){
   const p = tipExponent();
   for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, p);
   if(P.drawspine) drawSpineLine(poly, false);            // the centre path (distinct from the body contour)
-  if(P.drawContour){
-    const L=[], R=[];
-    for(const s of stations){
-      const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
-      L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
-      R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
-    }
-    drawInkContour(L.concat(R.reverse()), true);
-  }
+  if(P.drawContour) drawInkContour(bodyContourPts(stations, s => s.hw), true);
   drawTeeth(stations, wormIndex*3);
 }
 
@@ -890,13 +913,7 @@ function drawLeaf(leafIndex){
   for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, 1.6);
   if(P.drawspine) drawSpineLine(poly, false);            // the leaf axis (distinct from the body contour)
   if(P.drawContour){
-    const L=[], R=[];
-    for(const s of stations){
-      const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
-      L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
-      R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
-    }
-    drawInkContour(L.concat(R.reverse()), true);
+    drawInkContour(bodyContourPts(stations, s => s.hw), true);
     // The midrib is body ink too, so it rides the contour toggle (thinner).
     // It traces the leaf axis — the same path as the spine — so when the spine
     // is on it is suppressed rather than doubling that line.
@@ -938,7 +955,8 @@ function drawFern(fernIndex){
   }
   // Fern's stem IS its spine (it has no closed body), so it routes through the
   // spine control — not the body-contour control. Was unconditional pre-02.
-  if(P.drawspine) drawSpineLine(poly, false);
+  if(P.drawspine)  drawSpineLine(poly, false);
+  if(P.drawContour) drawInkContour(poly, false);
   drawTeeth(stations, fernIndex*3);
 }
 
@@ -975,7 +993,9 @@ function drawSun(sunIndex){
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeSunStations(cx, cy);
   // hub radius = the ring's HOLE (Rin) — the drawn circle in Mark's pencil sun
-  if(P.drawspine) drawSpineLine(spineCirclePts(cx, cy, P.width*0.55*(1-P.ringWidth)), true);
+  const sunHub = P.width*0.55*(1-P.ringWidth);
+  if(P.drawspine)  drawSpineLine(circlePts(cx, cy, sunHub, P.spineOffset), true);
+  if(P.drawContour) drawInkContour(circlePts(cx, cy, sunHub, 1), true);
   drawTeeth(stations, sunIndex*3);
 }
 
@@ -1010,7 +1030,10 @@ function drawPetal(bloomIdx){
   const maxW = 0.5 * (r1 + len*0.65) * slot * (1 - P.petalGap);
   const aOff = random(TWO_PI);
   // hub radius = r1, the empty centre the petals spring from
-  if(P.drawspine) drawSpineLine(spineCirclePts(cx, cy, r1), true);
+  if(P.drawspine)  drawSpineLine(circlePts(cx, cy, r1, P.spineOffset), true);
+  // the centre ring the petals spring from — NOT a per-petal outline, which
+  // would double the petals' own marks
+  if(P.drawContour) drawInkContour(circlePts(cx, cy, r1, 1), true);
   for(let p=0; p<P.petalCount; p++){
     const a = aOff + p*slot + random(-0.12, 0.12)*slot;
     const pts = makePetalOutline(cx, cy, a, r1, len, maxW);
@@ -1036,18 +1059,18 @@ function drawPetal(bloomIdx){
 // organic coral texture. Pen/rotring read too thin to register as a fan
 // against the Ground; spray loses the radiating-line geometry.
 const GENERATORS = {
-  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawRibbon     },
-  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'none',    fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawBurst      },
-  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawBloom      },
-  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawFan        },
-  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawFieldMarks },
-  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawTuft },
-  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawLinework },
-  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawWorm },
-  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawLeaf },
-  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', draw:drawFern },
-  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'single', draw:drawSun },
-  petal:      { label:'Petal bloom', allowedBrushes:['marker','charcoal','pen'], biasDefault:0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'single', draw:drawPetal }
+  ribbon:     { label:'Ribbon',      allowedBrushes:['pen','marker','charcoal','2B','HB','2H','cpencil','pastel','crayon'], biasDefault:0,   fieldDefault:'hand',    fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:false, draw:drawRibbon     },
+  burst:      { label:'Burst',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'none',    fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:false, draw:drawBurst      },
+  bloom:      { label:'Bloom',       allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:false, draw:drawBloom      },
+  fan:        { label:'Fan',         allowedBrushes:['marker','charcoal'], biasDefault:1.0, fieldDefault:'curved',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:false, draw:drawFan        },
+  fieldmarks: { label:'Field Marks', allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'seabed',  fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:false, contourDefault:false, draw:drawFieldMarks },
+  tuft:       { label:'Tuft',        allowedBrushes:['marker','charcoal','pen'], biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:false, draw:drawTuft },
+  linework:   { label:'Linework',    allowedBrushes:['pen','rotring'],     biasDefault:0,   fieldDefault:'waves',   fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:false, contourDefault:false, draw:drawLinework },
+  worm:       { label:'Worm',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:true, draw:drawWorm },
+  leaf:       { label:'Leaf',        allowedBrushes:['pen','marker','charcoal'], biasDefault:0, fieldDefault:'none', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:true, draw:drawLeaf },
+  fern:       { label:'Fern',        allowedBrushes:['pen','rotring','charcoal'], biasDefault:1.0, fieldDefault:'hand', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'random', hasContour:true, contourDefault:false, draw:drawFern },
+  sun:        { label:'Sun',         allowedBrushes:null,                  biasDefault:1.0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'single', hasContour:true, contourDefault:false, draw:drawSun },
+  petal:      { label:'Petal bloom', allowedBrushes:['marker','charcoal','pen'], biasDefault:0, fieldDefault:'curved', fieldAmountDefault:0.5, strokeLenDefault:1.0, colormodeDefault:'single', hasContour:true, contourDefault:false, draw:drawPetal }
 };
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
@@ -1070,15 +1093,17 @@ function drawSpineLine(poly, closed){
 // on, not the centre point. Two builders — one that follows the actual stations
 // (burst/bloom/fan/tuft: the ring inherits the form's own radius modulation),
 // one for generators with an explicit hub radius (sun's ring, petal's centre).
-// P.spineOffset scales the ring's radius about the figure's centre: 1.0 puts it
-// through the station bases, <1 pulls it inward toward the hub, >1 pushes it
-// outside the marks. 0 collapses it to the centre (allowed, not the default).
-function spineRingPts(cx, cy, stations){
-  const k = P.spineOffset;
+// Ring geometry for radial figures, shared by the spine and the body contour.
+// `k` scales the radius about the figure's centre: 1.0 puts the ring through the
+// station bases, <1 pulls it inward toward the hub, >1 pushes it outside the
+// marks. The SPINE passes P.spineOffset (its adjustable construction line); the
+// CONTOUR passes 1.0 — it is the figure's own drawn edge, so it sits where the
+// marks actually are. Neither consumes random().
+function ringPts(cx, cy, stations, k){
   return stations.map(s => ({ x: cx + (s.x-cx)*k, y: cy + (s.y-cy)*k }));
 }
-function spineCirclePts(cx, cy, r, n){
-  const N = n || 64, out = [], rr = r * P.spineOffset;
+function circlePts(cx, cy, r, k, n){
+  const N = n || 64, out = [], rr = r * k;
   for(let i=0;i<N;i++){
     const a = (i/N) * TWO_PI;
     out.push({ x: cx + cos(a)*rr, y: cy + sin(a)*rr });
@@ -1168,7 +1193,7 @@ function updateGeneratorUI(){
   // Body contour: only generators that actually HAVE a closed body outline.
   // Fern's ink is its stem (a spine, not a body); Petal's outlines are its own
   // palette-coloured marks, not ink — neither has a contour to control.
-  const hasContour = (P.generator==='worm' || P.generator==='leaf');
+  const hasContour = GENERATORS[P.generator].hasContour !== false;
   document.getElementById('drawcontourGroup').style.display = hasContour ? '' : 'none';
   document.getElementById('contourweightGroup').style.display = (hasContour && P.drawContour) ? '' : 'none';
   const sg=document.getElementById('swirlGroup');
@@ -1639,6 +1664,10 @@ function wireUI(){
     const cd = GENERATORS[P.generator].colormodeDefault ?? 'random';
     P.colormode = cd;
     document.getElementById('colormode').value = cd;
+    // Per-generator contour default — same user-switch-only guard, so a saved
+    // preset's drawContour always wins.
+    P.drawContour = !!GENERATORS[P.generator].contourDefault;
+    document.getElementById('drawContour').checked = P.drawContour;
     // Per-generator distortion defaults — same user-switch-only guard as bias/field.
     P.fieldAmount = GENERATORS[P.generator].fieldAmountDefault ?? 0.5;
     P.strokeLen   = GENERATORS[P.generator].strokeLenDefault   ?? 1.0;
