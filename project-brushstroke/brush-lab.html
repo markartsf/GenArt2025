@@ -291,6 +291,8 @@
   <div class="group" id="spineweightGroup">
     <div class="row"><label>Spine weight (vector pt)</label><span class="val" id="v_spineweight">6</span></div>
     <input type="range" id="spineweight" min="1" max="20" step="0.5" value="6">
+    <div class="row" style="margin-top:8px;"><label>Spine colour</label></div>
+    <div class="swatches"><input type="color" id="spineColor" value="#000000"></div>
 
   </div>
   <div class="group" id="spineoffsetGroup" style="display:none;">
@@ -340,6 +342,7 @@ const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
   drawContour:false, contourWeight:1.0, contourColor:'#000000', spineOffset:1.0,
+  spineColor:'#000000',
   tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14, ringWidth:0.35, rayCount:12,
   petalCount:9, petalGap:0.35,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
@@ -1081,7 +1084,7 @@ const GENERATORS = {
 function drawSpineLine(poly, closed){
   push();
   noFill();
-  stroke(0);                       // black, independent of Brush + Palette
+  stroke(P.spineColor);            // user-chosen, still independent of Brush + Palette
   strokeWeight(P.spineweight);
   beginShape();
   for(const pt of poly) vertex(pt.x, pt.y);
@@ -1371,6 +1374,7 @@ function loadPreset(j){
     if(!j.params || j.params.contourWeight === undefined) P.contourWeight = 1.0;
     if(!j.params || j.params.contourColor  === undefined) P.contourColor  = '#000000';
     if(!j.params || j.params.spineOffset    === undefined) P.spineOffset    = 1.0;
+    if(!j.params || j.params.spineColor     === undefined) P.spineColor     = '#000000';
     ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
@@ -1389,6 +1393,7 @@ function loadPreset(j){
     const dc = document.getElementById('drawContour');
     dc.checked = !!P.drawContour; dc.dispatchEvent(new Event('change'));
     document.getElementById('contourColor').value = P.contourColor;
+    document.getElementById('spineColor').value = P.spineColor;
     // field dropdown — set from loaded value; gensel.value was set directly (no
     // 'change' event) so the per-generator fieldDefault does NOT override this.
     if(P.field !== undefined) document.getElementById('fieldsel').value = P.field;
@@ -1692,6 +1697,7 @@ function wireUI(){
     P.drawContour=e.target.checked; updateGeneratorUI(); redraw();
   });
   document.getElementById('contourColor').addEventListener('input',e=>{P.contourColor=e.target.value;redraw();});
+  document.getElementById('spineColor').addEventListener('input',e=>{P.spineColor=e.target.value;redraw();});
   bindSlider('contourWeight','contourWeight',v=>v.toFixed(2));
   bindSlider('spineOffset','spineOffset',v=>v.toFixed(2));
   document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
@@ -1759,6 +1765,7 @@ function wireUI(){
     document.getElementById('midrib').checked=P.midrib;
     document.getElementById('drawContour').checked=P.drawContour;
     document.getElementById('contourColor').value=P.contourColor;
+    document.getElementById('spineColor').value=P.spineColor;
     buildSwatches(); updateGeneratorUI(); redraw();
   });
 }
