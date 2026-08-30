@@ -39,6 +39,7 @@
      p5 2.3.0 (p5@2) + p5.brush 2.1.9-beta UMD dist. Re-download from jsdelivr on a version bump. -->
 <script src="./lib/p5.min.js"></script>
 <script src="./lib/p5.brush.js"></script>
+<script src="./armature-io.js"></script>
 <style>
   :root{ --ink:#2a2622; --muted:#8a8278; --acc:#9a5b34; --panel:#1b1b20; }
   *{ box-sizing:border-box; }
@@ -1783,13 +1784,13 @@ function exportArmature(){
 }
 // Restore the plan the block was authored against, THEN apply its placements —
 // validating fully before touching any state so a bad file changes nothing.
-function importArmature(block){
-  if(!block || block.schema !== 'brushstroke.armature/1')
-    throw new Error("Not a brushstroke.armature/1 (schema was '" + (block && block.schema) + "').");
-  if(!Array.isArray(block.placements)) throw new Error('Block has no placements array.');
-  if(block.frame && (block.frame.w !== FRAME_W || block.frame.h !== FRAME_H))
-    showErr('Armature was authored at ' + block.frame.w + '×' + block.frame.h +
-            ', this display is ' + FRAME_W + '×' + FRAME_H + ' — positions are absolute, so it will not line up.');
+// All armature reading goes through ArmatureIO — one parser, one set of rules.
+// Throws on rejection so every caller surfaces the message instead of rendering
+// a half-applied or substituted composition.
+function importArmature(input){
+  const res = ArmatureIO.parse(input, { frameW: FRAME_W, frameH: FRAME_H });
+  if(!res.ok) throw new Error(res.error);
+  const block = res.block;
   if(block.armature){ ARMATURE = block.armature; const el=document.getElementById('armature'); if(el) el.value = ARMATURE; }
   if(block.curation){
     if(block.curation.heroCount != null) HERO_COUNT = block.curation.heroCount;
@@ -1864,7 +1865,7 @@ function enterArmatureMode(){
     const f = ev.target.files && ev.target.files[0];
     if(!f) return;
     const r = new FileReader();
-    r.onload = x => { try { importArmature(JSON.parse(x.target.result)); }
+    r.onload = x => { try { importArmature(x.target.result); }
                       catch(err){ console.error(err); showErr('Armature load failed: ' + err.message); } };
     r.readAsText(f);
     ev.target.value = '';
