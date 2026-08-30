@@ -896,7 +896,9 @@ function drawLeaf(leafIndex){
     }
     drawInkContour(L.concat(R.reverse()), true);
     // The midrib is body ink too, so it rides the contour toggle (thinner).
-    if(P.midrib) drawInkContour(poly, false, 0.7);
+    // It traces the leaf axis — the same path as the spine — so when the spine
+    // is on it is suppressed rather than doubling that line.
+    if(P.midrib && !P.drawspine) drawInkContour(poly, false, 0.7);
   }
   drawTeeth(stations, leafIndex*3);
 }
