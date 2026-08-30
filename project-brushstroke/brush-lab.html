@@ -101,6 +101,10 @@
     <select id="gensel"></select>
   </div>
   <div class="group">
+    <div class="row"><label>Figure scale</label><span class="val" id="v_scaleMul">1.00</span></div>
+    <input type="range" id="scaleMul" min="0.25" max="3" step="0.05" value="1">
+  </div>
+  <div class="group">
     <div class="row"><label>Count</label><span class="val" id="v_ribbons">3</span></div>
     <input type="range" id="ribbons" min="1" max="12" step="1" value="3">
   </div>
@@ -341,7 +345,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
-  drawContour:false, contourWeight:1.0, contourColor:'#000000', spineOffset:1.0,
+  drawContour:false, contourWeight:1.0, contourColor:'#000000', spineOffset:1.0, scaleMul:1.0,
   spineColor:'#000000',
   tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14, ringWidth:0.35, rayCount:12,
   petalCount:9, petalGap:0.35,
@@ -473,6 +477,42 @@ function rebuildBuiltinBrush(name) {
 //  END ADAPTER
 // ============================================================================
 
+
+// ---- UNIFORM FIGURE SCALE (intrinsic size) ---------------------------------
+// scaleMul is the figure's own natural size at its tuned proportions — "how big
+// is a worm". It is NOT the armature's per-placement scaleMul (extrinsic, one
+// preset serving as both counterweight and hero); the two MULTIPLY. See
+// PATTERNS "Brushstroke — two kinds of figure scale".
+//
+// Applied by scoping a multiplication over the size-bearing params for the whole
+// draw pass, so every derived quantity scales with them: radii, body widths,
+// tooth lengths, station spacing, hub radii, stroke weights. COUNTS are
+// invariant by construction, not by special-casing — every count in the file is
+// a RATIO of these (e.g. burst's TWO_PI*R0/P.spacing, worm's arcLength/spacing),
+// so scaling numerator and denominator together leaves them untouched.
+//
+// Consumes no random() and adds no random() calls, so the RNG stream is
+// identical at a fixed seed: the same figure, drawn larger.
+const SCALED_PARAMS = ['width','spacing','weight','tuftradius','spineweight','contourWeight','linewidth'];
+function withScale(fn){
+  const k = P.scaleMul;
+  if(k === 1) return fn();
+  const saved = {};
+  for(const key of SCALED_PARAMS){ saved[key] = P[key]; P[key] *= k; }
+  try { fn(); } finally { Object.assign(P, saved); }
+}
+// Ribbon and Worm wander their spine with hardcoded step lengths, so their
+// extent does not follow P.width like the placed figures do. Scaling the drawn
+// path about its own centroid gives the exact uniform scale — and because the
+// wander is generated at base scale first, frame clamping can't reshape a large
+// figure into a different one.
+function scaleAboutCentroid(pts, k){
+  if(k === 1) return pts;
+  let cx=0, cy=0;
+  for(const p of pts){ cx+=p.x; cy+=p.y; }
+  cx/=pts.length; cy/=pts.length;
+  return pts.map(p => ({ x: cx + (p.x-cx)*k, y: cy + (p.y-cy)*k }));
+}
 
 // ---- spline math (Catmull-Rom) : OUR code — the spine geometry -------------
 function catmullRom(p0,p1,p2,p3,t){
@@ -633,7 +673,7 @@ function drawTeeth(stations, colorOffset){
 
 // RIBBON Generator — teeth along an open spine, crossing it at the normal.
 function drawRibbon(ribbonIndex){
-  const cps  = makeControlPoints(P.ctrl);
+  const cps  = scaleAboutCentroid(makeControlPoints(P.ctrl), P.scaleMul);
   const poly = samplePolyline(cps);
   const stations = placeStations(poly, P.spacing);
   if(P.drawspine) drawSpineLine(poly, false);
@@ -839,7 +879,7 @@ const INK = '#4a4238';
 // tip: small p = long drawn-out points, large p = blunt body w/ abrupt point.
 function bodyEnvSharp(u, p){ return 1 - Math.pow(Math.abs(u*2-1), p); }
 function tipExponent(){ return lerp(2.5, 0.9, P.tipTaper); }   // slider 0..1 → blunt..drawn-out
-function contourWobble(x, y){ return (noise(x*0.02, y*0.02, 7.7) - 0.5) * 2 * 2.2; }
+function contourWobble(x, y){ return (noise(x*0.02, y*0.02, 7.7) - 0.5) * 2 * 2.2 * P.scaleMul; }
 // Draw a figure outline as ONE continuous pen stroke (closed loops repeat the
 // first point). Ink + weight independent of the active Brush + Palette.
 // BODY CONTOUR — the drawn edge that holds a figure's marks. A user feature
@@ -865,7 +905,7 @@ function drawInkContour(pts, closed, mul){
 function bodyContourPts(stations, hwOf){
   const L=[], R=[];
   for(const s of stations){
-    const hw = hwOf(s) + 1.2 + contourWobble(s.x, s.y);
+    const hw = hwOf(s) + 1.2*P.scaleMul + contourWobble(s.x, s.y);
     L.push({ x:s.x + s.nx*hw, y:s.y + s.ny*hw });
     R.push({ x:s.x - s.nx*hw, y:s.y - s.ny*hw });
   }
@@ -882,7 +922,7 @@ function ribbonHalfWidth(s){
 // contour), not radiating outward. Contour first, rungs second — the hand's
 // drawing order. Rung half-length rides each station as `hw` (drawTeeth).
 function drawWorm(wormIndex){
-  const cps  = makeControlPoints(P.ctrl);
+  const cps  = scaleAboutCentroid(makeControlPoints(P.ctrl), P.scaleMul);
   const poly = samplePolyline(cps);
   const stations = placeStations(poly, P.spacing);
   const p = tipExponent();
@@ -987,7 +1027,8 @@ function makeSunStations(cx, cy){
   for(let k=0;k<P.rayCount;k++){
     const a = (k / P.rayCount) * TWO_PI + random(-0.5, 0.5) * (TWO_PI / P.rayCount) * 0.3;
     const dx = cos(a), dy = sin(a);
-    out.push({ x:cx+dx*(R0+2), y:cy+dy*(R0+2), nx:dx, ny:dy, u:0.5, hw:R0*0.22 });
+    const rayFoot = R0 + 2*P.scaleMul;          // the 2px standoff is figure-space, so it scales
+    out.push({ x:cx+dx*rayFoot, y:cy+dy*rayFoot, nx:dx, ny:dy, u:0.5, hw:R0*0.22 });
   }
   return out;
 }
@@ -1290,7 +1331,7 @@ function draw(){
   background(P.bg);
   push();
   translate(-width/2,-height/2);              // WEBGL origin → top-left screen coords
-  for(let i=0;i<P.ribbons;i++) GENERATORS[P.generator].draw(i);
+  withScale(() => { for(let i=0;i<P.ribbons;i++) GENERATORS[P.generator].draw(i); });
   pop();
 }
 
@@ -1714,6 +1755,7 @@ function wireUI(){
   document.getElementById('spineColor').addEventListener('input',e=>{P.spineColor=e.target.value;redraw();});
   bindSlider('contourWeight','contourWeight',v=>v.toFixed(2));
   bindSlider('spineOffset','spineOffset',v=>v.toFixed(2));
+  bindSlider('scaleMul','scaleMul',v=>v.toFixed(2));
   document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('seedPrev').addEventListener('click',()=>regenerate(Math.max(0,seed-1)));
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
