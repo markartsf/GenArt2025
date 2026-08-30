@@ -519,6 +519,33 @@ without them load at their default).
 
 ## 4. Roadmap
 
+### Working order (agreed 2026-08-29)
+
+The milestone list below is the architecture. This is the **build sequence** —
+what is actually being worked, in order. The colour-sound subsection at the tail
+of this section refers to it as "step 5".
+
+1. **Generator revision in brush lab** — sketch vocabulary (worm, leaf, fern,
+   sun, petal bloom), Bend Field distortion as preset properties.
+   **Done** — handoffs 01, 02, 02a, 02b.
+2. **Armature editor (`?armature=1`)** — direct placement and scaling of real
+   figures; exports a placement block. **Done** — handoff 03. See §4·3b.
+3. **Contact sheet** — 12 seeds at the reveal end state, tiled to one PNG with
+   rubric numbers, no audio. The judging loop for compositions. **Next.**
+4. **V2 merge** — V1 native render → transparent buffer → composite as a raster
+   plate over the compositor's ground and washes, per §4·3a. One gate: the
+   premultiplied-alpha fringe (`premultipliedAlpha:false`). **Not a new app** —
+   only the owned-mask route was retired; the compositor stands. Runs after
+   end-frame compositions satisfy Mark, so grounds are judged under figures he
+   already likes.
+5. **Family-mapping + colour-sound spike** — band → generator family, chroma →
+   colour index. Design recorded at the tail of this section.
+
+**Ordering principle: each step is judged against the output of the one before
+it.** That is why 4 and 5 are deferred rather than parallelised — a ground can
+only be judged under figures that already satisfy, and a mapping can only be
+judged against compositions that already satisfy.
+
 1. **Form (m1 — complete).** `brush-lab.html`. The Generator family —
    Ribbon, Burst, Bloom, Fan, Field Marks, Tuft, Linework — plus the shared
    `drawTeeth` renderer, Tooth bias, Radial offset, Gestural modifiers
@@ -790,7 +817,7 @@ rule that keeps us out of the days-long tangles.
 > this, that is a new decision to take with Mark first — the presence of this
 > section is not licence to start.
 
-**Position in the order.** This extends the step-5 family-mapping spike. It runs
+**Position in the order.** This extends **step 5 of the working order** at the top of §4 (family mapping). It runs
 **after** V1 end-frame compositions satisfy Mark — a mapping can only be judged
 against compositions he already likes, otherwise a bad reaction is
 unattributable: nobody can tell whether the mapping is wrong or the underlying
