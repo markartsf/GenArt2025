@@ -1248,7 +1248,20 @@ let armatureActive = false;
 function preparePlan(){
   let pl = buildPlan();
   if(ARMATURE_MODE){
-    if(!Placement.list().length) Placement.init(pl);     // first frame seeds the store from the armature
+    // The store describes ONE plan. Seed, armature and the curation controls all
+    // change which marks exist, and mark ids are NOT stable across those changes —
+    // id 5 at seed 1 is a different figure from id 5 at seed 669141. So carrying
+    // placements across a plan change is meaningless, and leaving them behind is
+    // worse: the store desyncs, placements orphan, and an export then records the
+    // NEW seed against the OLD plan's ids. That is how the three armatures
+    // committed 2026-08-30 each lost four figures. Re-init when the mark set moves.
+    const planIds = pl.map(m => m.id).join(',');
+    if(!Placement.list().length || planIds !== Placement.idSet()){
+      const lost = Placement.isDirty();
+      Placement.init(pl);
+      if(lost) showErr('Placement edits were discarded — the plan changed (seed or curation). ' +
+                       'Export before reseeding to keep an arrangement.');
+    }
     pl = applyPlacements(pl);
   } else if(armatureActive){
     pl = applyPlacements(pl);                            // reveal driven by a loaded armature
@@ -1606,9 +1619,10 @@ function setup(){
 const Placement = (() => {
   let items = [];
   let sel = null;
+  let dirty = false;                    // any edit since init — guards discarding work
   let onChange = () => {};
   const find = id => items.find(p => p.id === id);
-  const changed = () => onChange(items);
+  const changed = () => { dirty = true; onChange(items); };
   return {
     bind(cb){ onChange = cb; },
     init(marks){
@@ -1618,8 +1632,11 @@ const Placement = (() => {
         hero: !!m.hero, bleedEdge: m.bleedEdge || null
       }));
       sel = null;
+      dirty = false;                    // a fresh init is not an edit
     },
     list(){ return items; },
+    isDirty(){ return dirty; },
+    idSet(){ return items.map(p => p.id).join(','); },
     get(id){ return find(id); },
     selectedId(){ return sel; },
     select(id){ sel = id; changed(); },
@@ -1642,7 +1659,7 @@ const Placement = (() => {
         scaleMul:p.scaleMul==null?1:+p.scaleMul, seedOff:p.seedOff|0,
         hero:!!p.hero, bleedEdge:p.bleedEdge||null
       }));
-      sel = null; changed();
+      sel = null; onChange(items); dirty = false;   // a load is not an edit
     }
   };
 })();
@@ -2003,10 +2020,14 @@ function regenerate(s){
 
 function wireUI(){
   const $ = id => document.getElementById(id);
-  $('seedPrev').addEventListener('click', ()=> regenerate(Math.max(0, seed-1)));
-  $('seedNext').addEventListener('click', ()=> regenerate(seed+1));
-  $('reseed').addEventListener('click',  ()=> regenerate(seed*7+1));     // the seed×7+1 chain
-  $('rand').addEventListener('click',    ()=> regenerate(Math.floor(Math.random()*1e6)));
+  // In the editor, changing the seed rebuilds the plan and therefore discards
+  // placement edits (see preparePlan). Ask first rather than losing authored work.
+  const mayDiscard = () => !(ARMATURE_MODE && Placement.isDirty()) ||
+    confirm('Reseeding rebuilds the plan and discards your placement edits.\n\nExport first to keep them. Continue?');
+  $('seedPrev').addEventListener('click', ()=> { if(mayDiscard()) regenerate(Math.max(0, seed-1)); });
+  $('seedNext').addEventListener('click', ()=> { if(mayDiscard()) regenerate(seed+1); });
+  $('reseed').addEventListener('click',  ()=> { if(mayDiscard()) regenerate(seed*7+1); });   // the seed×7+1 chain
+  $('rand').addEventListener('click',    ()=> { if(mayDiscard()) regenerate(Math.floor(Math.random()*1e6)); });
   $('save').addEventListener('click',    ()=> saveCanvas('brushstroke-v1-seed'+seed+'-h'+HERO_COUNT+HERO_TYPE[0], 'png'));
   $('hcount').addEventListener('input',  e=>{ HERO_COUNT=+e.target.value; $('hcval').textContent=HERO_COUNT; running=false; stopAudio(); redraw(); });
   $('htype').addEventListener('change',  e=>{ HERO_TYPE=e.target.value; running=false; stopAudio(); redraw(); });
