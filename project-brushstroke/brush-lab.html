@@ -279,8 +279,8 @@
     <label style="display:block;margin-bottom:7px;">Palette</label>
     <div class="swatches" id="swatches"></div>
   </div>
-  <label class="toggle group"><input type="checkbox" id="drawspine"> Draw spine</label>
-  <div class="group">
+  <label class="toggle group" id="drawspineGroup"><input type="checkbox" id="drawspine"> Draw spine</label>
+  <div class="group" id="spineweightGroup">
     <div class="row"><label>Spine weight (pt)</label><span class="val" id="v_spineweight">6</span></div>
     <input type="range" id="spineweight" min="1" max="20" step="0.5" value="6">
   </div>
@@ -636,7 +636,7 @@ function drawBurst(burstIndex){
   const pad = 170;
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeBurstStations(cx, cy);
-  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), true);
   drawTeeth(stations, burstIndex*3);
 }
 
@@ -682,7 +682,7 @@ function drawBloom(bloomIndex){
   const pad = 170;
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeBloomStations(cx, cy);
-  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), true);
   drawTeeth(stations, bloomIndex*3);
 }
 
@@ -737,7 +737,7 @@ function drawFan(fanIndex){
   const baseRad   = random(TWO_PI);                            // each fan points its own way
   const spreadRad = radians(P.fanspread);
   const stations = makeFanStations(cx, cy, baseRad, spreadRad);
-  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), false);   // an arc, not a closed ring
   drawTeeth(stations, fanIndex*3);
 }
 
@@ -770,6 +770,9 @@ function drawTuft(idx){
     // per-tuft radius variety → some big, some small → organic piles
     const r  = P.tuftradius * (1 - random(0, P.tuftjitter));
     const stations = makeTuftStations(cx, cy, r, P.tuftspread);
+    // one ring per tuft, at that tuft's own centre + radius (closed only when the
+    // tuft is a full ring; an open arc gets an open spine)
+    if(P.drawspine) drawSpineLine(spineRingPts(cx, cy, stations), P.tuftspread >= 1);
     // colorOffset varies per tuft so adjacent tufts aren't identical palettes
     drawTeeth(stations, t * 3);
   }
@@ -817,16 +820,13 @@ function drawInkContour(pts, closed, w){
 // POINT at both ends; teeth become RUNGS crossing the body (contour to
 // contour), not radiating outward. Contour first, rungs second — the hand's
 // drawing order. Rung half-length rides each station as `hw` (drawTeeth).
-function makeWormStations(){
+function drawWorm(wormIndex){
   const cps  = makeControlPoints(P.ctrl);
   const poly = samplePolyline(cps);
   const stations = placeStations(poly, P.spacing);
   const p = tipExponent();
   for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, p);
-  return stations;
-}
-function drawWorm(wormIndex){
-  const stations = makeWormStations();
+  if(P.drawspine) drawSpineLine(poly, false);            // the centre path (distinct from the body contour)
   const L=[], R=[];
   for(const s of stations){
     const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
@@ -859,6 +859,7 @@ function drawLeaf(leafIndex){
   const poly = makeLeafAxis();
   const stations = placeStations(poly, P.spacing);
   for(const s of stations) s.hw = (P.width*0.5) * bodyEnvSharp(s.u, 1.6);
+  if(P.drawspine) drawSpineLine(poly, false);            // the leaf axis (distinct from the body contour)
   const L=[], R=[];
   for(const s of stations){
     const hw = s.hw + 1.2 + contourWobble(s.x, s.y);
@@ -901,7 +902,9 @@ function drawFern(fernIndex){
     // longest mid-spine, shortening toward the tip (u→1)
     s.hw = (P.width*0.5) * Math.sin(PI*(0.2 + 0.55*s.u)) * (1 - 0.45*s.u);
   }
-  drawInkContour(poly, false, 1.0);                     // the central spine stroke
+  // Fern's stem IS its spine (it has no closed body), so it routes through the
+  // spine control — not the body-contour control. Was unconditional pre-02.
+  if(P.drawspine) drawSpineLine(poly, false);
   drawTeeth(stations, fernIndex*3);
 }
 
@@ -937,7 +940,8 @@ function drawSun(sunIndex){
   const pad = 170;
   const cx = random(pad, width-pad), cy = random(pad, height-pad);
   const stations = makeSunStations(cx, cy);
-  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  // hub radius = the ring's HOLE (Rin) — the drawn circle in Mark's pencil sun
+  if(P.drawspine) drawSpineLine(spineCirclePts(cx, cy, P.width*0.55*(1-P.ringWidth)), true);
   drawTeeth(stations, sunIndex*3);
 }
 
@@ -971,7 +975,8 @@ function drawPetal(bloomIdx){
   const slot = TWO_PI / P.petalCount;
   const maxW = 0.5 * (r1 + len*0.65) * slot * (1 - P.petalGap);
   const aOff = random(TWO_PI);
-  if(P.drawspine){ push(); noStroke(); fill(0); circle(cx,cy,P.spineweight*2); pop(); }
+  // hub radius = r1, the empty centre the petals spring from
+  if(P.drawspine) drawSpineLine(spineCirclePts(cx, cy, r1), true);
   for(let p=0; p<P.petalCount; p++){
     const a = aOff + p*slot + random(-0.12, 0.12)*slot;
     const pts = makePetalOutline(cx, cy, a, r1, len, maxW);
@@ -1011,16 +1016,34 @@ const GENERATORS = {
 
 // Drawn Spine — a SOLID black stroke along the spine path. Rendered with plain
 // p5 (not the p5.brush adapter) so it NEVER inherits the active Brush.
-// SPEC §1.5 decision 3.
-function drawSpineLine(poly){
+// SPEC §1.5 decision 3. THE single spine renderer: every generator routes here,
+// so P.spineweight is the one weight control everywhere. Never fill() — a filled
+// dot is not a spine (the pre-handoff-02 centre-dot fake).
+function drawSpineLine(poly, closed){
   push();
   noFill();
   stroke(0);                       // black, independent of Brush + Palette
   strokeWeight(P.spineweight);
   beginShape();
   for(const pt of poly) vertex(pt.x, pt.y);
-  endShape();
+  closed ? endShape(CLOSE) : endShape();
   pop();
+}
+
+// Spine geometry for RADIAL generators: the spine is the CIRCLE the stations sit
+// on, not the centre point. Two builders — one that follows the actual stations
+// (burst/bloom/fan/tuft: the ring inherits the form's own radius modulation),
+// one for generators with an explicit hub radius (sun's ring, petal's centre).
+function spineRingPts(cx, cy, stations){
+  return stations.map(s => ({ x: cx + (s.x-cx), y: cy + (s.y-cy) }));
+}
+function spineCirclePts(cx, cy, r, n){
+  const N = n || 64, out = [];
+  for(let i=0;i<N;i++){
+    const a = (i/N) * TWO_PI;
+    out.push({ x: cx + cos(a)*r, y: cy + sin(a)*r });
+  }
+  return out;
 }
 
 function currentBrush(){
@@ -1089,6 +1112,14 @@ function updateGeneratorUI(){
   ['petalcountGroup','petalgapGroup'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display = isPetal ? '' : 'none';
+  });
+  // Field Marks + Linework have no meaningful spine (a scatter and a set of
+  // free contours) — hide the control rather than leave a toggle that does
+  // nothing while reading as on.
+  const hasSpine = !(P.generator==='fieldmarks' || P.generator==='linework');
+  ['drawspineGroup','spineweightGroup'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = hasSpine ? '' : 'none';
   });
   const sg=document.getElementById('swirlGroup');
   if(sg) sg.style.display = (P.generator==='bloom') ? '' : 'none';
