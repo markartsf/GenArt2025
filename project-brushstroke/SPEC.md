@@ -15,6 +15,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - Branch: `project-brushstroke` · Frontier: **M3 (Composition)**
 - **2026-08-29 — generator-revision pass: worm/leaf/fern/sun/petal added to brush lab (handoff 01).**
 - **2026-08-29 — spine rendering unified, body contour made optional, spineOffset added, colormodeDefault per generator (handoff 02).**
+- **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
   anchor.type/anchor.s, cluster.gen, chain clusters via x2/y2 — a future sketch = one data
