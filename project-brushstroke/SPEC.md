@@ -20,6 +20,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — colour-sound spike DESIGN recorded (§4 roadmap tail, not scheduled, not built).**
 - **2026-08-29 — working order recorded (§4); §1.5 decision 3 amended for `spineColor`; armature editor logged in V1-SCOPE §9.**
 - **2026-08-30 — `brushstroke.armature/1` schema documented (§1.5, after decision 4); shared loader `v1/armature-io.js`; reveal can load an armature; Mark's three armatures committed. KNOWN GAP recorded: the file is an overlay on a rebuilt plan, so orphaned placements drop silently (handoff 05).**
+- **2026-08-30 — armature loader hardened: a loaded file owns its ids, orphaned placements are reported not silent, and `planSignature` refuses files authored against different plan-generation code.**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
@@ -328,6 +329,7 @@ Fields below are **what the editor actually writes**, not an aspiration:
   "curation": {                         // the plan-shaping controls at export time
     "heroCount": 2, "heroType": "burst", "raggedness": 0, "bleedMode": "some"
   },
+  "planSignature": "16b8f8680848207e",  // PROVENANCE — see below; absent in pre-guard files
   "placements": [
     { "id": 0,                          // STABLE mark id — load-bearing, see below
       "gen": "burst",                   // generator id
@@ -340,9 +342,27 @@ Fields below are **what the editor actually writes**, not an aspiration:
 }
 ```
 
-- **`id` is stable and load-bearing.** Marks seed by placement id, never by draw
-  order, so an id must survive a round trip unchanged or that figure redraws
-  differently. The loader rejects missing or duplicated ids for this reason.
+- **`id` is stable and load-bearing — but only within its seed AND its
+  plan-generation code.** Marks seed by placement id, never by draw order, so an
+  id must survive a round trip unchanged or that figure redraws differently. The
+  loader rejects missing or duplicated ids for this reason. An id is *not*
+  portable across seeds (id 5 at seed 1 is a different figure from id 5 at seed
+  669141) and *not* portable across changes to `buildPlan` — which is what
+  `planSignature` guards.
+- **`planSignature` is the provenance guard (added 2026-08-30).** A fingerprint of
+  what `buildPlan` *produces* for this file's seed and curation: every mark's id,
+  generator and unplaced position, hashed. Written at export, recomputed at load,
+  and **a mismatch refuses the file** with a message naming both signatures.
+  Without it, any future edit to plan generation would shift ids and silently map
+  every stored placement onto a different figure — corruption that renders
+  confidently. It fingerprints the plan's *output*, not a version string, so it
+  needs no manual bumping and catches drift no one remembered to declare.
+  - It guards **code drift only**. It does not detect a file whose placements were
+    never consistent with its own recorded seed — the desync fixed 2026-08-30
+    produced exactly that, and those files pass the signature check because their
+    seed rebuilds correctly today.
+  - **Absent in files written before the field existed**, which load unguarded, as
+    before. The three armatures committed 2026-08-30 are in that category.
 - **Coordinates are absolute to the recorded `frame`.** A file records what it was
   authored against. On a mismatch the loader **refuses rather than rescaling** —
   no scaling rule is defined, and inventing one silently would move every figure.

@@ -50,6 +50,19 @@
     if(!j.frame || typeof j.frame.w !== 'number' || typeof j.frame.h !== 'number')
       return fail('Armature has no frame dimensions — positions are absolute, so they cannot be placed.');
 
+    // PROVENANCE. A placement is an id reference into a procedurally rebuilt plan,
+    // so it is only meaningful against the plan-generation code it was authored
+    // with. If buildPlan ever changes, ids shift and every stored placement
+    // silently points at a different figure. The signature makes that a refusal
+    // instead of silent corruption. Absent in files written before the field
+    // existed — those are read as before, unguarded.
+    if(j.planSignature != null && opts.planSignature != null &&
+       j.planSignature !== opts.planSignature)
+      return fail('This armature was authored against different plan-generation code ' +
+                  '(signature ' + j.planSignature + ', this build produces ' + opts.planSignature +
+                  '). Placement ids would point at different figures, so it is not loadable. ' +
+                  'Re-author it, or check out the commit it was made with.');
+
     // Coordinates are absolute to the authored frame. Rescaling is NOT defined
     // here on purpose (see the schema note in SPEC): refuse, don't invent a rule.
     if(opts.frameW != null && opts.frameH != null &&

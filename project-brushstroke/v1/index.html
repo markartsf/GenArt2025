@@ -1836,6 +1836,35 @@ function armatureMouseUp(){
 // carries the placements plus the provenance needed to rebuild the same plan
 // (seed, armature key, hero/ragged/bleed settings, frame size); import replays
 // that plan and re-applies the overrides. Flagged in the handoff-03 report.
+// A stable fingerprint of what buildPlan PRODUCES for a given seed + curation:
+// the mark ids, their generators and their unplaced positions. Recomputed at load
+// and compared, so an armature authored against different plan-generation code
+// refuses rather than mapping its ids onto different figures.
+function planSignatureFor(sd, cur, arm){
+  const save = { seed, ARMATURE, HERO_COUNT, HERO_TYPE, RAGGEDNESS, BLEED_MODE };
+  try {
+    seed = sd; ARMATURE = arm;
+    if(cur){
+      if(cur.heroCount  != null) HERO_COUNT = cur.heroCount;
+      if(cur.heroType)           HERO_TYPE  = cur.heroType;
+      if(cur.raggedness != null) RAGGEDNESS = cur.raggedness;
+      if(cur.bleedMode)          BLEED_MODE = cur.bleedMode;
+    }
+    const pl = buildPlan();
+    const src = pl.map(m => m.id + ':' + m.gen + ':' + Math.round(m.cx) + ',' + Math.round(m.cy)).join('|');
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for(let i=0;i<src.length;i++){
+      const c = src.charCodeAt(i);
+      h1 = Math.imul((h1 ^ c) >>> 0, 16777619) >>> 0;
+      h2 = Math.imul((h2 ^ c) >>> 0, 2246822519) >>> 0;
+    }
+    return (h1>>>0).toString(16).padStart(8,'0') + (h2>>>0).toString(16).padStart(8,'0');
+  } finally {
+    seed = save.seed; ARMATURE = save.ARMATURE; HERO_COUNT = save.HERO_COUNT;
+    HERO_TYPE = save.HERO_TYPE; RAGGEDNESS = save.RAGGEDNESS; BLEED_MODE = save.BLEED_MODE;
+  }
+}
+
 function buildArmatureBlock(name){
   return {
     schema: 'brushstroke.armature/1',
@@ -1843,6 +1872,8 @@ function buildArmatureBlock(name){
     seed, armature: ARMATURE,
     frame: { w: FRAME_W, h: FRAME_H },
     curation: { heroCount: HERO_COUNT, heroType: HERO_TYPE, raggedness: RAGGEDNESS, bleedMode: BLEED_MODE },
+    planSignature: planSignatureFor(seed, { heroCount:HERO_COUNT, heroType:HERO_TYPE,
+                                            raggedness:RAGGEDNESS, bleedMode:BLEED_MODE }, ARMATURE),
     placements: Placement.toJSON()
   };
 }
@@ -1861,7 +1892,14 @@ function exportArmature(){
 // Throws on rejection so every caller surfaces the message instead of rendering
 // a half-applied or substituted composition.
 function importArmature(input){
-  const res = ArmatureIO.parse(input, { frameW: FRAME_W, frameH: FRAME_H });
+  // Two-pass so nothing is applied before the provenance check: parse to read the
+  // block's own seed/curation, compute what THIS build's plan code produces for
+  // them, then re-validate with that signature in hand.
+  const first = ArmatureIO.parse(input, { frameW: FRAME_W, frameH: FRAME_H });
+  if(!first.ok) throw new Error(first.error);
+  const sig = planSignatureFor(first.block.seed, first.block.curation,
+                               first.block.armature || ARMATURE);
+  const res = ArmatureIO.parse(first.block, { frameW: FRAME_W, frameH: FRAME_H, planSignature: sig });
   if(!res.ok) throw new Error(res.error);
   const block = res.block;
   if(block.armature){ ARMATURE = block.armature; const el=document.getElementById('armature'); if(el) el.value = ARMATURE; }
