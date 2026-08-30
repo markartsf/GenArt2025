@@ -291,6 +291,10 @@
     <div class="row"><label>Spine weight (pt)</label><span class="val" id="v_spineweight">6</span></div>
     <input type="range" id="spineweight" min="1" max="20" step="0.5" value="6">
   </div>
+  <div class="group" id="spineoffsetGroup" style="display:none;">
+    <div class="row"><label>Spine offset <span style="color:var(--muted);font-size:10px;">hub ← 1 → outside</span></label><span class="val" id="v_spineOffset">1.00</span></div>
+    <input type="range" id="spineOffset" min="0" max="1.5" step="0.01" value="1">
+  </div>
 
   <div class="divider"></div>
 
@@ -333,7 +337,7 @@
 const DEFAULTS = {
   ribbons:3, ctrl:5, spacing:11, width:120, weight:1.4,
   anglej:8, lenj:0.25, taper:0.6, bias:0, radialoffset:0, swirl:60, colormode:'random', drawspine:false,
-  drawContour:false, contourWeight:1.0, contourColor:'#000000',
+  drawContour:false, contourWeight:1.0, contourColor:'#000000', spineOffset:1.0,
   tipTaper:0.5, midrib:true, frondAngle:40, frondCount:14, ringWidth:0.35, rayCount:12,
   petalCount:9, petalGap:0.35,
   // Hand modifier (gestural / Enfantines behavior) — 0 = clean, 1 = full hand
@@ -1055,14 +1059,18 @@ function drawSpineLine(poly, closed){
 // on, not the centre point. Two builders — one that follows the actual stations
 // (burst/bloom/fan/tuft: the ring inherits the form's own radius modulation),
 // one for generators with an explicit hub radius (sun's ring, petal's centre).
+// P.spineOffset scales the ring's radius about the figure's centre: 1.0 puts it
+// through the station bases, <1 pulls it inward toward the hub, >1 pushes it
+// outside the marks. 0 collapses it to the centre (allowed, not the default).
 function spineRingPts(cx, cy, stations){
-  return stations.map(s => ({ x: cx + (s.x-cx), y: cy + (s.y-cy) }));
+  const k = P.spineOffset;
+  return stations.map(s => ({ x: cx + (s.x-cx)*k, y: cy + (s.y-cy)*k }));
 }
 function spineCirclePts(cx, cy, r, n){
-  const N = n || 64, out = [];
+  const N = n || 64, out = [], rr = r * P.spineOffset;
   for(let i=0;i<N;i++){
     const a = (i/N) * TWO_PI;
-    out.push({ x: cx + cos(a)*r, y: cy + sin(a)*r });
+    out.push({ x: cx + cos(a)*rr, y: cy + sin(a)*rr });
   }
   return out;
 }
@@ -1142,6 +1150,10 @@ function updateGeneratorUI(){
     const el=document.getElementById(id);
     if(el) el.style.display = hasSpine ? '' : 'none';
   });
+  // Spine offset applies only where the spine is a RING around a centre.
+  const isRadial = ['burst','bloom','fan','tuft','sun','petal'].includes(P.generator);
+  const sog=document.getElementById('spineoffsetGroup');
+  if(sog) sog.style.display = isRadial ? '' : 'none';
   // Body contour: only generators that actually HAVE a closed body outline.
   // Fern's ink is its stem (a spine, not a body); Petal's outlines are its own
   // palette-coloured marks, not ink — neither has a contour to control.
@@ -1322,7 +1334,8 @@ function loadPreset(j){
     if(!j.params || j.params.drawContour   === undefined) P.drawContour   = false;
     if(!j.params || j.params.contourWeight === undefined) P.contourWeight = 1.0;
     if(!j.params || j.params.contourColor  === undefined) P.contourColor  = '#000000';
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    if(!j.params || j.params.spineOffset    === undefined) P.spineOffset    = 1.0;
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1634,6 +1647,7 @@ function wireUI(){
   });
   document.getElementById('contourColor').addEventListener('input',e=>{P.contourColor=e.target.value;redraw();});
   bindSlider('contourWeight','contourWeight',v=>v.toFixed(2));
+  bindSlider('spineOffset','spineOffset',v=>v.toFixed(2));
   document.getElementById('regen').addEventListener('click',()=>regenerate(floor(Math.random()*99999)));
   document.getElementById('seedPrev').addEventListener('click',()=>regenerate(Math.max(0,seed-1)));
   document.getElementById('seedNext').addEventListener('click',()=>regenerate(seed+1));
@@ -1688,7 +1702,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
