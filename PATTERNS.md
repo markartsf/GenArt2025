@@ -166,7 +166,21 @@ Implementation notes that keep the intrinsic scale honest:
   written as a raw number (Sun's 2px ray standoff, the contour's 1.2px offset and
   its wobble amplitude) must be multiplied by `scaleMul` or the figure is not the
   same drawing at another size. Placement padding is *not* figure space and
-  should not scale.
+  should not scale. Adding the uniform scale is what *surfaced* Sun's constant —
+  it had been invisible while everything rendered at one size. **Assume more are
+  latent** in any generator not yet checked by the geometry test below; a raw
+  number in figure space is a bug waiting for a scale change.
+- **Never derive a station count by walking arc length to a target that lands on
+  the path end.** Asking `placeStations` for `spacing = arcLen/count` puts the
+  final target exactly at the end, where its `run+L >= target` test tips on
+  floating point and returns `count` or `count+1` depending on the path's
+  absolute size. Use `placeStationsByCount(poly, count)`, which derives positions
+  from `u = i/count` in normalised path space. Two things matter there: compare
+  in normalised arc length (the ratios are scale-invariant, the raw pixel sums
+  are not), and take the tangent from a **central difference** rather than the
+  segment the search landed on — a station at `u=0.5` on a two-arc spine sits
+  exactly on the join, where the one-sided tangents genuinely differ and the mark
+  rotates depending on which side won.
 - **Verify by geometry, not by eye.** Patch the `stamp()` adapter to record every
   tooth's endpoints, render at 1× and 2×, and check that each point's offset from
   the mark centroid scales by exactly 2. Centroid-relative, so it isolates shape

@@ -559,6 +559,56 @@ function placeStations(poly, spacing){
   return stations;
 }
 
+// Place EXACTLY `count` stations at normalised positions u = i/count along the
+// polyline. Same station shape and normal convention as placeStations, but the
+// count is an input rather than an outcome of walking arc length: asking for
+// spacing = arcLen/count puts the final target exactly on the path end, where
+// placeStations' `run+L >= target` test tips on floating point and yields count
+// or count+1 depending on the path's absolute size. That made a scaled figure a
+// slightly different drawing (handoff 02b measured fern off by 5.2px at 2x).
+// Deriving positions from t ∈ [0,1] removes the boundary entirely.
+function placeStationsByCount(poly, count){
+  const cum=[0]; let total=0;
+  for(let i=1;i<poly.length;i++){
+    total += dist(poly[i-1].x,poly[i-1].y,poly[i].x,poly[i].y);
+    cum.push(total);
+  }
+  const out=[];
+  if(count<1 || total<=0) return out;
+  // Compare in NORMALISED arc length, not absolute pixels. Scaling multiplies
+  // every cumulative length and the total by the same factor, so the ratios are
+  // scale-invariant while the raw products are not — comparing raw pixels lets
+  // the segment search tip at a vertex on one scale and not another, which flips
+  // the station's tangent to the next segment and rotates its mark. Normalising
+  // is what makes the placement identical at every scale, not just the count.
+  const cumN = cum.map(c => c/total);
+  // Position at normalised arc length u. Searching from scratch each call keeps
+  // it independent of iteration order, and the ratios are scale-invariant.
+  const posAt = (u) => {
+    const t = Math.min(1, Math.max(0, u));
+    let s = 1;
+    while(s < cumN.length-1 && cumN[s] < t) s++;
+    const a = poly[s-1], b = poly[s], span = cumN[s]-cumN[s-1];
+    const f = span > 0 ? Math.min(1, Math.max(0, (t - cumN[s-1]) / span)) : 0;
+    return { x: a.x+(b.x-a.x)*f, y: a.y+(b.y-a.y)*f };
+  };
+  // Tangent by CENTRAL difference around the station, not from the segment the
+  // search happened to land on. A station at u=0.5 on a two-arc spine sits
+  // exactly on the join, where the one-sided tangents genuinely differ and the
+  // search tips one way or the other on last-bit accumulation — that was the
+  // whole residual after the count was fixed. A central difference is
+  // well-defined at a vertex and identical at every scale.
+  const d = 0.25/count;
+  for(let i=0;i<count;i++){
+    const u = i/count;
+    const p = posAt(u), before = posAt(u-d), after = posAt(u+d);
+    let tx = after.x-before.x, ty = after.y-before.y;
+    const m = Math.hypot(tx,ty)||1; tx/=m; ty/=m;
+    out.push({ x:p.x, y:p.y, nx:-ty, ny:tx, u });
+  }
+  return out;
+}
+
 // ---- ribbon generation -----------------------------------------------------
 function makeControlPoints(n){
   // a loose drifting path across the canvas, seeded
@@ -983,9 +1033,7 @@ function drawFern(fernIndex){
     { x: cx + px*bow,     y: cy + py*bow     },
     { x: cx + dx*len*0.5, y: cy + dy*len*0.5 }
   ]);
-  let arcLen = 0;
-  for(let i=1;i<poly.length;i++) arcLen += dist(poly[i-1].x, poly[i-1].y, poly[i].x, poly[i].y);
-  const stations = placeStations(poly, arcLen / P.frondCount).slice(0, P.frondCount);
+  const stations = placeStationsByCount(poly, P.frondCount);
   const theta = radians(P.frondAngle);
   for(let i=0;i<stations.length;i++){
     const s = stations[i];
