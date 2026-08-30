@@ -1,0 +1,298 @@
+{
+  "schema": "brushstroke.armature/1",
+  "name": "dominant-seed669141",
+  "seed": 669141,
+  "armature": "dominant",
+  "frame": {
+    "w": 1456,
+    "h": 910
+  },
+  "curation": {
+    "heroCount": 2,
+    "heroType": "burst",
+    "raggedness": 0,
+    "bleedMode": "some"
+  },
+  "placements": [
+    {
+      "id": 0,
+      "gen": "burst",
+      "x": 998,
+      "y": 549,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": true,
+      "bleedEdge": null
+    },
+    {
+      "id": 1,
+      "gen": "burst",
+      "x": 575,
+      "y": 429,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": true,
+      "bleedEdge": null
+    },
+    {
+      "id": 2,
+      "gen": "fan",
+      "x": 464,
+      "y": 720,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": true,
+      "bleedEdge": null
+    },
+    {
+      "id": 3,
+      "gen": "tuft",
+      "x": 589,
+      "y": 60,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 4,
+      "gen": "tuft",
+      "x": 1386,
+      "y": 257,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 5,
+      "gen": "tuft",
+      "x": 766,
+      "y": 625,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 6,
+      "gen": "tuft",
+      "x": 467,
+      "y": 470,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 7,
+      "gen": "tuft",
+      "x": 898,
+      "y": 55,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 8,
+      "gen": "tuft",
+      "x": 1271,
+      "y": 104,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 9,
+      "gen": "tuft",
+      "x": 791,
+      "y": 689,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 10,
+      "gen": "tuft",
+      "x": 467,
+      "y": 298,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 11,
+      "gen": "bloom",
+      "x": 1255,
+      "y": 408,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 12,
+      "gen": "bloom",
+      "x": 182,
+      "y": 602,
+      "scaleMul": 2.374,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 13,
+      "gen": "bloom",
+      "x": 338,
+      "y": 234,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 14,
+      "gen": "bloom",
+      "x": 233,
+      "y": 360,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 15,
+      "gen": "bloom",
+      "x": 305,
+      "y": 114,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 16,
+      "gen": "bloom",
+      "x": 362,
+      "y": 364,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 17,
+      "gen": "bloom",
+      "x": 323,
+      "y": 750,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 18,
+      "gen": "bloom",
+      "x": 944,
+      "y": 716,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 19,
+      "gen": "bloom",
+      "x": 139,
+      "y": 221,
+      "scaleMul": 2.398,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 20,
+      "gen": "bloom",
+      "x": 698,
+      "y": 807,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 21,
+      "gen": "bloom",
+      "x": 1020,
+      "y": 572,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 22,
+      "gen": "bloom",
+      "x": 1282,
+      "y": 248,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 23,
+      "gen": "bloom",
+      "x": 1133,
+      "y": 312,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 24,
+      "gen": "bloom",
+      "x": 100,
+      "y": 554,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 25,
+      "gen": "bloom",
+      "x": 153,
+      "y": 744,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 26,
+      "gen": "bloom",
+      "x": 1308,
+      "y": 578,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    },
+    {
+      "id": 27,
+      "gen": "bloom",
+      "x": 564,
+      "y": 810,
+      "scaleMul": 1,
+      "seedOff": 0,
+      "hero": false,
+      "bleedEdge": null
+    }
+  ]
+}
