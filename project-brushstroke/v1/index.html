@@ -144,6 +144,8 @@
     </div>
     <div class="herobox" id="revealarmbox">
       <label>armature file<select id="revarmload"><option value="">— in-code armature —</option></select></label>
+      <button id="revarmimportbtn" style="width:100%;margin-top:6px;">Load armature file…</button>
+      <input type="file" id="revarmimport" accept=".json,application/json" style="display:none">
       <div id="revarmname" style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center;">using the in-code armature</div>
     </div>
     <div class="herobox" id="revealbox">
@@ -1188,7 +1190,12 @@ let DEBUG_LABELS = false;
 // rendering. The reveal and the audio path are inert here by design (V1-SCOPE §5:
 // placement is authored, arrival stays emergent — the editor touches placement
 // only and never sequences the reveal).
-const ARMATURE_MODE = new URLSearchParams(location.search).get('armature') === '1';
+const ARMATURE_PARAM = new URLSearchParams(location.search).get('armature');
+const ARMATURE_MODE  = ARMATURE_PARAM === '1';
+// `?armature=1` opens the editor; `?armature=<name>` loads that folder armature
+// into the REVEAL. An armature literally named "1" is therefore unreachable by
+// URL — flagged; use the dropdown for it.
+const ARMATURE_LOAD  = (ARMATURE_PARAM && ARMATURE_PARAM !== '1') ? ARMATURE_PARAM : null;
 const GEN_DOT = { ribbon:'#000000', burst:'#ff00ff', bloom:'#00aaff', fan:'#ff8800', tuft:'#00cc44' };
 function drawPlanOverlay(){
   const counts = {};
@@ -1576,6 +1583,11 @@ function setup(){
   wireUI();
   regenerate(seed);
   if(ARMATURE_MODE) enterArmatureMode();
+  else if(ARMATURE_LOAD){
+    ArmatureIO.loadFromFolder(ARMATURE_LOAD, { frameW: FRAME_W, frameH: FRAME_H })
+      .then(res => { const sel=document.getElementById('revarmload');
+                     if(useArmatureForReveal(res, ARMATURE_LOAD) && sel) sel.value = ARMATURE_LOAD; });
+  }
 }
 
 // ============================================================================
@@ -2008,6 +2020,16 @@ function wireUI(){
     if(!name){ armatureActive = false;
       $('revarmname').textContent = 'using the in-code armature'; showErr(''); redraw(); return; }
     useArmatureForReveal(await ArmatureIO.loadFromFolder(name, { frameW: FRAME_W, frameH: FRAME_H }), name);
+  });
+  $('revarmimportbtn').addEventListener('click', ()=> $('revarmimport').click());
+  $('revarmimport').addEventListener('change', ev => {
+    const f = ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = x => useArmatureForReveal(
+      ArmatureIO.parse(x.target.result, { frameW: FRAME_W, frameH: FRAME_H }), f.name);
+    r.readAsText(f);
+    ev.target.value = '';
   });
   $('debuglabels').addEventListener('change', e=>{ DEBUG_LABELS=e.target.checked; running=false; stopAudio(); redraw(); });
   // reveal controls — manual (fixed clock) preview vs audio-driven
