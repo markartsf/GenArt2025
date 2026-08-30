@@ -269,6 +269,20 @@ Composition page stages Presets together. Editor → Preset → Composition.
    - *Possible extension (parked):* let the Drawn Spine use any Brush. Not now.
    - (v1 bug being fixed: spine inherited the active Brush, so it only showed
      under spray. It must NOT inherit the active Brush.)
+   - **AMENDED 2026-08-29 — spine colour is choosable.** The spine is no longer
+     pinned to black: it takes its own `spineColor` (default black), saved with
+     the preset. **The intent of this decision stands unchanged and is what the
+     amendment protects — spine colour never comes from the active Brush or the
+     Palette.** It now comes from its own control instead of a constant. The
+     parked extension above is still parked and still declined: the spine does
+     not use any Brush, it remains a plain vector stroke. Prompted by a pale
+     single-colour sun wearing a hard black ring — the fixed black fought the
+     figure it belongs to.
+   - **RELATED, NOT PART OF THIS DECISION (2026-08-29):** the **body contour** —
+     the drawn edge of a figure — is a *separate and independent* control with
+     its own toggle, weight and colour, now available on every figure generator.
+     Spine and contour are independently toggleable: either, both, or neither.
+     Do not conflate them; this decision governs the spine only.
 4. **The portable JSON file is the source of truth for presets; localStorage is
    only a convenience cache.** A `brushstroke.preset/1` JSON file is portable,
    version-controllable, lives in the repo (`presets/`), and travels between
