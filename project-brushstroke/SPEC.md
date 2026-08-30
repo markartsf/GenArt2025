@@ -19,7 +19,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — armature editor (`?armature=1`) added to V1: placement authoring only; reveal, composition schema, and §4·3b host topology unchanged (handoff 03).**
 - **2026-08-29 — colour-sound spike DESIGN recorded (§4 roadmap tail, not scheduled, not built).**
 - **2026-08-29 — working order recorded (§4); §1.5 decision 3 amended for `spineColor`; armature editor logged in V1-SCOPE §9.**
-- **2026-08-30 — `brushstroke.armature/1` schema documented (§1.5, after decision 4); shared loader `v1/armature-io.js`; reveal can load an armature; Mark's three armatures committed. KNOWN GAP recorded: the file is an overlay on a rebuilt plan, so orphaned placements drop silently (handoff 05).**
+- **2026-08-30 — `brushstroke.armature/1` schema documented (§1.5, after decision 4); shared loader `v1/armature-io.js`; reveal can load an armature; Mark's three armatures committed (handoff 05). The file is an overlay on a rebuilt plan — a standing property of the format; orphaned placements are now detected and reported.**
 - **2026-08-30 — armature loader hardened: a loaded file owns its ids, orphaned placements are reported not silent, and `planSignature` refuses files authored against different plan-generation code.**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
@@ -369,18 +369,35 @@ Fields below are **what the editor actually writes**, not an aspiration:
 - **Placement only.** No reveal, no timing, no ground, no composition — see the
   two-builds table in §4·3b. Reveal order stays emergent (2026-07-02).
 
-**KNOWN GAP — the file is an OVERLAY, not a self-contained composition.** It does
-not store the marks; it stores adjustments to a plan rebuilt procedurally from
-`seed` + `armature` + `curation`. If that rebuild yields a different set of marks
-than the author had on screen, placements whose ids no longer exist are silently
-dropped and those figures do not render. All three armatures committed
-2026-08-30 hit this: each carries 28 placements where its own recorded seed
-rebuilds 24 marks, so four figures are lost on load. The trigger was an editor
-desync (the placement store is initialised once and not rebuilt when the seed
-changes), but the format is what makes the failure *silent*. Two honest fixes
-exist and **neither is decided**: re-initialise the store whenever the plan
-changes, or make the file self-contained by recording each mark's generative
-parameters instead of an id reference.
+**STANDING PROPERTY — the file is an OVERLAY, not a self-contained composition.**
+It does not store the marks; it stores adjustments to a plan rebuilt procedurally
+from `seed` + `armature` + `curation`. This is a property of the format, not an
+outstanding defect. Its three consequences are **handled, not open**:
+
+- **A loaded file's ids are authoritative** (2026-08-30). Loading no longer
+  re-initialises the store from the rebuilt plan, so a file is never silently
+  replaced by plan defaults. An explicit reseed releases that claim, because the
+  user has then asked for a different plan.
+- **Placements the rebuilt plan has no mark for are detected and REPORTED** —
+  persistently, re-asserted every render, in the error banner and both panels:
+  *"N of M placements don't exist in this plan — those figures are not drawn."*
+  A file that renders short says so; it no longer drops figures silently.
+- **Plan-code drift is refused** by `planSignature` (above).
+
+Making the file **self-contained** — recording each mark's generative parameters
+instead of an id reference — remains available if it is ever wanted, and would
+additionally make armatures portable across seeds and across plan-code changes.
+It is **not pending**: nothing is waiting on it.
+
+**The three armatures committed 2026-08-30 — what actually happened.** Each is the
+**seed-1 plan (28 marks) with five figures moved**, but labelled `"seed": 669141`:
+the editor's placement store was initialised at seed 1 and not rebuilt when the
+seed changed (that desync was fixed 2026-08-30). Rebuilding from the recorded seed
+669141 yields 24 marks, so four placements orphan and those figures do not render.
+**The mark count was never inconsistent** — seed 1 genuinely produces 28 and seed
+669141 genuinely produces 24; the file simply pairs one seed's label with the
+other's placements. They pass `planSignature` because the recorded seed still
+rebuilds correctly today, which is precisely the limit of that guard.
 
 **Fields the format does NOT carry**, despite being natural to assume:
 - **No preset id.** V1 marks are generated by `buildPlan` from the armature and
