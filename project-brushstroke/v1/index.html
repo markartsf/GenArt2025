@@ -134,6 +134,9 @@
     <div class="herobox" id="armaturebox" style="display:none;">
       <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Armature editor</div>
       <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;white-space:pre-line;">nothing selected</div>
+      <div class="btnrow" style="margin-top:8px;">
+        <button id="armexport">Export JSON ⤓</button>
+      </div>
     </div>
     <div class="herobox" id="revealbox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
@@ -1749,6 +1752,33 @@ function armatureMouseUp(){
   redraw();                                         // the one full redraw for this gesture
 }
 
+// ---- ARMATURE EXPORT / IMPORT ---------------------------------------------
+// NOTE ON FORMAT: the in-code `sketch-*` armatures are normalised SKELETONS —
+// anchors, clusters, voids as 0..1 fractions — not per-figure placement lists.
+// There is no slot in that shape for "this bloom sits at x=812, scale 1.4,
+// seed +2", so an edited arrangement cannot round-trip through it. This block
+// carries the placements plus the provenance needed to rebuild the same plan
+// (seed, armature key, hero/ragged/bleed settings, frame size); import replays
+// that plan and re-applies the overrides. Flagged in the handoff-03 report.
+function buildArmatureBlock(name){
+  return {
+    schema: 'brushstroke.armature/1',
+    name: name || (ARMATURE + '-seed' + seed),
+    seed, armature: ARMATURE,
+    frame: { w: FRAME_W, h: FRAME_H },
+    curation: { heroCount: HERO_COUNT, heroType: HERO_TYPE, raggedness: RAGGEDNESS, bleedMode: BLEED_MODE },
+    placements: Placement.toJSON()
+  };
+}
+function exportArmature(){
+  const block = buildArmatureBlock();
+  const blob = new Blob([JSON.stringify(block, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = block.name.replace(/[^\w.-]+/g,'_') + '.armature.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 // Keyboard editing for the selected figure. Ignored while a text field or the
 // preset/armature selects have focus so V1's own controls keep their keys.
 function armatureKey(e){
@@ -1806,6 +1836,7 @@ function enterArmatureMode(){
   window.addEventListener('mousemove', armatureMouseMove);
   window.addEventListener('mouseup', armatureMouseUp);
   window.addEventListener('keydown', armatureKey);
+  document.getElementById('armexport').addEventListener('click', exportArmature);
   cv.style.cursor = 'crosshair';
   redraw();                            // end state + overlay
   updateArmatureReadout();
