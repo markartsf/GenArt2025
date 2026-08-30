@@ -47,7 +47,9 @@
     font-family:ui-monospace,Menlo,monospace; }
   #wrap{ display:flex; min-height:100%; align-items:flex-start; justify-content:center;
     gap:18px; padding:18px; }
-  #canvas-holder{ line-height:0; }
+  /* position:relative so the drag ghost (position:absolute) resolves against the
+     holder rather than BODY — otherwise it is offset by the canvas's page position. */
+  #canvas-holder{ line-height:0; position:relative; }
   canvas{ box-shadow:0 8px 40px rgba(0,0,0,.45); border-radius:2px;
     max-width:calc(100vw - 270px); height:auto; }   /* display-only fit; backing store unchanged */
   #panel{ width:210px; flex:0 0 auto; padding:14px; background:rgba(0,0,0,.25);
@@ -1775,7 +1777,12 @@ function showGhost(id){
   const cv = document.querySelector('#canvas-holder canvas');
   if(!bb || !p || !cv) return;
   const r = cv.getBoundingClientRect(), hr = document.getElementById('canvas-holder').getBoundingClientRect();
-  const k = r.width / FRAME_W;
+  // PER-AXIS scale. The canvas is displayed non-uniformly whenever the window is
+  // narrower than the sketch (the panel always takes width), so a single factor
+  // cannot serve both axes — using r.width/FRAME_W for y drifted the box further
+  // from the pointer the further down the frame it went. Mirrors toSketch(),
+  // which was already per-axis; this is what made the box disagree with it.
+  const kx = r.width / FRAME_W, ky = r.height / FRAME_H;
   // bbox was computed at the pre-drag centre; offset it by how far the figure has
   // moved since, and grow it about the centre by the scale change.
   const g = ghost(), sc = p.scaleMul / (drag.startScale || p.scaleMul || 1);
@@ -1783,10 +1790,10 @@ function showGhost(id){
   const w = (bb.x1-bb.x0)*sc, h = (bb.y1-bb.y0)*sc;
   const x = (bb.x0-cxs)*sc + p.x, y = (bb.y0-cys)*sc + p.y;
   g.style.display='block';
-  g.style.left = ((r.left-hr.left) + x*k) + 'px';
-  g.style.top  = ((r.top -hr.top ) + y*k) + 'px';
-  g.style.width  = (w*k) + 'px';
-  g.style.height = (h*k) + 'px';
+  g.style.left = ((r.left-hr.left) + x*kx) + 'px';
+  g.style.top  = ((r.top -hr.top ) + y*ky) + 'px';
+  g.style.width  = (w*kx) + 'px';
+  g.style.height = (h*ky) + 'px';
 }
 function hideGhost(){ if(ghostEl) ghostEl.style.display='none'; }
 function armatureMouseDown(e){
