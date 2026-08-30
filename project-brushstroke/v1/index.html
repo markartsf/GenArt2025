@@ -131,7 +131,11 @@
       <label>raggedness <span class="val" id="ragval">0.00</span><input id="rag" type="range" min="0" max="1" step="0.05" value="0"></label>
       <label>edge bleed<select id="bleed"><option value="some" selected>some seeds (~⅓)</option><option value="off">off</option><option value="all">every seed</option></select></label>
     </div>
-    <div class="herobox">
+    <div class="herobox" id="armaturebox" style="display:none;">
+      <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Armature editor</div>
+      <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;">nothing selected</div>
+    </div>
+    <div class="herobox" id="revealbox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
       <button id="loadtrack" style="width:100%;">Load track…</button>
       <div id="trackname" style="font-size:10px;color:var(--muted);margin:5px 0 7px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">winterland.mp3 (default)</div>
@@ -1161,6 +1165,18 @@ function drawStrokes(from, to){
 //     cluster bias-circles (blue), voids (grey discs).
 // WEBGL text() needs a loaded font, so the legend stays HTML (#debuglegend).
 let DEBUG_LABELS = false;
+
+// ============================================================================
+//  ARMATURE EDITOR — entry flag (V1.1, handoff 03)
+// ============================================================================
+// `?armature=1` opens the piece as a static authoring surface: the armature's END
+// STATE is drawn on load (every mark placed, as if the reveal had finished) so
+// Mark composes with the real marks on the real ground. Without the flag V1
+// behaves exactly as before — this mode is additive, never a change to normal
+// rendering. The reveal and the audio path are inert here by design (V1-SCOPE §5:
+// placement is authored, arrival stays emergent — the editor touches placement
+// only and never sequences the reveal).
+const ARMATURE_MODE = new URLSearchParams(location.search).get('armature') === '1';
 const GEN_DOT = { ribbon:'#000000', burst:'#ff00ff', bloom:'#00aaff', fan:'#ff8800', tuft:'#00cc44' };
 function drawPlanOverlay(){
   const counts = {};
@@ -1251,6 +1267,7 @@ let audioDriven = false;      // true → revealEnergy comes from the FFT each f
 
 // Begin an append-only reveal from the current seed/hero settings.
 function startReveal(){
+  if(ARMATURE_MODE) return;           // placement authoring only — the reveal stays emergent
   plan = buildPlan();                 // freeze the plan being revealed
   compileStrokes();                   // flatten it to ordered stroke records
   revealCount = 0; lastDrawn = 0; revealFps = 0; curFieldMark = -1;
@@ -1522,6 +1539,23 @@ function setup(){
   noLoop();
   wireUI();
   regenerate(seed);
+  if(ARMATURE_MODE) enterArmatureMode();
+}
+
+// Enter the authoring surface: hide the reveal/audio controls (inert here), show
+// the armature panel, and force the footprint overlay on — those boxes are the
+// selection targets, and their geometry is already computed per mark.
+function enterArmatureMode(){
+  document.getElementById('revealbox').style.display = 'none';
+  document.getElementById('armaturebox').style.display = '';
+  const hint = document.querySelector('#panel .hint');
+  if(hint) hint.textContent = 'Armature editor: the frame is drawn at its end state. ' +
+    'Click a footprint to select. Reveal and audio are inert in this mode.';
+  document.querySelector('#panel .sub').textContent = 'native · armature editor';
+  DEBUG_LABELS = true;
+  const cb = document.getElementById('debuglabels');
+  if(cb) cb.checked = true;
+  redraw();                            // end state + overlay
 }
 
 function draw(){
