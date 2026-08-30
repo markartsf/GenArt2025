@@ -18,6 +18,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — uniform `scaleMul` added to brush lab (intrinsic figure size); armature `scaleMul` remains the extrinsic per-placement multiplier (handoff 02b).**
 - **2026-08-29 — armature editor (`?armature=1`) added to V1: placement authoring only; reveal, composition schema, and §4·3b host topology unchanged (handoff 03).**
 - **2026-08-29 — colour-sound spike DESIGN recorded (§4 roadmap tail, not scheduled, not built).**
+- **2026-08-29 — working order recorded (§4); §1.5 decision 3 amended for `spineColor`; armature editor logged in V1-SCOPE §9.**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
