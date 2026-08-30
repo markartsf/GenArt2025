@@ -1430,7 +1430,8 @@ function loadPreset(j){
     if(!j.params || j.params.contourColor  === undefined) P.contourColor  = '#000000';
     if(!j.params || j.params.spineOffset    === undefined) P.spineOffset    = 1.0;
     if(!j.params || j.params.spineColor     === undefined) P.spineColor     = '#000000';
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    if(!j.params || j.params.scaleMul       === undefined) P.scaleMul       = 1.0;
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','scaleMul','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       const el = document.getElementById(id);
       if(el && P[id] !== undefined){
         el.value = P[id];
@@ -1810,7 +1811,7 @@ function wireUI(){
   loadPresetLibrary();                                          // populate dropdown (async)
   document.getElementById('reset').addEventListener('click',()=>{
     P=structuredClone(DEFAULTS);
-    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
+    ['ribbons','ctrl','spacing','width','weight','anglej','lenj','taper','bias','radialoffset','tipTaper','frondAngle','frondCount','ringWidth','rayCount','petalCount','petalGap','swirl','fieldcount','fieldscale','fanspread','tuftcount','tuftradius','tuftspread','tuftjitter','linecount','linesegments','linewander','linewidth','linealpha','spineweight','spineOffset','contourWeight','scaleMul','handTremor','handGate','handChaos','fieldAmount','strokeLen'].forEach(id=>{
       document.getElementById(id).value=P[id];
       document.getElementById(id).dispatchEvent(new Event('input'));
     });
