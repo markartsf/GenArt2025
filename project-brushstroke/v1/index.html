@@ -1000,7 +1000,8 @@ function compileStrokes(){
   strokes = []; markField = []; bboxes = {};
   for(const m of revealOrder()){
     const id = m.id;                                            // STABLE identity → seed by this, not reveal position
-    randomSeed(seed + id*9973); noiseSeed(seed + id*9973);      // MARK seed → spine/station geometry
+    const mSeed = seed + id*9973 + (m.seedOff||0)*7717;          // seedOff: armature editor re-rolls ONE figure in place (0 = untouched)
+    randomSeed(mSeed); noiseSeed(mSeed);                         // MARK seed → spine/station geometry
     applyMark(m);                                               // sets P.* + resolves the mark's field
     markField[id] = P.field;
     const stations = stationsFor(m);
@@ -1013,7 +1014,7 @@ function compileStrokes(){
       const nSeg = pts.length - (closed ? 0 : 1);
       for(let j=0;j<nSeg;j++){
         const a = pts[j], b = pts[(j+1)%pts.length];
-        const sk = (seed + id*9973 + (j+100000)*7919) >>> 0;   // contour segs: own stroke-seed lane (past any tooth k)
+        const sk = (mSeed + (j+100000)*7919) >>> 0;            // contour segs: own stroke-seed lane (past any tooth k)
         pushStroke({ brush:'pen', color:col, weight:cw, ax:a.x, ay:a.y, bx:b.x, by:b.y, mi:id, seedK:sk, body:true });
       }
     }
@@ -1023,7 +1024,7 @@ function compileStrokes(){
     const gap = ragGapFor(id);                                 // deliberate-incompleteness gap (null when off)
     for(let k=0;k<stations.length;k++){
       if(gap && inRagGap(gap, k/Math.max(1, stations.length-1))) continue;   // fill abandoned here
-      const sk = (seed + id*9973 + (k+1)*7919) >>> 0;          // per-STROKE seed (stored → reused at stamp)
+      const sk = (mSeed + (k+1)*7919) >>> 0;                   // per-STROKE seed (stored → reused at stamp)
       randomSeed(sk); noiseSeed(sk);
       const rec = computeTooth(stations, k, colorOffset, finalWeight, m.brush);
       if(rec){ rec.mi = id; rec.seedK = sk; pushStroke(rec); }
@@ -1218,7 +1219,16 @@ function drawPlanOverlay(){
   if(el) el.textContent = 'placed: ' + Object.entries(counts).map(([g,n])=>g+'='+n).join('  ')
     + '  (total ' + plan.length + ')  ·  box = mark footprint (thick = featured) · ✚ = anchor (red large / amber medium) · ○ = cluster · grey disc = void';
 }
-function renderStatic(){ plan = buildPlan(); compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length); if(DEBUG_LABELS) drawPlanOverlay(); }
+function renderStatic(){
+  plan = buildPlan();
+  if(ARMATURE_MODE){
+    if(!Placement.list().length) Placement.init(plan);   // first frame seeds the store from the armature
+    plan = applyPlacements(plan);
+  }
+  compileStrokes(); curFieldMark = -1; paintGround(); drawStrokes(0, strokes.length);
+  if(DEBUG_LABELS) drawPlanOverlay();
+  if(ARMATURE_MODE) drawSelectionOverlay();
+}
 
 // ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
 // revealRate() = REVEAL_RATE (strokes/sec at full energy) × revealEnergy (0..1). In MANUAL
@@ -1542,9 +1552,213 @@ function setup(){
   if(ARMATURE_MODE) enterArmatureMode();
 }
 
+// ============================================================================
+//  PLACEMENT STORE — the armature editor's state (self-contained)
+// ============================================================================
+// Owns WHERE figures sit and nothing else. It holds no reference to the plan, the
+// stroke list, the render loop, the canvas or the audio graph: mutations update
+// plain records and call one `onChange` callback, and the renderer decides what
+// to do about it. That narrow seam is deliberate — after the V2 merge a figure
+// becomes a plate and this module is the natural placement layer for the compose
+// host (SPEC §4·3b), so it must be liftable without dragging V1's loop with it.
+//
+// A record is {id, gen, x, y, scaleMul, seedOff, hero, bleedEdge}. `id` is the
+// mark's stable plan id — seeding keys off it, never off draw order, so moving,
+// scaling, reseeding or deleting one figure never changes how the others look.
+const Placement = (() => {
+  let items = [];
+  let sel = null;
+  let onChange = () => {};
+  const find = id => items.find(p => p.id === id);
+  const changed = () => onChange(items);
+  return {
+    bind(cb){ onChange = cb; },
+    init(marks){
+      items = marks.map(m => ({
+        id: m.id, gen: m.gen, x: m.cx, y: m.cy,
+        scaleMul: 1, seedOff: 0,
+        hero: !!m.hero, bleedEdge: m.bleedEdge || null
+      }));
+      sel = null;
+    },
+    list(){ return items; },
+    get(id){ return find(id); },
+    selectedId(){ return sel; },
+    select(id){ sel = id; changed(); },
+    moveBy(id, dx, dy){ const p=find(id); if(!p) return; p.x+=dx; p.y+=dy; changed(); },
+    setPos(id, x, y){ const p=find(id); if(!p) return; p.x=x; p.y=y; changed(); },
+    setScale(id, k){ const p=find(id); if(!p) return; p.scaleMul=Math.max(0.25, Math.min(3, k)); changed(); },
+    stepSeed(id, d){ const p=find(id); if(!p) return; p.seedOff+=d; changed(); },
+    remove(id){ items=items.filter(p=>p.id!==id); if(sel===id) sel=null; changed(); },
+    toJSON(){
+      return items.map(p => ({
+        id:p.id, gen:p.gen, x:Math.round(p.x), y:Math.round(p.y),
+        scaleMul:+p.scaleMul.toFixed(3), seedOff:p.seedOff,
+        hero:p.hero, bleedEdge:p.bleedEdge
+      }));
+    },
+    fromJSON(arr){
+      if(!Array.isArray(arr)) throw new Error('armature JSON must be an array of placements');
+      items = arr.map(p => ({
+        id:p.id, gen:p.gen, x:+p.x, y:+p.y,
+        scaleMul:p.scaleMul==null?1:+p.scaleMul, seedOff:p.seedOff|0,
+        hero:!!p.hero, bleedEdge:p.bleedEdge||null
+      }));
+      sel = null; changed();
+    }
+  };
+})();
+
+// The renderer's half of the seam: rebuild the plan as usual, then let the store
+// overrule placement. Deleted marks drop out; scaled marks scale the same
+// size-bearing params brush lab's scaleMul does, so proportions hold.
+function applyPlacements(pl){
+  const keep = [];
+  for(const m of pl){
+    const p = Placement.get(m.id);
+    if(!p) continue;                       // deleted in the editor
+    m.cx = p.x; m.cy = p.y;
+    m.seedOff = p.seedOff;
+    const k = p.scaleMul;
+    if(k !== 1){
+      m.width *= k;
+      if(m.spacing) m.spacing *= k;
+      if(m.weight)  m.weight  *= k;
+      if(m.extent)  m.extent  *= k;
+      m.r = (m.r||0) * k;
+    }
+    keep.push(m);
+  }
+  return keep;
+}
+
 // Enter the authoring surface: hide the reveal/audio controls (inert here), show
 // the armature panel, and force the footprint overlay on — those boxes are the
 // selection targets, and their geometry is already computed per mark.
+// Selection chrome: highlight the selected footprint and give it a corner handle.
+const HANDLE = 18;                                   // scale-handle hit size, sketch px
+function selectedBox(){
+  const id = Placement.selectedId();
+  if(id == null) return null;
+  const bb = bboxes[id];
+  return bb ? { id, bb } : null;
+}
+function drawSelectionOverlay(){
+  const s = selectedBox();
+  if(!s) return;
+  push();
+  translate(-width/2, -height/2);
+  const { x0, y0, x1, y1 } = s.bb;
+  noFill(); stroke(0,150,255); strokeWeight(3);
+  rect(x0, y0, x1-x0, y1-y0);
+  noStroke(); fill(0,150,255);
+  rect(x1 - HANDLE/2, y1 - HANDLE/2, HANDLE, HANDLE);   // corner scale handle
+  pop();
+}
+
+// Client → sketch coordinates. The canvas is CSS-scaled and pixelDensity'd, so go
+// through the bounding rect; never touch the canvas size itself (no resizeCanvas).
+function toSketch(e){
+  const cv = document.querySelector('#canvas-holder canvas');
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (FRAME_W / r.width),
+           y: (e.clientY - r.top)  * (FRAME_H / r.height) };
+}
+function markAt(x, y){
+  let hit = null, best = Infinity;                    // smallest containing box wins
+  for(const p of Placement.list()){
+    const bb = bboxes[p.id];
+    if(!bb) continue;
+    if(x>=bb.x0 && x<=bb.x1 && y>=bb.y0 && y<=bb.y1){
+      const a = (bb.x1-bb.x0)*(bb.y1-bb.y0);
+      if(a < best){ best = a; hit = p.id; }
+    }
+  }
+  return hit;
+}
+let drag = null;                                      // {mode:'move'|'scale', id, ...}
+// A full redraw costs ~1.9s at retina (3821 strokes), so repainting per mousemove
+// would lock the UI. The gesture is coalesced to ONE redraw on release; during the
+// drag an HTML ghost box tracks the figure so the move is still direct to the eye.
+// This is not a caching scheme — every repaint is still a complete frame.
+let ghostEl = null;
+function ghost(){
+  if(!ghostEl){
+    ghostEl = document.createElement('div');
+    ghostEl.style.cssText = 'position:absolute;border:2px solid #0096ff;background:rgba(0,150,255,0.10);'
+      + 'pointer-events:none;display:none;z-index:5;';
+    document.getElementById('canvas-holder').appendChild(ghostEl);
+  }
+  return ghostEl;
+}
+function showGhost(id){
+  const bb = bboxes[id], p = Placement.get(id);
+  const cv = document.querySelector('#canvas-holder canvas');
+  if(!bb || !p || !cv) return;
+  const r = cv.getBoundingClientRect(), hr = document.getElementById('canvas-holder').getBoundingClientRect();
+  const k = r.width / FRAME_W;
+  // bbox was computed at the pre-drag centre; offset it by how far the figure has
+  // moved since, and grow it about the centre by the scale change.
+  const g = ghost(), sc = p.scaleMul / (drag.startScale || p.scaleMul || 1);
+  const cxs = drag.baseCx, cys = drag.baseCy;
+  const w = (bb.x1-bb.x0)*sc, h = (bb.y1-bb.y0)*sc;
+  const x = (bb.x0-cxs)*sc + p.x, y = (bb.y0-cys)*sc + p.y;
+  g.style.display='block';
+  g.style.left = ((r.left-hr.left) + x*k) + 'px';
+  g.style.top  = ((r.top -hr.top ) + y*k) + 'px';
+  g.style.width  = (w*k) + 'px';
+  g.style.height = (h*k) + 'px';
+}
+function hideGhost(){ if(ghostEl) ghostEl.style.display='none'; }
+function armatureMouseDown(e){
+  const pt = toSketch(e);
+  const s = selectedBox();
+  if(s){                                              // handle takes priority over a new selection
+    const { x1, y1 } = s.bb;
+    if(Math.abs(pt.x-x1) <= HANDLE && Math.abs(pt.y-y1) <= HANDLE){
+      const p = Placement.get(s.id);
+      drag = { mode:'scale', id:s.id, startScale:p.scaleMul, baseCx:p.x, baseCy:p.y,
+               startDist:Math.max(1, Math.hypot(pt.x-p.x, pt.y-p.y)) };
+      e.preventDefault(); return;
+    }
+  }
+  const id = markAt(pt.x, pt.y);
+  Placement.select(id);
+  if(id != null){
+    const p = Placement.get(id);
+    drag = { mode:'move', id, offX:p.x-pt.x, offY:p.y-pt.y,
+             baseCx:p.x, baseCy:p.y, startScale:p.scaleMul };
+  }
+  e.preventDefault();
+}
+function armatureMouseMove(e){
+  if(!drag) return;
+  const pt = toSketch(e);
+  if(drag.mode==='move') Placement.setPos(drag.id, pt.x+drag.offX, pt.y+drag.offY);
+  else {
+    const p = Placement.get(drag.id);
+    const d = Math.max(1, Math.hypot(pt.x-p.x, pt.y-p.y));
+    Placement.setScale(drag.id, drag.startScale * (d/drag.startDist));
+  }
+  e.preventDefault();
+}
+function armatureMouseUp(){
+  if(!drag) return;
+  drag = null;
+  hideGhost();
+  redraw();                                         // the one full redraw for this gesture
+}
+
+function updateArmatureReadout(){
+  const el = document.getElementById('armsel');
+  if(!el) return;
+  const id = Placement.selectedId();
+  const p = id==null ? null : Placement.get(id);
+  el.textContent = p
+    ? `${p.gen} #${p.id}${p.hero?' (hero)':''} · x ${Math.round(p.x)} y ${Math.round(p.y)} · scale ${p.scaleMul.toFixed(2)} · seed +${p.seedOff}`
+    : `${Placement.list().length} figures · click a footprint to select`;
+}
+
 function enterArmatureMode(){
   document.getElementById('revealbox').style.display = 'none';
   document.getElementById('armaturebox').style.display = '';
@@ -1555,7 +1769,21 @@ function enterArmatureMode(){
   DEBUG_LABELS = true;
   const cb = document.getElementById('debuglabels');
   if(cb) cb.checked = true;
+  // The store's ONLY outward dependency: state changed, redraw the frame. Full
+  // redraw on every edit — Mark sees the real marks in the new position, never a
+  // proxy (no partial invalidation, no caching scheme).
+  Placement.bind(() => {
+    updateArmatureReadout();
+    if(drag) showGhost(drag.id);                    // mid-gesture: ghost only
+    else redraw();                                  // settled: full frame
+  });
+  const cv = document.querySelector('#canvas-holder canvas');
+  cv.addEventListener('mousedown', armatureMouseDown);
+  window.addEventListener('mousemove', armatureMouseMove);
+  window.addEventListener('mouseup', armatureMouseUp);
+  cv.style.cursor = 'crosshair';
   redraw();                            // end state + overlay
+  updateArmatureReadout();
 }
 
 function draw(){
