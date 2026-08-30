@@ -1287,6 +1287,44 @@ function renderStatic(){
   if(ARMATURE_MODE) drawSelectionOverlay();
 }
 
+// ---- ACCRETIVE RENDER (shared: contact sheet + "Render as reveal") -----------------
+// The static path and the reveal do NOT produce the same frame (SPEC §4·3b: ~22.2%
+// apart, because splitting a mark's strokes across frames composites differently
+// than merging them in one p5.brush buffer). Anything that needs a frame the piece
+// actually ARRIVES at must therefore go through the accretive path, not renderStatic.
+//
+// This is the reveal's mechanism driven by FRAME COUNT rather than a wall clock:
+// deterministic, headless, no audio, and as fast as rAF allows. Measured against a
+// real wall-clock reveal at seed 7 (2155 strokes): 0.037% of pixels differ at >32,
+// against a reveal-vs-reveal noise floor of 0.048% — i.e. indistinguishable from
+// the real thing, and ~3.4x faster than reproducing its frame count exactly.
+const ACCRETIVE_CHUNK = 30;        // strokes per frame; 30 measured faithful + fast
+function renderAccretive(chunk){
+  return new Promise(resolve => {
+    plan = preparePlan();
+    compileStrokes();
+    curFieldMark = -1;
+    const step = chunk || ACCRETIVE_CHUNK;
+    const realDraw = window.draw;
+    let i = 0, painted = false, frames = 0;
+    const t0 = performance.now();
+    window.draw = function(){
+      frames++;
+      if(!painted){ paintGround(); painted = true; }      // ground once, then append only
+      if(i >= strokes.length){
+        window.draw = realDraw; noLoop();
+        setTimeout(() => resolve({ frames, ms: Math.round(performance.now()-t0),
+                                   strokes: strokes.length }), 60);
+        return;
+      }
+      drawStrokes(i, Math.min(i + step, strokes.length));
+      i += step;
+    };
+    running = false;
+    loop();
+  });
+}
+
 // ---- REVEAL (append-only accretion; accumulation-spike §8 / V1-SCOPE §5) ------------
 // revealRate() = REVEAL_RATE (strokes/sec at full energy) × revealEnergy (0..1). In MANUAL
 // mode revealEnergy is pinned to 1 (a fixed clock for curation preview); in AUDIO mode it's
