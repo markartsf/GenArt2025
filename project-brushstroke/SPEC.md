@@ -21,6 +21,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — working order recorded (§4); §1.5 decision 3 amended for `spineColor`; armature editor logged in V1-SCOPE §9.**
 - **2026-08-30 — `brushstroke.armature/1` schema documented (§1.5, after decision 4); shared loader `v1/armature-io.js`; reveal can load an armature; Mark's three armatures committed (handoff 05). The file is an overlay on a rebuilt plan — a standing property of the format; orphaned placements are now detected and reported.**
 - **2026-08-30 — armature loader hardened: a loaded file owns its ids, orphaned placements are reported not silent, and `planSignature` refuses files authored against different plan-generation code.**
+- **2026-08-30 — CONTACT SHEET built (`?sheet=1`, working-order step 3): twelve end frames on the ACCRETIVE path, seed-only sweep, one PNG. Tile matches the real reveal to 0.008% (noise floor 0.048%). "Render as reveal" built in the editor (handoff 06).**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
@@ -903,8 +904,11 @@ judged against compositions that already satisfy.
        - **Decision:** accept the divergence. *Option 1* (make the editor accrete) rejected —
          several seconds per drag breaks the authoring loop. *Option 2* (reveal splits only at
          mark boundaries) rejected — per-tooth accretion **is** the piece and is not traded for
-         preview parity. **Mitigation: an on-demand "Render as reveal" control in the editor
-         — PLANNED, NOT BUILT.**
+         preview parity. **Mitigation: an on-demand "Render as reveal" control in the editor —
+         BUILT 2026-08-30 (handoff 06).** One accretive pass on demand, never automatic and
+         never fired by an edit; the canvas is banner- and outline-marked while it shows the
+         true frame, and ANY edit invalidates it immediately so a stale accurate frame cannot
+         be mistaken for a current one. Shares `renderAccretive()` with the contact sheet.
        - Consequence for the schema: the armature file's promise is authored *placement*, not a
          pixel-exact end frame. Judge dense compositions in the reveal.
    - **Layering verdict — translucency CONFIRMED (2026-06-25, by-eye at retina).** Multi-plate

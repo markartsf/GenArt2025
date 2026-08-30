@@ -150,6 +150,9 @@
       <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Armature editor</div>
       <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;white-space:pre-line;">nothing selected</div>
       <label style="margin-top:6px;">load armature<select id="armload"><option value="">— from armatures/ folder —</option></select></label>
+      <button id="armtrue" style="width:100%;margin-top:8px;">Render as reveal</button>
+      <div id="armtruestate" style="font-size:10px;margin-top:5px;text-align:center;color:#8d877d;">
+        fast preview</div>
       <div class="btnrow" style="margin-top:8px;">
         <button id="armexport">Export JSON ⤓</button>
         <button id="armimportbtn">Import…</button>
@@ -2135,6 +2138,37 @@ function useArmatureForReveal(res, label){
   return true;
 }
 
+// ---- "RENDER AS REVEAL" (SPEC §4·3b mitigation) -----------------------------
+// The editor draws on the STATIC path because it must stay responsive, and that
+// frame is not what the reveal arrives at (§4·3b). This runs one accretive pass on
+// demand so Mark can see the true frame without a playthrough.
+//
+// It is deliberately NOT automatic — it must never fire on an edit, or the
+// authoring loop inherits its cost. And the two states must never be confusable:
+// the banner says which is on screen, and ANY edit invalidates the true render
+// immediately, so a stale accurate frame can't be mistaken for a current one.
+let trueRender = false;
+function setTrueRenderState(on){
+  trueRender = on;
+  const el = document.getElementById('armtruestate');
+  const cv = document.querySelector('#canvas-holder canvas');
+  if(el){
+    el.textContent = on ? '● TRUE FRAME (as the reveal arrives)' : 'fast preview';
+    el.style.color = on ? '#7ddf9a' : '#8d877d';
+  }
+  if(cv) cv.style.outline = on ? '2px solid #7ddf9a' : '';
+}
+async function renderTrueFrame(){
+  if(!ARMATURE_MODE || sheetBusy) return;
+  const btn = document.getElementById('armtrue');
+  if(btn){ btn.disabled = true; btn.textContent = 'rendering…'; }
+  setTrueRenderState(false);
+  const r = await renderAccretive();
+  if(btn){ btn.disabled = false; btn.textContent = 'Render as reveal'; }
+  setTrueRenderState(true);
+  return r;
+}
+
 // Keyboard editing for the selected figure. Ignored while a text field or the
 // preset/armature selects have focus so V1's own controls keep their keys.
 function armatureKey(e){
@@ -2185,10 +2219,12 @@ function enterArmatureMode(){
   // redraw on every edit — Mark sees the real marks in the new position, never a
   // proxy (no partial invalidation, no caching scheme).
   Placement.bind(() => {
+    if(trueRender) setTrueRenderState(false);       // any edit invalidates the true frame
     updateArmatureReadout();
     if(drag) showGhost(drag.id);                    // mid-gesture: ghost only
     else redraw();                                  // settled: full frame
   });
+  document.getElementById('armtrue').addEventListener('click', renderTrueFrame);
   const cv = document.querySelector('#canvas-holder canvas');
   cv.addEventListener('mousedown', armatureMouseDown);
   window.addEventListener('mousemove', armatureMouseMove);
