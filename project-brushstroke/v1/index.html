@@ -133,7 +133,7 @@
     </div>
     <div class="herobox" id="armaturebox" style="display:none;">
       <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Armature editor</div>
-      <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;">nothing selected</div>
+      <div id="armsel" style="font-size:10px;color:var(--muted);line-height:1.5;white-space:pre-line;">nothing selected</div>
     </div>
     <div class="herobox" id="revealbox">
       <input type="file" id="audiofile" accept="audio/*" style="display:none">
@@ -1749,6 +1749,29 @@ function armatureMouseUp(){
   redraw();                                         // the one full redraw for this gesture
 }
 
+// Keyboard editing for the selected figure. Ignored while a text field or the
+// preset/armature selects have focus so V1's own controls keep their keys.
+function armatureKey(e){
+  const id = Placement.selectedId();
+  if(id == null) return;
+  const t = e.target;
+  if(t && (t.tagName==='INPUT' || t.tagName==='SELECT' || t.tagName==='TEXTAREA')) return;
+  const step = e.shiftKey ? 10 : 1;
+  let handled = true;
+  switch(e.key){
+    case 'ArrowLeft':  Placement.moveBy(id, -step, 0); break;
+    case 'ArrowRight': Placement.moveBy(id,  step, 0); break;
+    case 'ArrowUp':    Placement.moveBy(id, 0, -step); break;
+    case 'ArrowDown':  Placement.moveBy(id, 0,  step); break;
+    case '[':          Placement.stepSeed(id, -1); break;   // re-roll this figure in place
+    case ']':          Placement.stepSeed(id,  1); break;
+    case 'Backspace':
+    case 'Delete':     Placement.remove(id); break;
+    default: handled = false;
+  }
+  if(handled) e.preventDefault();
+}
+
 function updateArmatureReadout(){
   const el = document.getElementById('armsel');
   if(!el) return;
@@ -1756,6 +1779,7 @@ function updateArmatureReadout(){
   const p = id==null ? null : Placement.get(id);
   el.textContent = p
     ? `${p.gen} #${p.id}${p.hero?' (hero)':''} · x ${Math.round(p.x)} y ${Math.round(p.y)} · scale ${p.scaleMul.toFixed(2)} · seed +${p.seedOff}`
+      + '\n↑↓←→ nudge (⇧ ×10) · [ ] reseed · ⌫ delete'
     : `${Placement.list().length} figures · click a footprint to select`;
 }
 
@@ -1781,6 +1805,7 @@ function enterArmatureMode(){
   cv.addEventListener('mousedown', armatureMouseDown);
   window.addEventListener('mousemove', armatureMouseMove);
   window.addEventListener('mouseup', armatureMouseUp);
+  window.addEventListener('keydown', armatureKey);
   cv.style.cursor = 'crosshair';
   redraw();                            // end state + overlay
   updateArmatureReadout();
