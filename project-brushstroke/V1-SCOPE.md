@@ -205,6 +205,15 @@ Pick by a quick spike; written finding only, not committed as a feature.
 
 ## 9. V1.x roadmap
 
+- **V1.1 — armature editor (BUILT 2026-08-29, handoff 03):** `?armature=1` opens
+  the piece as a static authoring surface — the armature's end state drawn with
+  real marks, figures selected and dragged/scaled/reseeded directly, exported as
+  a `brushstroke.armature/1` placement block. **It authors PLACEMENT ONLY, and
+  crosses neither boundary:** the authored *reveal* stays cut from V1.0 per §5
+  (arrival remains emergent — no timeline, no sequencing, no audio), and no
+  `brushstroke.composition` is written, so §7 holds too. Without the flag V1
+  behaves exactly as before. See SPEC §4·3b for how it differs from the compose
+  host.
 - **V1.1 / V1.2:** fold in the remaining non-Tuft generators (Bloom, Fan, Field
   Marks, Linework) one increment at a time, each as a tuned preset on the house palette.
 - **Mood variant:** Flowering Trees palette pass, once pigment-checked by eye.
