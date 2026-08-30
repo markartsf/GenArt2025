@@ -16,6 +16,7 @@ to slow ambient tracks (~30–40 BPM). Aesthetic lineage: Alejandro Campos Uribe
 - **2026-08-29 — generator-revision pass: worm/leaf/fern/sun/petal added to brush lab (handoff 01).**
 - **2026-08-29 — spine rendering unified, body contour made optional, spineOffset added, colormodeDefault per generator (handoff 02).**
 - **2026-08-29 — uniform `scaleMul` added to brush lab (intrinsic figure size); armature `scaleMul` remains the extrinsic per-placement multiplier (handoff 02b).**
+- **2026-08-29 — armature editor (`?armature=1`) added to V1: placement authoring only; reveal, composition schema, and §4·3b host topology unchanged (handoff 03).**
 - **2026-08-29 — body contour extended to every figure generator (Mark, direct); spine colour now choosable. AMENDS §1.5 decision 3: the spine is no longer pinned to black — it takes its own `spineColor` (default black). The decision's intent stands: spine colour never comes from the active Brush or the Palette. Contour and spine remain independent controls.**
 - **2026-08-18 (later) — SKETCH ARMATURES + RAGGEDNESS + EDGE BLEED (committed with this
   line).** Mark's four pencil sketches encoded as armatures (`sketch-a`…`sketch-d`; extensions:
@@ -699,6 +700,24 @@ without them load at their default).
        (extend `brush-lab` vs separate host) and reference-vs-inline plate storage. **The
        recipe is the freeze line** — compositions are authored and frozen with no audio in the
        loop; M4 modulates a saved recipe only.
+     - **Armature editor (V1, BUILT 2026-08-29) — a different, smaller build. Do not conflate
+       it with the compose host.** `v1/index.html?armature=1` authors figure **placement**
+       within an armature; the compose host authors a whole **Composition**:
+
+       | | Armature editor (V1.1) | Compose host (this section, M3) |
+       |---|---|---|
+       | Authors | figure **placement** in an armature | a full **Composition** |
+       | Data out | `brushstroke.armature/1` placement block | `brushstroke.composition` recipe |
+       | Renders | V1 native, one layer | layered cached-KM plate stack |
+       | Controls | position, scale, seed | plus ground, washes, plate order/depth, palette rotation |
+
+       Its placement state is a self-contained module with no dependency on V1's render loop or
+       audio, talking to the renderer through one "here is the current armature, redraw" call —
+       so that **after the V2 merge, when a figure becomes a plate, it can be absorbed as the
+       host's placement layer** rather than rewritten. That convergence is likely but **not
+       settled here**. **The host-topology question above stays OPEN**: this build picked
+       "inside V1" for *armature editing only* and decides nothing about where the compose host
+       lives.
    - **Layering verdict — translucency CONFIRMED (2026-06-25, by-eye at retina).** Multi-plate
      layering reads as translucency, signed off. A wash plate + multiple Tuft fields (each at
      its own scale / seed / palette-offset) through the cached KM compositor produce the

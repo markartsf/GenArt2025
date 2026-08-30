@@ -135,6 +135,15 @@ This is a deliberate scope cut: the **authored-final-frame reveal** (compose the
 endpoint first, choreograph entrances toward it) belongs to the compositor / compose
 host, not here. V1.0 trades authored control for speed and emergence.
 
+**Which half is authored, and which is emergent.** Read carefully, because "not
+authored-endpoint" is easy to over-read. **Placement is authored** — the armatures
+(`sketch-a`…`sketch-d`) are hand-encoded layouts, and the armature editor
+(`?armature=1`, handoff 03) makes that existing data editable by hand instead of by
+transcription. **Arrival is emergent** — which mark lands when, and how densely, is
+the seed and the track. The V1.0 cut is the authored **reveal**, not authored
+placement. Editing an armature does not reopen this section; adding a timeline,
+entrance order, or any sequencing would.
+
 - One seed drives the whole piece; expose seed + reseed (the `seed×7+1` convention)
   and a save-seed affordance.
 - `pixelDensity(2)` and canvas size are set **once at setup**.
