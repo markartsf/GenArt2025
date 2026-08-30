@@ -138,6 +138,24 @@ tried, both wrong — see Failed approaches).
   name is actually registered in the installed p5.brush build before assuming a
   param bug.
 
+### Brushstroke — colour order shifts the jitter RNG stream
+
+In brush lab, `random` colour order draws a value per tooth (`pickColor` →
+`random(pal.length)`); `sequential`, `runs` and `single` are pure index maths and
+draw nothing. Tooth jitter (angle, length, radial offset) is pulled from the same
+seeded stream, so **changing colour order at a fixed seed also changes every
+subsequent tooth's jitter** — the marks move, not just their colours.
+
+- Pre-existing behaviour, not a bug: the stream is shared by design and the seed
+  still reproduces exactly, for a given colour order.
+- **Matters during seed curation.** A seed chosen under one colour order is not
+  the same composition under another. Lock the colour order *before* hunting
+  seeds, and record it alongside the seed — a preset already stores both.
+- Same trap applies to any future per-tooth option that conditionally consumes
+  `random()`. If a knob must not disturb the composition, derive it from a
+  separate stream (or from `noise()`, which doesn't touch the random stream)
+  rather than from the shared one.
+
 ### Brushstroke — built-in vibration (override semantics)
 
 Changing a built-in brush's vibration at runtime is non-obvious because
