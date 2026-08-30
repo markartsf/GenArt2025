@@ -138,9 +138,11 @@
     </div>
     <div class="herobox" id="sheetbox" style="display:none;">
       <div style="font-size:10.5px;color:#e9e2d4;font-weight:600;margin-bottom:2px;">Contact sheet</div>
-      <label>start seed<input id="sheetseed" type="number" step="1" value="1"
+      <label>start seed <span style="opacity:.7">(tile 1; then ×7+1)</span><input id="sheetseed" type="number" step="1" value="1"
         style="width:100%;background:#2c2a24;color:#e9e2d4;border:1px solid rgba(255,255,255,.12);
                border-radius:5px;padding:4px 6px;font:inherit;font-size:11px;"></label>
+      <div id="sheetseedlist" style="font-size:9.5px;color:var(--muted);margin-top:5px;line-height:1.5;
+           font-family:ui-monospace,Menlo,monospace;"></div>
       <button class="primary" id="sheetrender" style="width:100%;margin-top:7px;">Render 12 tiles</button>
       <button id="sheetsave" style="width:100%;margin-top:6px;">Download PNG</button>
       <div id="sheetstatus" style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5;">
@@ -1413,6 +1415,20 @@ function downloadContactSheet(){
   document.body.appendChild(a); a.click(); a.remove();
 }
 
+// Show the twelve seeds this sheet will render, so it is never a guess which ones
+// are about to be spent. The main seed readout above drives a SINGLE composition and
+// does nothing here, so sheet mode disables it rather than leaving two live-looking
+// seed controls with different jobs.
+function updateSheetSeedList(){
+  const el = document.getElementById('sheetseedlist');
+  if(!el) return;
+  const v = parseInt(document.getElementById('sheetseed').value, 10);
+  const start = Number.isFinite(v) ? v : seed;
+  const all = sheetSeeds(start);
+  el.textContent = 'tiles: ' + all.slice(0,3).join(', ') + ' … ' + all[all.length-1]
+                 + '   (' + SHEET_N + ' seeds)';
+}
+
 function enterSheetMode(){
   ['revealbox','revealarmbox','armaturebox'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -1423,8 +1439,27 @@ function enterSheetMode(){
     'arrives at, not the static preview. Seed varies; everything else is held and recorded in the header.';
   const start = (SHEET_PARAM && SHEET_PARAM !== '1') ? parseInt(SHEET_PARAM,10) : seed;
   document.getElementById('sheetseed').value = Number.isFinite(start) ? start : seed;
-  document.getElementById('canvas-holder').style.display = 'none';
+  // NEVER display:none the canvas — p5 stops driving draw() for a hidden canvas and
+  // renderAccretive() then waits forever. Instead shrink it to a thumbnail: it stays
+  // live (doubling as per-tile progress) while the SHEET is the primary view.
+  // CSS width only — the drawing buffer is untouched, so this is not a resizeCanvas.
+  const cvEl = document.querySelector('#canvas-holder canvas');
+  if(cvEl){ cvEl.style.width='260px'; cvEl.style.height='auto'; }
+  const hold = document.getElementById('canvas-holder');
+  hold.style.padding = '6px 0 2px';
+  const cap = document.createElement('div');
+  cap.textContent = 'live tile ▸';
+  cap.style.cssText = 'font:10px ui-monospace,Menlo,monospace;color:#6f6a62;padding:2px 0 6px;';
+  hold.appendChild(cap);
   document.getElementById('sheetpreview').style.display = 'block';
+  // the top seed row drives ONE composition and is inert here — disable it so two
+  // seed controls with different jobs are never both live
+  ['seedPrev','seedNext','reseed','rand'].forEach(id=>{
+    const b=document.getElementById(id); if(b){ b.disabled=true; b.style.opacity=.35; b.title='sheet mode: use start seed'; }
+  });
+  const sv=document.getElementById('seedval');
+  if(sv){ sv.style.opacity=.35; sv.title='sheet mode: use start seed'; }
+  updateSheetSeedList();
 }
 
 // ---- ACCRETIVE RENDER (shared: contact sheet + "Render as reveal") -----------------
@@ -2239,11 +2274,6 @@ function enterArmatureMode(){
     try { importArmature(res.block); showErr(''); }
     catch(err){ showErr('Armature not loaded — ' + err.message); }
   });
-  document.getElementById('sheetrender').addEventListener('click', ()=>{
-    const v = parseInt(document.getElementById('sheetseed').value, 10);
-    renderContactSheet(Number.isFinite(v) ? v : seed);
-  });
-  document.getElementById('sheetsave').addEventListener('click', downloadContactSheet);
   document.getElementById('armexport').addEventListener('click', exportArmature);
   document.getElementById('armimportbtn').addEventListener('click', ()=>document.getElementById('armimport').click());
   document.getElementById('armimport').addEventListener('change', ev=>{
@@ -2309,6 +2339,15 @@ function regenerate(s){
 
 function wireUI(){
   const $ = id => document.getElementById(id);
+  // Contact-sheet controls are bound HERE, not in a mode-entry function: wireUI runs
+  // on every load, whereas enterArmatureMode() never runs in sheet mode — which left
+  // the button inert with no error, so clicking it did nothing at all.
+  $('sheetrender').addEventListener('click', ()=>{
+    const v = parseInt($('sheetseed').value, 10);
+    renderContactSheet(Number.isFinite(v) ? v : seed);
+  });
+  $('sheetsave').addEventListener('click', downloadContactSheet);
+  $('sheetseed').addEventListener('input', updateSheetSeedList);
   // In the editor, changing the seed rebuilds the plan and therefore discards
   // placement edits (see preparePlan). Ask first rather than losing authored work.
   const mayDiscard = () => {
